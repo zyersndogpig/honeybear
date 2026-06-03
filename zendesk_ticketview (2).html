@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>🎫 티켓 뷰 설치</title>
+<style>
+  body{font-family:-apple-system,sans-serif;max-width:600px;margin:40px auto;padding:0 20px;background:#f8f9fa;color:#333;}
+  .card{background:#fff;border-radius:12px;padding:24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+  h1{font-size:22px;margin:0 0 4px;} .sub{color:#666;font-size:14px;margin-bottom:20px;}
+  .bookmark-btn{display:inline-block;padding:12px 24px;background:#0a7d72;color:#fff;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;cursor:grab;}
+  .drag-hint{font-size:13px;color:#888;margin-top:8px;}
+  .step{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px;font-size:14px;}
+  .num{background:#0a7d72;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:1px;}
+  .code-box{background:#f1f3f5;border-radius:6px;padding:12px;font-size:11px;word-break:break-all;font-family:monospace;max-height:80px;overflow:auto;margin-top:12px;}
+  .copy-manual{margin-top:8px;} .copy-manual button{padding:6px 14px;background:#059669;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;}
+  h2{font-size:15px;margin:0 0 12px;}
+  .feat{background:#e6f7f4;border-radius:6px;padding:10px 12px;font-size:13px;color:#0a5d54;margin-bottom:12px;}
+  .fix-list{font-size:13px;color:#555;padding-left:18px;margin:0;} .fix-list li{margin-bottom:5px;}
+  .tag-r{display:inline-block;background:#0a7d72;color:#fff;font-size:11px;padding:1px 6px;border-radius:4px;margin-right:4px;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🎫 티켓 뷰</h1>
+  <p class="sub">작성 중인 답변을 읽고 보조 멘트를 추천 + 슬랙 적재</p>
+  <div class="step"><div class="num">1</div><p>아래 버튼을 북마크바로 <strong>드래그</strong>하세요</p></div>
+  <div class="step"><div class="num">2</div>
+    <div><a href="HREF_PLACEHOLDER" class="bookmark-btn">🎫 티켓 뷰</a>
+    <div class="drag-hint">↑ 이 버튼을 북마크바로 끌어다 놓으세요</div></div>
+  </div>
+  <div class="step"><div class="num">3</div><p>젠데스크 티켓 화면에서 북마크를 클릭하면 우측에 패널이 열립니다</p></div>
+</div>
+
+<div class="card">
+  <h2>💬 추천 멘트 — 이렇게 씁니다</h2>
+  <div class="feat">문의를 보고 <strong>상담사가 직접 적절한 매크로를 적용</strong>해 답변을 작성합니다. 그 상태에서 북마크를 누르면, 도구가 <strong>작성 중인 답변을 읽고</strong> 거기에 어울리는 보조 멘트(중개 플랫폼 한계, 능동 제재 등)를 추천합니다.</div>
+  <ul class="fix-list">
+    <li>패널의 <strong>🔄 작성 글 다시 읽기</strong>를 누르면 현재 답변 에디터 내용을 다시 읽어 추천을 갱신합니다</li>
+    <li>작성 글과 관련도 높은 멘트는 <strong>★ 표시</strong>로 위쪽에 정렬됩니다 (나머지 멘트도 모두 보입니다)</li>
+    <li>멘트 칩을 클릭하면 <strong>담은 멘트</strong> 칸에 쌓이고, <strong>📋 멘트 복사</strong>로 가져가 답변에 붙여넣습니다</li>
+    <li>하단 <strong>📋 슬랙 적재</strong>는 기존처럼 티켓 링크 + 문의 내용을 복사합니다</li>
+    <li><span class="tag-r">추가</span> <strong>드라이버 빠따+영구차단</strong> 멘트 선택 시 <strong>영구 차단 문구 포함</strong> 체크박스 노출 → 체크하면 차단 문장이 들어가고(대괄호 제거), 해제하면 해당 문단이 빠집니다. 기본은 미포함</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>버튼이 드래그가 안 되면</h2>
+  <p style="font-size:13px;color:#555;margin:0 0 8px;">아래 코드를 복사해 북마크를 새로 만들고 URL 칸에 붙여넣으세요.</p>
+  <div class="code-box" id="codeBox"></div>
+  <div class="copy-manual"><button onclick="copyCode()">📋 코드 복사</button></div>
+</div>
+
+<script>
+// =========================================================================
+// 북마크릿 실제 작동 코드 (수정·유지보수는 여기서 하시면 됩니다)
+// =========================================================================
+async function runBookmarklet() {
+  const urlMatch=location.href.match(/zendesk\.com\/agent\/tickets\/(\d+)/);
+  if(!urlMatch){alert('젠데스크 티켓 페이지에서 실행해주세요.');return;}
+  const ticketNum=urlMatch[1];
+  const ticketUrl=`https://tadatadahelp.zendesk.com/agent/tickets/${ticketNum}`;
+
+  // 이미 팝업 열려있으면 닫고 재실행 (중복 방지)
+  const existing=document.getElementById('zd_overlay_'+ticketNum);
+  if(existing){existing.remove();}
+
+  // DOM이 현재 티켓으로 업데이트됐는지 확인
+  const isDomReady=()=>document.body.innerText.includes('#'+ticketNum);
+  if(!isDomReady()){
+    alert('⏳ 티켓 로딩 중이거나 다른 탭이에요!\n현재 티켓(#'+ticketNum+') 화면에서 잠시 후 다시 눌러주세요.');
+    return;
+  }
+
+  function blinkTitle(msg){
+    const old=document.title;
+    document.title=msg;
+    setTimeout(()=>document.title=old,1200);
+  }
+
+  // ── 고객 메시지 추출 ──
+  let customerMsg='';
+  let customerMsgs=[]; // 고객이 여러 번 인입한 경우 모두 수집
+
+  // 이메일/일반 티켓: 첫 문의가 제목에 담기는 경우가 있어 티켓 제목을 인입 후보로 확보
+  function cleanSubj(t){
+    return (t||'')
+      .replace(/^\s*(티켓|제목|subject)\s*[:：]\s*/i,'')                                  // 라벨 접두
+      .replace(/\s*[–\-|]\s*(VCNC|TADA|타다|Zendesk|젠데스크|Agent\s*Workspace)\s*$/i,'') // 사이트 접미
+      .replace(/:\s*[^\s:]+\.(png|jpe?g|gif|pdf|heic|webp)\s*$/i,'')                       // 첨부 파일명 접미
+      .replace(/\s*[.…]{1,3}\s*$/,'')                                                       // 말줄임표
+      .trim();
+  }
+  function getTicketSubject(){
+    try{
+      const sels=['[data-test-id="ticketHeader-subject"]','[data-test-id="ticket-pane-subject"]','input[data-test-id="ticket-subject-field"]','input[name="subject"]','[data-test-id="ticketFieldSubject"] input'];
+      for(const s of sels){
+        const el=document.querySelector(s);
+        if(el){ const t=(el.value||el.innerText||'').trim(); if(t.length>1) return cleanSubj(t); }
+      }
+      let t=(document.title||'').trim().replace(/^\(\d+\)\s*/,'');
+      if(t.length>1 && !/^https?:/i.test(t) && !/응대 도우미|티켓 뷰|적재 복사|적재 완료/.test(t)) return cleanSubj(t);
+    }catch(e){}
+    return '';
+  }
+
+  try{
+    const bodyText=document.body.innerText;
+    const bodyLimit=bodyText.indexOf('메시지 작성기');
+
+    let activeConv=null;
+    const allConvs=[...document.querySelectorAll('[data-test-id="ticket-main-conversation"]')];
+    if(allConvs.length===0){
+      allConvs.push(...document.querySelectorAll('[class*="conversation"]'));
+    }
+    for(const c of allConvs){
+      const r=c.getBoundingClientRect();
+      const st=getComputedStyle(c);
+      const isVisible=r.width>0&&r.height>0&&st.visibility!=='hidden'&&st.display!=='none';
+      const hasContent=(c.innerText||'').trim().length>5;
+      if(isVisible&&hasContent){activeConv=c;break;}
+    }
+    const convEl=activeConv
+      ||document.querySelector('[data-test-id="ticket-main-conversation"]')
+      ||document.querySelector('[class*="conversation"]')
+      ||document.querySelector('main')
+      ||document.body;
+
+    const scopedComments=(convEl&&convEl.querySelectorAll('.zd-comment').length>0)
+      ?convEl.querySelectorAll('.zd-comment')
+      :document.querySelectorAll('.zd-comment');
+
+    const isMessaging = !!(convEl && /Web User [a-f0-9]+/.test(convEl.innerText));
+    if(isMessaging){
+      const rawLines=convEl.innerText.split('\n');
+      const cutLineIdx=rawLines.findIndex(l=>l.trim()==='메시지 작성기');
+      const allLines=cutLineIdx>=0?rawLines.slice(0,cutLineIdx):rawLines;
+
+      let lastAgentIdx=-1;
+      for(let k=0;k<allLines.length;k++){
+        if(allLines[k].trim()==='드라이버 상담사') lastAgentIdx=k;
+      }
+      const scanFrom=0; void lastAgentIdx;
+
+      const isNoise=(ml)=>(
+        !ml||ml==='•'||ml==='A form was sent:'||ml==='내부'||
+        ml==='드라이버 상담사'||/^TADA /.test(ml)||/^Web User [a-f0-9]/.test(ml)||
+        ml==='대화'||/님과의 대화$/.test(ml)||/^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(ml)||
+        /^(오늘|어제|그제|월요일|화요일|수요일|목요일|금요일|토요일|일요일) \d{1,2}:\d{2}$/.test(ml)||
+        /^\d{1,2}:\d{2}$/.test(ml)||
+        /^메시지 작성기$|^메시징$|^보내기$/.test(ml)||
+        /^존함을 말씀|^필요시 추가확인|^사진 또는 자료/.test(ml)||
+        /^상담 중인 날짜|^감사합니다|^오늘도 안전/.test(ml)||
+        /^\d{4}-\d{2}-\d{2}$|^\d{2}-\d{2}$/.test(ml)||
+        /^오류 제보|^유선 상담 중 자료|^계약 및 해지|^기타$/.test(ml)||
+        /^\d{10,11}$/.test(ml)||
+        /^\d{3,4}-\d{3,4}-\d{4}$/.test(ml)
+      );
+
+      const blocks=[];
+      let i=scanFrom;
+      while(i<allLines.length){
+        const l=allLines[i].trim();
+        if(/^Web User [a-f0-9]/.test(l)){
+          let j=i+1;
+          const msgLines=[];
+          let skipName=false; // '존함을 말씀' 폼 직후 이름 답변 1회 제외
+          while(j<allLines.length){
+            const ml=allLines[j].trim();
+            if(ml==='드라이버 상담사'||/^TADA /.test(ml)||/^Web User [a-f0-9]/.test(ml)) break;
+            if(ml==='메시지 작성기') break;
+            if(/^존함을 말씀/.test(ml)){ skipName=true; j++; continue; }
+            if(skipName && ml && !isNoise(ml)){
+              if(/^[가-힣]{2,5}$/.test(ml)){ skipName=false; j++; continue; }
+              skipName=false;
+            }
+            if(!isNoise(ml)) msgLines.push(ml);
+            j++;
+          }
+          if(msgLines.length>0) blocks.push(msgLines.join('\n'));
+          i=j;
+        }else{
+          i++;
+        }
+      }
+      if(blocks.length>0){
+        customerMsgs=blocks.map(b=>b.trim()).filter(b=>b.length>0);
+        customerMsg=customerMsgs.length>0?customerMsgs[customerMsgs.length-1]:'';
+      }
+    }
+
+    if(!customerMsg){
+      const bubbleSelectors=[
+        '[data-test-id*="message"][class*="end"]',
+        '[class*="message-bubble"]',
+        '[class*="chat-bubble"]',
+      ];
+      const _scope=convEl||document;
+      for(const sel of bubbleSelectors){
+        const bubbles=_scope.querySelectorAll(sel);
+        if(bubbles.length>0){
+          const texts=[...bubbles].map(b=>b.innerText?.trim()).filter(Boolean);
+          if(texts.length>0){customerMsg=texts[texts.length-1];break;}
+        }
+      }
+    }
+
+    if(!customerMsg&&convEl){
+      const fullT=convEl.innerText||'';
+      const webUserBlocks=fullT.split(/Web User [a-f0-9]+\n•\n/);
+      if(webUserBlocks.length>1){
+        const lastBlock=webUserBlocks[webUserBlocks.length-1];
+        const msgLines=lastBlock.split('\n');
+        const msgContent=[];
+        for(const line of msgLines){
+          if(/^오늘 \d|^어제 \d|^드라이버|^TADA|^사진 또는|^상담 중인|^감사합니다|^오늘도/.test(line.trim())) break;
+          const l=line.trim();
+          if(!l||/^\d{1,2}:\d{2}$/.test(l)) continue;
+          if(l==='기타'||l==='오류 제보 하기'||l==='대화'||/님과의 대화$/.test(l)) continue;
+          if(/^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(l)) continue;
+          msgContent.push(l);
+        }
+        const _m=msgContent.join('\n').trim();
+        if(_m.length>0) customerMsg=_m;
+      }
+    }
+
+    if(!customerMsg && !isMessaging){
+      const comments=scopedComments;
+      for(let i=0;i<comments.length;i++){
+        const _box=comments[i].closest('article, li, [data-comment-id], [class*="event"]')||comments[i].parentElement;
+        const _boxTxt=_box?_box.innerText:'';
+        const _author=(_boxTxt.split('\n').map(x=>x.trim()).filter(Boolean)[0])||'';
+        if(/^TADA\b/.test(_author)||/(^|\n)\s*내부\s*(\n|$)/.test(_boxTxt)) continue;
+        const tmp=document.createElement('div');
+        tmp.innerHTML=comments[i].innerHTML;
+        let rawTxt=tmp.innerText||tmp.textContent||'';
+        if(/전화구분\s*[:：]|통화시간\s*[:：]|발신내선\s*[:：]|수신번호\s*[:：]/.test(rawTxt)){continue;}
+        const origMailIdx=rawTxt.search(/-{2,}\s*원본 메일|원본 메일\s*-{2,}|-{3,}\s*Original/);
+        if(origMailIdx>=0) rawTxt=rawTxt.slice(0,origMailIdx);
+        if(bodyLimit>=0){
+          const commentPosInBody=bodyText.indexOf(rawTxt.slice(0,20).trim());
+          if(commentPosInBody>=0&&commentPosInBody>bodyLimit) continue;
+        }
+        if(/타다 팀 드림|타다를 이용해 주셔서|이용 경험 평가하기|안녕하세요\.\s*[가-힣]+님\s*타다/.test(rawTxt)){
+          continue;
+        }
+        const cutIdx=rawTxt.indexOf('메시지 작성기');
+        const txt=cutIdx>=0?rawTxt.slice(0,cutIdx):rawTxt;
+        const lines=txt.split('\n').map(l=>l.trim()).filter(l=>{
+          if(!l) return false;
+          if(/^https?:\/\//.test(l)) return false;
+          if(/^\d{4}\.\d{2}\.\d{2}( \d{1,2}:\d{2}(:\d{2})?)?$/.test(l)) return false;
+          if(/^(오늘|어제|그제) \d{1,2}:\d{2}$/.test(l)) return false;
+          if(/^\d+분 전$/.test(l)||/^\d+시간 전$/.test(l)) return false;
+          if(/^\d{1,2}:\d{2}$/.test(l)) return false;
+          if(/\.(png|jpg|jpeg|gif|pdf)$/i.test(l)) return false;
+          if(l==='·'||l==='•'||l==='-') return false;
+          if(/^수신자:$|^자세히 보기$|^원본 메일|^-{3,}/.test(l)) return false;
+          if(/^메시지 작성기$|^메시징$|^보내기$|^사진 또는 자료|^상담 중인 날짜/.test(l)) return false;
+          if(l==='대화'||/님과의 대화$/.test(l)||/^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(l)) return false;
+          if(l==='기타'||l==='오류 제보 하기'||/^타다에 전달 하고 싶은/.test(l)||/^이외 문의를 남겨주시면/.test(l)) return false;
+          return true;
+        });
+        if(lines.length>0){
+          const msg=lines.join('\n').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+          if(msg.length>0) customerMsgs.push(msg);
+        }
+      }
+      if(customerMsgs.length>0) customerMsg=customerMsgs[0];
+    }
+
+    // 비메시징(이메일/일반) 티켓: 첫 문의가 제목에만 담긴 경우 대비해 제목을 후보로 추가
+    // (단, 제목이 본문 발화와 사실상 같으면 추가하지 않음 → 중복 칩 방지)
+    if(!isMessaging){
+      try{
+        const subj=getTicketSubject(); // cleanSubj가 라벨·사이트접미·말줄임까지 정리
+        if(subj){
+          const key=s=>s.replace(/[^0-9a-z가-힣]/gi,'').toLowerCase(); // 비교용 핵심 키
+          const sk=key(subj);
+          const dup = sk.length<6 || customerMsgs.some(b=>{
+            const bk=key(b);
+            if(bk.length<6) return false;
+            if(bk.includes(sk)||sk.includes(bk)||bk.startsWith(sk)||sk.startsWith(bk)) return true;
+            // 잘린 제목 대응: 공통 앞부분이 12자 이상이면 같은 글로 간주
+            let n=0; while(n<sk.length&&n<bk.length&&sk[n]===bk[n]) n++;
+            return n>=12;
+          });
+          if(!dup) customerMsgs.unshift(subj);
+        }
+      }catch(e){}
+      if(customerMsgs.length>0 && !customerMsg) customerMsg=customerMsgs[0];
+    }
+
+    if(!customerMsg) customerMsg='(내용을 직접 입력해주세요)';
+  }catch(e){customerMsg='(내용 파싱 실패 - 직접 입력해주세요)';}
+
+  // ── 작성 중인 답변(에디터) 텍스트 읽기 ──
+  // 젠데스크 답변 에디터의 contenteditable/textarea 중 화면에 보이고 내용이 가장 많은 것을 채택.
+  // 내 팝업(overlay) 내부 요소는 제외.
+  function getDraftText(){
+    const sels=['[data-test-id="omni-log-editor"]','.ProseMirror','.zendesk-editor--rich-text-comment','[contenteditable="true"]','textarea'];
+    let best='';
+    const ovId='zd_overlay_'+ticketNum;
+    sels.forEach(s=>{
+      document.querySelectorAll(s).forEach(el=>{
+        if(el.closest('#'+ovId)) return; // 내 팝업 내부 제외
+        const r=el.getBoundingClientRect();
+        if(r.width<=0||r.height<=0) return;
+        const t=(el.innerText||el.value||'').trim();
+        if(t.length>best.length) best=t;
+      });
+    });
+    return best;
+  }
+  let draftText=getDraftText();
+
+  // ── 보조 멘트 라이브러리 (지침 자주 쓰는 멘트) ──
+  // trig: 작성 중인 답변에 이 단어가 있으면 추천으로 끌어올림
+  const MENTS=[
+    {id:'요금방어', label:'요금 징징이들 방어', text:'당사 서버에 기록된 GPS 실제 운행 경로를 확인하여 고의적인 경로 우회 여부를 면밀히 검토하였습니다.\n\n확인 결과, 해당 운행은 내비게이션 안내 경로에 따라 정상적으로 이동한 것으로 확인되었으며, 이용 요금에 영향을 줄 수 있을 정도의 고의적이거나 임의적인 우회 운행 정황은 확인되지 않았습니다.\n\n타다에 소속된 모든 드라이버는 원칙적으로 차량 내 내비게이션의 추천 경로를 우선하여 운행하고 있으며, 해당 운행 건 또한 드라이버가 안내받은 경로를 기준으로 실제 운행 거리·운행 시간·통행료 등에 따라 정상적으로 요금이 산정된 것으로 확인됩니다.\n\n또한 타다는 고객님 탑승 시점의 실시간 교통 상황을 반영하여 추천 경로를 안내하고 있으며, 드라이버는 고객님의 별도 요청이 없는 경우 시스템에서 제공되는 추천 경로를 기준으로 운행하게 됩니다.\n\n다만 드라이버 역시 운행 전 사전에 어떤 도로 및 경로로 최종 안내될지 별도로 확인하기 어려운 구조이며, 실제 운행 중 실시간 교통 상황 변화에 따라 고속화도로 또는 우회 경로가 포함될 수 있는 점 참고 부탁드립니다.\n\n아울러 앱 내 표시되는 예상 요금은 거리 기준으로 단순 계산된 최저 예상치로, 실제 운행 시 교통 상황·경로 변경 등으로 차이가 발생할 수 있습니다.\n\n본 운행 건은 유료도로 이용 및 실제 이동 거리 증가로 인해 최초 안내 금액 대비 추가 요금이 발생한 것으로 확인되며, 운행 내역에 따른 이용 요금으로 판단되어 플랫폼 차원에서 임의 조정 또는 환불을 진행하기 어려운 점 너른 양해 부탁드립니다.\n\n아울러 고객님께서 말씀하시는 상황과 불편함을 이해하지 못하는 것은 아니나, 타다는 이용자와 드라이버를 연결하는 플랫폼 서비스로 운영되고 있어 역할 및 권한에 일정 부분 한계가 있는 점 양해 부탁드립니다.\n\n결제된 이용 요금 및 수수료에 대한 정산 권한은 실제 운행을 수행한 드라이버에게 귀속되며, 플랫폼 운영 센터에서는 드라이버의 동의 없이 임의로 환불 또는 요금 정정을 진행하기 어려운 구조로 운영되고 있습니다.\n\n시간을 내어 문의해 주셨음에도 만족스러운 답변을 드리지 못한 점 저희 또한 무겁게 생각하고 있으며, 고객님의 입장에서 더욱 만족스러운 이용 경험을 제공해드릴 수 있도록 지속적으로 노력하겠습니다.', trig:['요금','환불','정정','수수료','권한','경로','우회','gps','예상','통행료','거리','넥스트','탄력','유료도로']},
+    {id:'빠따차단', label:'드라이버 빠따+영구차단', text:'타다를 이용하여 보다 편안하고 신속한 이동을 기대하셨을 텐데, 이용에 불편을 드린 점 드라이버를 대신하여 깊이 사과드립니다.\n\n[고객님께 본의 아니게 불편을 드린 점에 대한 죄송한 마음을 담아, 해당 드라이버가 다시는 배차되지 않도록 영구 배차 차단 조치하였습니다.]\n\n타다는 내부적으로 드라이버 모니터링을 실시하고 있으며, 고객님들의 제보와 신고가 누적될 경우 해당 드라이버에게 배차 제한 및 서비스 이용 제한 등 제재 조치를 취하고 있습니다.\n가능한 범위 내에서 문제 드라이버에 대한 이용 제한 조치를 적극적으로 시행하고 있음을 안내드립니다.\n\n드라이버의 의도가 없었다 할지라도, 해당일 고객님께서 드라이버의 미흡한 대처로 인해 불편을 겪으신 내용에 대해서는 제재 조치를 취할 수 있도록 담당 부서로 전달하였으며, 해당 드라이버 모니터링 강화 및 내부 규정에 따라 조치를 취할 예정입니다.\n\n고객님께서 타다 이용에 불편하셨던 부분을 직접적으로 말씀해주셔서 드라이버 운행 실태 확인 및 타다 서비스 개선에 큰 기여를 해주신 점에 진심으로 감사드리며, 이번과 같은 불편한 상황을 경험하시지 않도록 최선을 다해 서비스를 개선해 나가도록 하겠습니다.\n\n다시 한번 큰 실망과 불편을 드린 고객님께 진심으로 고개 숙여 깊은 사과 말씀을 드립니다. 죄송합니다.', trig:['드라이버','불친절','클레임','제보','태도','난폭','응대','차단','영구','블랙리스트']},
+    {id:'운행의무외', label:'운행 의무 외 강제 불가', text:'타다는 이용자와 드라이버를 연결하는 플랫폼 서비스로 운영되고 있어 역할 및 권한에 일정 부분 한계가 있는 점 양해 부탁드립니다.\n\n또한 드라이버는 이용자의 이동을 위한 운행 서비스를 제공하는 주체로, 전화 연락이나 짐 적재 등 운행 외적인 사항에 대해서는 협조를 요청드릴 수는 있으나 이를 강제하기는 어려운 점 양해 부탁드립니다.', trig:['전화','통화','짐','적재','요청','강제','연락']},
+    {id:'일반크레딧후적용', label:'일반 크레딧 후적용 불가', text:'타다의 일반 크레딧은 하차와 동시에 결제와 크레딧 사용·적립이 함께 처리되며, 이 과정이 완료된 이후에는 시스템상 이전 상태로 되돌려 크레딧을 적용하는 것이 어렵습니다.\n\n고객님께서 말씀 주신 취지에는 충분히 공감하나, 이미 결제가 완료된 이후에는 정책상 추가 적용이나 소급 적용을 도와드리기 어려운 점 양해 부탁드립니다.\n\n번거로우시겠지만, 크레딧 혜택을 놓치지 않으시도록 반드시 하차 전 고객님께서 크레딧 적용 여부를 확인해 주시길 부탁드립니다.', trig:['쿠폰','크레딧','후적용','적용','소급']},
+    {id:'영손비플랫폼', label:'영손비 플랫폼 결제', text:'영업손실비는 플랫폼 내 결제로만 진행되며, 드라이버가 현장에서 현금을 요구할 수 없습니다.', trig:['영업손실비','영손비','오염','세차','파손']},
+    {id:'자료요청', label:'자료 요청', text:'정확한 확인을 위해 해당 운행 일시·출발>도착지 및 결제 내역 캡처를 공유해 주시면 신속히 검토하겠습니다.', trig:['확인','검토','자료','캡처']},
+    {id:'안드로이드기종', label:'안드로이드 기종 정보 요청', text:'현재 서버 측에서는 별도의 오류가 확인되지 않고 있습니다.\n번거로우시겠지만, 해당 현상을 확인할 수 있는 화면 녹화본과 함께 아래 정보를 전달해 주시면 면밀히 확인 후 안내드리겠습니다.\n\n* ONE UI 버전 : 설정 → 휴대전화 정보 → 소프트웨어 정보\n* 사용 중인 기기명 :\n* 오류 화면 녹화본 : (파일 첨부 필요)\n\n시간을 내어 문의해 주셨음에도 즉시 도움을 드리지 못한 점 진심으로 사과드리며, 자료를 전달해 주시면 신속히 확인 후 안내드리겠습니다.', trig:['안드로이드','갤럭시','android','기종','오류','앱오류','버그']},
+    {id:'아이폰기종', label:'아이폰 기종 정보 요청', text:'현재 서버 측에서는 별도의 오류가 확인되지 않고 있습니다.\n번거로우시겠지만, 해당 현상을 확인할 수 있는 화면 녹화본과 함께 아래 정보를 전달해 주시면 면밀히 확인 후 안내드리겠습니다.\n\n* iOS 버전 : 설정 → 일반 → 정보 → iOS 버전\n* 사용 중인 기기명 : (예: iPhone 15, iPhone 14 Pro 등)\n* 오류 화면 녹화본 : (파일 첨부 필요)\n\n아울러 타다 앱 내 로그 전송 방법은 아래와 같습니다.\n타다 앱 실행 → 우측 상단 프로필 또는 메뉴(≡) → 설정 → 로그 전송\n위 경로를 통해 로그를 전송해 주시면 전달해 주신 자료와 함께 확인하여 보다 정확한 안내를 드리겠습니다.\n\n시간을 내어 문의해 주셨음에도 즉시 도움을 드리지 못한 점 진심으로 사과드리며, 번거로우시겠지만 관련 자료를 전달해 주시면 신속히 확인 후 안내드리겠습니다.', trig:['아이폰','iphone','ios','기종','오류','앱오류','버그']},
+    {id:'사과시작', label:'사과(시작)', text:'먼저 타다 이용에 불편을 드려 대단히 죄송합니다.', trig:['사과','불편','죄송']},
+    {id:'사과마무리', label:'사과(마무리)', text:'다시 한번 불편을 드린 점 진심으로 사과드립니다.', trig:[]},
+    {id:'감사마무리', label:'감사(마무리)', text:'시간 내어 문의 주셔서 감사드립니다.', trig:[]}
+  ];
+
+  // ── UI ──
+  const overlay=document.createElement('div');
+  overlay.id='zd_overlay_'+ticketNum;
+  overlay.style.cssText='position:fixed;top:16px;right:16px;width:380px;max-height:92vh;overflow-y:auto;z-index:999999;background:#fff;border:1px solid #d9e0de;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.22);font-family:-apple-system,sans-serif;';
+  overlay.innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff;border-radius:12px 12px 0 0;">
+      <strong style="font-size:14px;">🎫 티켓 뷰</strong>
+      <span style="font-size:12px;color:#0a7d72;font-weight:bold;">#${ticketNum}</span>
+      <button id="zd_close" style="margin-left:auto;border:none;background:#f1f3f5;border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:14px;">×</button>
+    </div>
+    <div style="padding:14px 16px;">
+      <!-- 추천 멘트 -->
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+        <strong style="font-size:12px;color:#0a7d72;">💬 추천 멘트</strong>
+        <span style="font-size:10px;color:#aaa;">칩 클릭 → 아래 표시 → 복사하기</span>
+        <button id="zd_refresh" style="margin-left:auto;padding:3px 8px;border:1px solid #0a7d72;background:#fff;color:#0a7d72;border-radius:6px;cursor:pointer;font-size:10px;font-weight:bold;">🔄 다시 읽기</button>
+      </div>
+      <div id="zd_ment_status" style="font-size:10px;color:#aaa;margin-bottom:6px;"></div>
+      <div id="zd_ment_chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+      <label id="zd_ment_optwrap" style="display:none;align-items:center;gap:6px;margin-bottom:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;user-select:none;"><input type="checkbox" id="zd_ment_opt" style="accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;"> <span id="zd_ment_optlabel">영구 차단 문구 포함</span></label>
+      <textarea id="zd_ment_preview" rows="5" placeholder="멘트 칩을 누르면 여기에 표시됩니다. 필요하면 직접 수정 후 복사하세요." style="display:none;width:100%;box-sizing:border-box;padding:9px;border:1px solid #cdeae6;border-radius:6px;font-size:12.5px;line-height:1.7;resize:vertical;background:#fbfdfc;margin-bottom:6px;"></textarea>
+      <button id="zd_ment_copy" style="display:none;width:100%;padding:7px;background:#0a7d72;border:1px solid #0a7d72;color:#fff;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">📋 복사하기</button>
+
+      <div style="border-top:1px solid #eee;margin:14px 0;"></div>
+
+      <!-- 슬랙 적재 -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <strong style="font-size:13px;color:#0052cc;">📋 슬랙 적재</strong>
+        <div style="margin-left:auto;display:flex;gap:6px;">
+          <button id="zd_user" style="padding:4px 10px;border:1px solid #0052cc;border-radius:6px;background:#0052cc;color:#fff;font-size:11px;font-weight:bold;cursor:pointer;">이용자</button>
+          <button id="zd_partner" style="padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#333;font-size:11px;font-weight:bold;cursor:pointer;">파트너</button>
+        </div>
+      </div>
+      <div id="zd_pick_wrap" style="display:none;margin-bottom:8px;">
+        <div style="font-size:11px;color:#555;font-weight:bold;margin-bottom:5px;">인입 선택 (복수 가능)</div>
+        <div id="zd_pick_chips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+      <textarea id="zd_content" rows="9" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #ccc;border-radius:6px;font-size:12.5px;line-height:1.6;resize:vertical;margin-bottom:8px;min-height:150px;"></textarea>
+      <button id="zd_slack_copy" style="width:100%;padding:9px;background:#0052cc;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;">티켓 적재 복사</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('zd_content').value=customerMsg;
+
+  // ── 인입 선택 (복수 가능) ──
+  const pickWrap=document.getElementById('zd_pick_wrap');
+  const pickChips=document.getElementById('zd_pick_chips');
+  const contentBox=document.getElementById('zd_content');
+  const pickBlocks=(customerMsgs&&customerMsgs.length)
+    ?customerMsgs.slice()
+    :((customerMsg&&!/^\(/.test(customerMsg))?[customerMsg]:[]);
+  const pickSel=new Set();
+  if(pickBlocks.length>0) pickSel.add(pickBlocks.length-1); // 기본: 마지막(가장 최근) 발화 선택
+  function rebuildContent(){
+    const arr=[];
+    pickBlocks.forEach((b,idx)=>{ if(pickSel.has(idx)) arr.push(b); });
+    contentBox.value=arr.join('\n\n');
+  }
+  function renderPick(){
+    pickChips.innerHTML='';
+    pickBlocks.forEach((b,idx)=>{
+      const sel=pickSel.has(idx);
+      const c=document.createElement('button');
+      const oneLine=b.replace(/\n/g,' ');
+      const short=oneLine.slice(0,18)+(oneLine.length>18?'…':'');
+      c.textContent=(sel?'✓ ':'')+(idx+1)+'. '+short;
+      c.title=b;
+      c.style.cssText='padding:5px 10px;border-radius:14px;cursor:pointer;font-size:11px;border:1px solid '+(sel?'#0052cc':'#ccc')+';background:'+(sel?'#0052cc':'#f5f5f5')+';color:'+(sel?'#fff':'#333')+';font-weight:'+(sel?'bold':'normal')+';max-width:100%;text-align:left;';
+      c.onclick=()=>{ if(pickSel.has(idx)) pickSel.delete(idx); else pickSel.add(idx); rebuildContent(); renderPick(); };
+      pickChips.appendChild(c);
+    });
+  }
+  if(pickBlocks.length>=1){
+    pickWrap.style.display='block';
+    renderPick();
+    rebuildContent();
+  }
+
+  // ── 추천 멘트 렌더링 ──
+  const chipsBox=document.getElementById('zd_ment_chips');
+  const statusEl=document.getElementById('zd_ment_status');
+  const previewEl=document.getElementById('zd_ment_preview');
+  const mentCopyBtn=document.getElementById('zd_ment_copy');
+
+  function scoreMent(m,txt){
+    let s=0; (m.trig||[]).forEach(k=>{ if(txt.includes(k.toLowerCase())) s++; }); return s;
+  }
+  function renderMents(){
+    const txt=(draftText||'').toLowerCase();
+    const scored=MENTS.map(m=>({m,score:scoreMent(m,txt)}));
+    const hasDraft=txt.trim().length>0;
+    const matched=scored.filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+    const rest=scored.filter(x=>x.score===0);
+    const ordered=hasDraft?[...matched,...rest]:scored;
+    statusEl.textContent=hasDraft
+      ? (matched.length>0 ? '작성 중인 답변 기준 추천입니다 (위쪽이 관련도 높음).' : '추천 단서를 못 찾아 전체 멘트를 표시합니다.')
+      : '답변 작성 후 🔄 다시 읽기를 누르면 관련 멘트가 위로 정렬됩니다.';
+    chipsBox.innerHTML='';
+    ordered.forEach(({m,score})=>{
+      const b=document.createElement('button');
+      const hot=hasDraft&&score>0;
+      const base='padding:4px 9px;border-radius:13px;cursor:pointer;font-size:11px;border:1px solid '+(hot?'#0a7d72':'#cfd6d4')+';background:'+(hot?'#e6f7f4':'#fff')+';color:'+(hot?'#0a5d54':'#555')+';font-weight:'+(hot?'bold':'normal')+';';
+      b.textContent=(hot?'★ ':'')+m.label;
+      b.title=m.text;
+      b.style.cssText=base;
+      b.onclick=()=>{
+        previewEl.style.display='block';
+        mentCopyBtn.style.display='block';
+        const optWrap=document.getElementById('zd_ment_optwrap');
+        const optBox=document.getElementById('zd_ment_opt');
+        const optLabel=document.getElementById('zd_ment_optlabel');
+        const hasBracket=/\[[\s\S]*?\]/.test(m.text);
+        // 대괄호 포함/미포함 텍스트 생성
+        function applyMentText(){
+          if(hasBracket&&optBox.checked){
+            // 켜짐: 대괄호만 제거하고 안쪽 문장 포함
+            previewEl.value=m.text.replace(/\[([\s\S]*?)\]/,'$1');
+          }else if(hasBracket){
+            // 꺼짐: 대괄호 문단 통째로 제거 + 빈 줄 정리
+            previewEl.value=m.text.replace(/\n*\[[\s\S]*?\]\n*/,'\n\n').replace(/\n{3,}/g,'\n\n').trim();
+          }else{
+            previewEl.value=m.text;
+          }
+        }
+        if(hasBracket){
+          optWrap.style.display='flex';
+          optLabel.textContent=(m.id==='빠따차단')?'영구 차단 문구 포함':'대괄호 문구 포함';
+          optBox.checked=false;          // 기본: 미포함
+          optBox.onchange=applyMentText;
+        }else{
+          optWrap.style.display='none';
+          optBox.onchange=null;
+        }
+        applyMentText();                   // 표시만 (자동 복사 안 함)
+        mentCopyBtn.textContent='📋 복사하기';
+        previewEl.focus();
+      };
+      chipsBox.appendChild(b);
+    });
+  }
+  renderMents();
+
+  document.getElementById('zd_refresh').onclick=()=>{ draftText=getDraftText(); renderMents(); };
+  mentCopyBtn.onclick=function(){ copyText(previewEl.value,this); };
+  function copyText(val,btn){
+    const ta=document.createElement('textarea');ta.value=val;ta.style.cssText='position:fixed;top:-9999px;';
+    document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);
+    if(btn){const t=btn.textContent;btn.textContent='✅ 복사됨';setTimeout(()=>btn.textContent=t,1500);}
+  }
+
+  // ── 슬랙 적재 ──
+  let selectedParty='이용자';
+  const bu=document.getElementById('zd_user'), bp=document.getElementById('zd_partner');
+  const ACT='padding:4px 10px;border:1px solid #0052cc;border-radius:6px;background:#0052cc;color:#fff;font-size:11px;font-weight:bold;cursor:pointer;';
+  const INA='padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#333;font-size:11px;font-weight:bold;cursor:pointer;';
+  bu.onclick=()=>{selectedParty='이용자';bu.style.cssText=ACT;bp.style.cssText=INA;};
+  bp.onclick=()=>{selectedParty='파트너';bp.style.cssText=ACT;bu.style.cssText=INA;};
+
+  document.getElementById('zd_slack_copy').onclick=()=>{
+    const content=document.getElementById('zd_content').value.trim();
+    const escaped=content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const htmlData=`<a href="${ticketUrl}">#${ticketNum}</a> ${selectedParty} 인입<br><pre style="background:#f3f4f6;padding:8px;border-radius:4px;font-size:12px;white-space:pre-wrap;">${escaped}</pre>`;
+    const plainData=`<${ticketUrl}|#${ticketNum}> ${selectedParty} 인입\n\`\`\`\n${content}\n\`\`\``;
+    let copied=false;
+    try{
+      function listener(e){e.clipboardData.setData('text/html',htmlData);e.clipboardData.setData('text/plain',plainData);e.preventDefault();}
+      document.addEventListener('copy',listener,{once:true});
+      copied=document.execCommand('copy');
+      if(!copied) document.removeEventListener('copy',listener);
+    }catch(e){copied=false;}
+    if(!copied){ copyText(plainData,null); }
+    blinkTitle('🎫 적재 복사 완료!');
+    const b=document.getElementById('zd_slack_copy');const t=b.textContent;b.textContent='✅ 적재 복사 완료';setTimeout(()=>b.textContent=t,1500);
+  };
+
+  // 닫기
+  function onKey(e){if(e.key==='Escape'){overlay.remove();document.removeEventListener('keydown',onKey);}}
+  document.addEventListener('keydown',onKey);
+  document.getElementById('zd_close').onclick=()=>{overlay.remove();document.removeEventListener('keydown',onKey);};
+}
+
+// =========================================================================
+// 자동으로 코드를 묶어 북마크릿 링크로 만듭니다. (수정 불필요)
+// =========================================================================
+const codeString = '(' + runBookmarklet.toString() + ')();';
+const bm = 'javascript:' + encodeURIComponent(codeString);
+
+document.querySelector('.bookmark-btn').setAttribute('href', bm);
+document.getElementById('codeBox').textContent = bm;
+
+function copyCode() {
+  const ta = document.createElement('textarea');
+  ta.value = bm;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+  const btn = document.querySelector('.copy-manual button');
+  btn.textContent = '✅ 복사됨!';
+  setTimeout(function() { btn.textContent = '📋 코드 복사'; }, 2000);
+}
+</script>
+</body>
+</html>
