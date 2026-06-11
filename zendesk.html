@@ -38,10 +38,10 @@
     <li><span class="tag-r">개선</span> 추천 점수에 <strong>가중치</strong>를 적용했습니다. 결정적 단서(우회·영업손실비·가결제 등)는 크게, 보조어는 작게 반영하고 빈출어(불편·확인 등)는 점수에서 제외해 <strong>★ 정확도</strong>를 높였습니다</li>
     <li><span class="tag-r">개선</span> 칩을 누르면 아래 칸에 <strong>누적</strong>됩니다(덮어쓰지 않음). 사과 시작 + 본문 + 마무리처럼 <strong>여러 멘트를 쌓아</strong> 한 번에 복사하세요. 직접 수정한 내용도 보존됩니다</li>
     <li><span class="tag-r">추가</span> 상단 <strong>검색창</strong>으로 멘트를 라벨로 바로 찾을 수 있고, <strong>비우기</strong>로 누적 칸을 초기화합니다</li>
-    <li><span class="tag-r">추가</span> 멘트 11종 → <strong>21종</strong>으로 확장(이중결제·취소/노쇼 수수료·클레임 케어·분실물·현금/미수금·엄마포인트 후적용·영수증·환불소요·분리청구·유선상담)</li>
-    <li><strong>대괄호 선택 문구 포함</strong> 체크 시 [영구 차단] 같은 문장형 대괄호가 들어가고, 해제하면 빠집니다. <strong>[   ]</strong> 같은 짧은 채워넣기 표시는 항상 유지됩니다</li>
+    <li><span class="tag-r">개선</span> <strong>📋 슬랙 적재(티켓 복사)를 패널 상단</strong>으로 올렸습니다. 추천 멘트가 길어져도 티켓 단순 복사 시 스크롤 없이 바로 쓸 수 있습니다</li>
+    <li><span class="tag-r">추가</span> 멘트 21종 → <strong>24종</strong>으로 확장 — <strong>파트너 대응 멘트</strong> 추가(셔틀 불만·만족도 불만족·배차 추천 구조 안내)</li>
+    <li><span class="tag-r">개선</span> <strong>대괄호 선택 문구 포함</strong> 체크박스는 이제 <strong>드라이버 빠따</strong>처럼 [영구 차단] 같은 문장형 대괄호가 있는 멘트를 누를 때만 표시됩니다. 다른 멘트에서는 숨겨집니다. <strong>[   ]</strong> 같은 짧은 채워넣기 표시는 항상 유지됩니다</li>
     <li>패널의 <strong>🔄 다시 읽기</strong>로 현재 답변 에디터 내용을 다시 읽어 추천을 갱신합니다</li>
-    <li>하단 <strong>📋 슬랙 적재</strong>는 기존처럼 티켓 링크 + 문의 내용을 복사합니다</li>
   </ul>
 </div>
 
@@ -338,6 +338,9 @@ async function runBookmarklet() {
     {id:'아이폰기종', label:'아이폰 기종 정보 요청', key:['아이폰','iphone','ios'], trig:['앱오류','버그','튕김','먹통'], text:'현재 서버 측에서는 별도의 오류가 확인되지 않고 있습니다.\n번거로우시겠지만, 해당 현상을 확인할 수 있는 화면 녹화본과 함께 아래 정보를 전달해 주시면 면밀히 확인 후 안내드리겠습니다.\n\n* iOS 버전 : 설정 → 일반 → 정보 → iOS 버전\n* 사용 중인 기기명 : (예: iPhone 15, iPhone 14 Pro 등)\n* 오류 화면 녹화본 : (파일 첨부 필요)\n\n아울러 타다 앱 내 로그 전송 방법은 아래와 같습니다.\n타다 앱 실행 → 우측 상단 프로필 또는 메뉴(≡) → 설정 → 로그 전송\n위 경로를 통해 로그를 전송해 주시면 전달해 주신 자료와 함께 확인하여 보다 정확한 안내를 드리겠습니다.\n\n시간을 내어 문의해 주셨음에도 즉시 도움을 드리지 못한 점 진심으로 사과드리며, 번거로우시겠지만 관련 자료를 전달해 주시면 신속히 확인 후 안내드리겠습니다.'},
     {id:'자료요청', label:'자료 요청', key:[], trig:['캡처','스크린샷','증빙','자료'], text:'정확한 확인을 위해 해당 운행 일시·출발>도착지 및 결제 내역 캡처를 공유해 주시면 신속히 검토하겠습니다.'},
     {id:'유선상담', label:'전화상담→이메일', key:['유선','콜센터','전화상담'], trig:['통화상담','전화로'], text:'타다는 보다 많은 문의를 폭넓게 접수하고 정확히 안내드리기 위해 유선 채널이 아닌 이메일(문의하기)을 통해 상담을 진행하고 있습니다.\n\n번거로우시더라도 문의 내용을 남겨 주시면 신속히 확인하여 안내드리겠습니다.'},
+    {id:'셔틀불만파트너', label:'셔틀 불만(파트너)', key:['셔틀','b2b'], trig:['스케줄','구간','매출','파트너'], text:'B2B 셔틀 운행 건의 경우, 수락 이후에도 고객사 운영 스케줄에 따라 일정이 변동될 수 있는 점 안내드립니다.\n\n또한 요금은 운행 거리 구간에 따라 산정되며, 해당 셔틀 운행 건의 요금은 정상적으로 적용된 것으로 확인됩니다.\n\n아래 도움말을 참고하시어 운행 부탁드리며, 앞으로도 파트너님들의 매출 향상에 실질적으로 기여할 수 있는 운영 환경을 만들기 위해 지속적으로 고민하고 최선을 다하겠습니다.\n\n도움말 - [B2B 셔틀운행](https://help.tadatada.com/hc/ko/articles/50835140923417--25-09-%ED%83%80%EB%8B%A4-B2B-%EC%85%94%ED%8B%80-%EC%84%9C%EB%B9%84%EC%8A%A4-%EC%95%88%EB%82%B4)'},
+    {id:'파트너불만족', label:'파트너 불만족 사유', key:['불만족','만족도'], trig:['평가','별점','사유'], text:'문의해 주신 운행 건을 확인한 결과, 별도의 특이사항이나 기재된 사유 없이 이용자 만족도가 \'불만족\'으로만 확인되는 점 안내드립니다.\n\n만족도 평가는 이용자가 직접 남기는 항목으로, 구체적인 사유가 함께 기재되지 않은 경우 불만의 상세 내용까지 확인하기는 어려운 점 양해 부탁드립니다.\n\n다만 말씀해 주신 내용은 운행 환경 개선을 위한 참고 자료로 활용하며, 파트너님께서 안정적으로 운행하실 수 있도록 지속적으로 살펴보겠습니다.'},
+    {id:'배차불만파트너', label:'배차 관련 불만(파트너)', key:['배차'], trig:['콜','추천','라인업','지정'], text:'배차 관련하여 궁금하셨을 부분에 대해 안내드립니다.\n\n타다의 배차는 호출 발생 시 센터에서 개별적으로 배차를 지정하는 방식이 아니라, 다양한 조건을 종합하여 시스템이 자동으로 배차를 추천하는 구조입니다.\n\n일반적으로는 승차지와 가장 가까운 파트너님께 우선적으로 호출이 추천되지만, 배차 과정에서는 기예약 호출 여부, 라인업 상태, 목적지 방향 콜 여부, 퇴근 콜 여부, 이용자와의 차단 설정 여부 등 실제 운행 수행이 가능한 상태인지를 포함한 여러 요소가 종합적으로 반영됩니다.\n\n이러한 기준에 따라 특정 호출이 배차되지 않거나 다른 파트너님께 추천될 수 있는 점 참고 부탁드립니다.'},
     {id:'사과마무리', label:'사과(마무리)', key:[], trig:[], text:'다시 한번 불편을 드린 점 진심으로 사과드립니다.'},
     {id:'감사마무리', label:'감사(마무리)', key:[], trig:[], text:'시간 내어 문의 주셔서 감사드립니다.'}
   ];
@@ -353,25 +356,7 @@ async function runBookmarklet() {
       <button id="zd_close" style="margin-left:auto;border:none;background:#f1f3f5;border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:14px;">×</button>
     </div>
     <div style="padding:14px 16px;">
-      <!-- 추천 멘트 -->
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
-        <strong style="font-size:12px;color:#0a7d72;">💬 추천 멘트</strong>
-        <span style="font-size:10px;color:#aaa;">칩 클릭 → 아래에 누적 → 복사</span>
-        <button id="zd_refresh" style="margin-left:auto;padding:3px 8px;border:1px solid #0a7d72;background:#fff;color:#0a7d72;border-radius:6px;cursor:pointer;font-size:10px;font-weight:bold;">🔄 다시 읽기</button>
-      </div>
-      <input id="zd_ment_filter" type="text" placeholder="멘트 검색 (예: 요금, 분실물, 가결제)" style="width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid #cdeae6;border-radius:6px;font-size:11.5px;margin-bottom:6px;">
-      <div id="zd_ment_status" style="font-size:10px;color:#aaa;margin-bottom:6px;"></div>
-      <div id="zd_ment_chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
-      <label id="zd_ment_optwrap" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;user-select:none;"><input type="checkbox" id="zd_ment_opt" style="accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;"> <span>영구 차단 등 선택 문구 포함 (체크 후 칩 클릭 / 또는 추가 직후 토글)</span></label>
-      <textarea id="zd_ment_preview" rows="6" placeholder="멘트 칩을 누르면 여기에 누적됩니다. 자유롭게 수정 후 복사하세요." style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cdeae6;border-radius:6px;font-size:12.5px;line-height:1.7;resize:vertical;background:#fbfdfc;margin-bottom:6px;min-height:120px;"></textarea>
-      <div style="display:flex;gap:6px;">
-        <button id="zd_ment_copy" style="flex:1;padding:7px;background:#0a7d72;border:1px solid #0a7d72;color:#fff;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">📋 복사하기</button>
-        <button id="zd_ment_clear" style="padding:7px 12px;background:#fff;border:1px solid #cfd6d4;color:#777;border-radius:6px;cursor:pointer;font-size:12px;">비우기</button>
-      </div>
-
-      <div style="border-top:1px solid #eee;margin:14px 0;"></div>
-
-      <!-- 슬랙 적재 -->
+      <!-- 슬랙 적재 (상단: 티켓 단순 복사 우선) -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
         <strong style="font-size:13px;color:#0052cc;">📋 슬랙 적재</strong>
         <div style="margin-left:auto;display:flex;gap:6px;">
@@ -385,6 +370,24 @@ async function runBookmarklet() {
       </div>
       <textarea id="zd_content" rows="9" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #ccc;border-radius:6px;font-size:12.5px;line-height:1.6;resize:vertical;margin-bottom:8px;min-height:150px;"></textarea>
       <button id="zd_slack_copy" style="width:100%;padding:9px;background:#0052cc;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;">티켓 적재 복사</button>
+
+      <div style="border-top:1px solid #eee;margin:14px 0;"></div>
+
+      <!-- 추천 멘트 (하단: 답변 작성 보조) -->
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+        <strong style="font-size:12px;color:#0a7d72;">💬 추천 멘트</strong>
+        <span style="font-size:10px;color:#aaa;">칩 클릭 → 아래에 누적 → 복사</span>
+        <button id="zd_refresh" style="margin-left:auto;padding:3px 8px;border:1px solid #0a7d72;background:#fff;color:#0a7d72;border-radius:6px;cursor:pointer;font-size:10px;font-weight:bold;">🔄 다시 읽기</button>
+      </div>
+      <input id="zd_ment_filter" type="text" placeholder="멘트 검색 (예: 요금, 분실물, 가결제)" style="width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid #cdeae6;border-radius:6px;font-size:11.5px;margin-bottom:6px;">
+      <div id="zd_ment_status" style="font-size:10px;color:#aaa;margin-bottom:6px;"></div>
+      <div id="zd_ment_chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+      <label id="zd_ment_optwrap" style="display:none;align-items:center;gap:6px;margin-bottom:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;user-select:none;"><input type="checkbox" id="zd_ment_opt" style="accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;"> <span>영구 차단 등 선택 문구 포함 (체크 후 칩 클릭 / 또는 추가 직후 토글)</span></label>
+      <textarea id="zd_ment_preview" rows="6" placeholder="멘트 칩을 누르면 여기에 누적됩니다. 자유롭게 수정 후 복사하세요." style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cdeae6;border-radius:6px;font-size:12.5px;line-height:1.7;resize:vertical;background:#fbfdfc;margin-bottom:6px;min-height:120px;"></textarea>
+      <div style="display:flex;gap:6px;">
+        <button id="zd_ment_copy" style="flex:1;padding:7px;background:#0a7d72;border:1px solid #0a7d72;color:#fff;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">📋 복사하기</button>
+        <button id="zd_ment_clear" style="padding:7px 12px;background:#fff;border:1px solid #cfd6d4;color:#777;border-radius:6px;cursor:pointer;font-size:12px;">비우기</button>
+      </div>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -432,6 +435,7 @@ async function runBookmarklet() {
   const mentCopyBtn=document.getElementById('zd_ment_copy');
   const mentClearBtn=document.getElementById('zd_ment_clear');
   const optBox=document.getElementById('zd_ment_opt');
+  const optwrap=document.getElementById('zd_ment_optwrap');
 
   const norm=(s)=>(s||'').toLowerCase();
   // 고객 인입 문의 + 작성 중인 답변을 함께 신호로 사용 (작성 전에도 문의 기준 추천)
@@ -465,6 +469,9 @@ async function runBookmarklet() {
     const cur=previewEl.value;
     previewEl.value=cur.trim()?(cur.replace(/\s+$/,'')+'\n\n'+seg):seg;
     lastMent=m; lastSeg=seg;
+    // 영구 차단 등 선택 문구(문장형 대괄호)가 있는 멘트(드라이버 빠따)에서만 체크박스 노출
+    if(hasOptionalBracket(m.text)){ optwrap.style.display='flex'; }
+    else { optwrap.style.display='none'; optBox.checked=false; }
     previewEl.focus();
     previewEl.scrollTop=previewEl.scrollHeight;
   }
@@ -498,7 +505,7 @@ async function runBookmarklet() {
 
   document.getElementById('zd_refresh').onclick=()=>{ draftText=getDraftText(); renderMents(); };
   mentCopyBtn.onclick=function(){ copyText(previewEl.value,this); };
-  mentClearBtn.onclick=function(){ previewEl.value=''; lastMent=null; lastSeg=''; previewEl.focus(); };
+  mentClearBtn.onclick=function(){ previewEl.value=''; lastMent=null; lastSeg=''; optwrap.style.display='none'; optBox.checked=false; previewEl.focus(); };
   // 체크박스 토글 시, 방금 추가한 멘트가 선택 문구(문장형 대괄호)를 가지면 즉시 반영
   optBox.onchange=function(){
     if(lastMent&&hasOptionalBracket(lastMent.text)&&previewEl.value.endsWith(lastSeg)){
