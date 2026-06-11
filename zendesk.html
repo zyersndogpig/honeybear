@@ -39,7 +39,8 @@
     <li><span class="tag-r">개선</span> 칩을 누르면 아래 칸에 <strong>누적</strong>됩니다(덮어쓰지 않음). 사과 시작 + 본문 + 마무리처럼 <strong>여러 멘트를 쌓아</strong> 한 번에 복사하세요. 직접 수정한 내용도 보존됩니다</li>
     <li><span class="tag-r">추가</span> 상단 <strong>검색창</strong>으로 멘트를 라벨로 바로 찾을 수 있고, <strong>비우기</strong>로 누적 칸을 초기화합니다</li>
     <li><span class="tag-r">개선</span> <strong>📋 슬랙 적재(티켓 복사)를 패널 상단</strong>으로 올렸습니다. 추천 멘트가 길어져도 티켓 단순 복사 시 스크롤 없이 바로 쓸 수 있습니다</li>
-    <li><span class="tag-r">개선</span> 멘트 <strong>20종</strong>으로 정리 — <strong>파트너 대응 멘트</strong> 추가(셔틀 불만·만족도 불만족·배차 추천 구조 안내), 사용 빈도 낮은 멘트(취소/노쇼 수수료·엄마포인트 후적용·영손비·분실물) 정리</li>
+    <li><span class="tag-r">추가</span> <strong>카시트 환불관련</strong> 멘트 추가 — 칩을 누르면 <strong>드롭다운</strong>에서 경우(이너시트 미제공·카시트 미숙지·카시트 오염·환불 불가)를 골라 해당 안내문을 누적합니다</li>
+    <li><span class="tag-r">개선</span> 멘트 <strong>21종</strong>으로 정리 — <strong>파트너 대응 멘트</strong>(셔틀 불만·만족도 불만족·배차 추천 구조 안내)와 <strong>카시트 환불</strong> 추가, 사용 빈도 낮은 멘트(취소/노쇼 수수료·엄마포인트 후적용·영손비·분실물) 정리</li>
     <li><span class="tag-r">개선</span> <strong>대괄호 선택 문구 포함</strong> 체크박스는 이제 <strong>드라이버 빠따</strong>처럼 [영구 차단] 같은 문장형 대괄호가 있는 멘트를 누를 때만 표시됩니다. 다른 멘트에서는 숨겨집니다. <strong>[   ]</strong> 같은 짧은 채워넣기 표시는 항상 유지됩니다</li>
     <li>패널의 <strong>🔄 다시 읽기</strong>로 현재 답변 에디터 내용을 다시 읽어 추천을 갱신합니다</li>
   </ul>
@@ -330,13 +331,19 @@ async function runBookmarklet() {
     {id:'영수증발급', label:'영수증 발급 방법', key:['영수증','세금계산서'], trig:['발급'], text:'영수증은 아래 경로로 발급하실 수 있습니다.\n\n타다 앱 > 이용내역 > 이용완료 > 해당 내역 선택 > [이메일로 전송] > 받으실 이메일 주소 입력 > [영수증 전송하기]'},
     {id:'환불소요', label:'환불 처리 소요', key:['환불반영','환불소요','환불처리','환불언제'], trig:['며칠','입금','얼마나'], text:'환불은 결제하신 카드 승인 내역에 대한 취소 방식으로만 진행되며, 현금 환불은 불가한 점 양해 부탁드립니다.\n\n취소 처리 후 실제 환불 반영까지는 카드사 사정에 따라 영업일 기준 며칠 정도 소요될 수 있습니다.'},
     {id:'분리청구', label:'이용료·부가 분리청구', key:['분리청구','부가서비스결제'], trig:['따로결제','별도청구','두건'], text:'이용 요금과 카시트 등 부가서비스 요금은 각각 별도로 청구되어 결제 내역에 두 건으로 표시될 수 있으나, 이는 정상적인 청구 방식인 점 안내드립니다.'},
+    {id:'카시트환불', label:'카시트 환불관련', key:['카시트','이너시트'], trig:['환불','오염','미비치','옵션','부가서비스'], text:'카시트 부가서비스 환불 관련 안내 (경우를 선택하세요)', variants:[
+      {label:'이너시트 미제공 환불', text:'먼저 영아와 함께하는 중요한 이동 과정에서 불편과 심려를 끼쳐드린 점 진심으로 사과드립니다.\n\n특히 고객님께서는 영아 카시트 이용을 위해 타다를 선택해 주셨음에도, 사전에 요청하신 영아용 이너시트가 실제 차량에 준비되어 있지 않아 아기의 안전과 편안함에 대해 큰 불안과 불편을 겪으신 것으로 확인되었습니다.\n\n고객님께서 전달해 주신 내용과 드라이버 확인 결과를 종합해 본 결과, 해당 차량에는 영아용 이너시트가 비치되어 있지 않았던 것으로 확인되었습니다.\n\n고객님 말씀처럼 영아의 경우 이너시트 유무가 탑승 편의와 안전에 중요한 요소가 될 수 있음에도, 운행 전 해당 사항이 정확히 안내되지 못한 점에 대해서는 아쉬움이 있었다고 판단하고 있습니다.\n\n이에 해당 내용은 드라이버 관리 부서에 전달하여 카시트 구성품 관리 및 고객 응대 과정에 대한 재교육이 진행될 수 있도록 조치하겠습니다.\n\n또한 고객님께서 이용하신 카시트 부가서비스에 대해서는 정상적인 서비스 제공이 이루어지지 못한 것으로 판단되어 카시트 옵션 이용요금은 전액 환불 처리해 드릴 예정입니다.\n\n다만 본 이용 건은 실제 목적지까지 정상적으로 운행이 완료된 점과, 운행 자체가 제공된 점을 고려할 때 이용요금 전체 환불은 어려운 점 양해 부탁드립니다.\n\n타다는 차량 운행 서비스를 중개하는 플랫폼으로서, 운행이 완료된 건에 대한 전체 운행요금을 드라이버에게 일괄적으로 환불하도록 강제하기 어려운 구조인 점 또한 함께 양해 부탁드립니다.\n\n그럼에도 고객님께서 기대하셨던 수준의 서비스를 제공해 드리지 못한 점에 대해서는 무겁게 받아들이고 있으며, 특히 영아 동반 이용 고객이 보다 안심하고 서비스를 이용하실 수 있도록 카시트 관리 기준 및 안내 절차 개선에 참고하겠습니다.\n\n소중한 의견 남겨주셔서 감사드리며, 다시 한번 이용 과정에서 불편을 드린 점 진심으로 사과드립니다.'},
+      {label:'카시트 미숙지(장착·조작) 환불', text:'먼저 영아와 함께하는 중요한 이동 과정에서 불편과 심려를 끼쳐드린 점 진심으로 사과드립니다.\n\n특히 고객님께서는 영아 카시트 이용을 위해 타다를 선택해 주셨음에도, 드라이버의 카시트 장착 및 조작 미흡으로 인해 카시트를 정상적으로 이용하지 못하시어 아기의 안전과 편안함에 대해 큰 불안과 불편을 겪으신 것으로 확인되었습니다.\n\n고객님께서 전달해 주신 내용과 드라이버 확인 결과를 종합해 본 결과, 해당 운행 건에서 카시트가 정상적으로 장착·제공되지 못한 것으로 확인되었습니다.\n\n고객님 말씀처럼 영아의 경우 카시트의 올바른 장착 여부가 탑승 편의와 안전에 직결되는 중요한 요소임에도, 운행 과정에서 이를 제대로 제공해 드리지 못한 점에 대해서는 아쉬움이 있었다고 판단하고 있습니다.\n\n이에 해당 내용은 드라이버 관리 부서에 전달하여 카시트 장착·조작 및 고객 응대 과정에 대한 재교육이 진행될 수 있도록 조치하겠습니다.\n\n또한 고객님께서 이용하신 카시트 부가서비스에 대해서는 정상적인 서비스 제공이 이루어지지 못한 것으로 판단되어 카시트 옵션 이용요금은 전액 환불 처리해 드릴 예정입니다.\n\n다만 본 이용 건은 실제 목적지까지 정상적으로 운행이 완료된 점과, 운행 자체가 제공된 점을 고려할 때 이용요금 전체 환불은 어려운 점 양해 부탁드립니다.\n\n타다는 차량 운행 서비스를 중개하는 플랫폼으로서, 운행이 완료된 건에 대한 전체 운행요금을 드라이버에게 일괄적으로 환불하도록 강제하기 어려운 구조인 점 또한 함께 양해 부탁드립니다.\n\n그럼에도 고객님께서 기대하셨던 수준의 서비스를 제공해 드리지 못한 점에 대해서는 무겁게 받아들이고 있으며, 특히 영아 동반 이용 고객이 보다 안심하고 서비스를 이용하실 수 있도록 카시트 장착·관리 기준 및 안내 절차 개선에 참고하겠습니다.\n\n소중한 의견 남겨주셔서 감사드리며, 다시 한번 이용 과정에서 불편을 드린 점 진심으로 사과드립니다.'},
+      {label:'카시트 오염 환불', text:'먼저 영아와 함께하는 중요한 이동 과정에서 불편과 심려를 끼쳐드린 점 진심으로 사과드립니다.\n\n특히 고객님께서는 영아 카시트 이용을 위해 타다를 선택해 주셨음에도, 카시트가 오염된 상태로 비치되어 있어 아기를 위생적으로 안심하고 탑승시키기 어려운 불편을 겪으신 것으로 확인되었습니다.\n\n고객님께서 전달해 주신 내용과 드라이버 확인 결과를 종합해 본 결과, 해당 차량의 카시트가 청결하지 못한 상태였던 것으로 확인되었습니다.\n\n고객님 말씀처럼 영아의 경우 카시트의 청결 상태가 탑승 위생과 안전에 중요한 요소가 될 수 있음에도, 운행 전 카시트 상태가 제대로 관리되지 못한 점에 대해서는 아쉬움이 있었다고 판단하고 있습니다.\n\n이에 해당 내용은 드라이버 관리 부서에 전달하여 카시트 청결·소독 관리 및 고객 응대 과정에 대한 재교육이 진행될 수 있도록 조치하겠습니다.\n\n또한 고객님께서 이용하신 카시트 부가서비스에 대해서는 정상적인 서비스 제공이 이루어지지 못한 것으로 판단되어 카시트 옵션 이용요금은 전액 환불 처리해 드릴 예정입니다.\n\n다만 본 이용 건은 실제 목적지까지 정상적으로 운행이 완료된 점과, 운행 자체가 제공된 점을 고려할 때 이용요금 전체 환불은 어려운 점 양해 부탁드립니다.\n\n타다는 차량 운행 서비스를 중개하는 플랫폼으로서, 운행이 완료된 건에 대한 전체 운행요금을 드라이버에게 일괄적으로 환불하도록 강제하기 어려운 구조인 점 또한 함께 양해 부탁드립니다.\n\n그럼에도 고객님께서 기대하셨던 수준의 서비스를 제공해 드리지 못한 점에 대해서는 무겁게 받아들이고 있으며, 특히 영아 동반 이용 고객이 보다 안심하고 서비스를 이용하실 수 있도록 카시트 위생 관리 기준 및 안내 절차 개선에 참고하겠습니다.\n\n소중한 의견 남겨주셔서 감사드리며, 다시 한번 이용 과정에서 불편을 드린 점 진심으로 사과드립니다.'},
+      {label:'환불 불가', text:'문의주신 카시트 부가서비스의 경우, 카시트 오염, 카시트 미비치, 또는 드라이버의 카시트 장착·조작 미흡 등으로 정상적인 서비스가 제공되지 않은 경우에는 환불이 가능합니다.\n\n다만 본 건은 부가서비스가 제공되지 않았거나 정상적으로 제공되지 않은 경우에 해당하지 않아, 카시트 부가서비스 요금 환불은 어려운 점 너른 양해 부탁드립니다.'}
+    ]},
     {id:'안드로이드기종', label:'안드로이드 기종 정보 요청', key:['안드로이드','갤럭시','android'], trig:['앱오류','버그','튕김','먹통'], text:'현재 서버 측에서는 별도의 오류가 확인되지 않고 있습니다.\n번거로우시겠지만, 해당 현상을 확인할 수 있는 화면 녹화본과 함께 아래 정보를 전달해 주시면 면밀히 확인 후 안내드리겠습니다.\n\n* ONE UI 버전 : 설정 → 휴대전화 정보 → 소프트웨어 정보\n* 사용 중인 기기명 :\n* 오류 화면 녹화본 : (파일 첨부 필요)\n\n시간을 내어 문의해 주셨음에도 즉시 도움을 드리지 못한 점 진심으로 사과드리며, 자료를 전달해 주시면 신속히 확인 후 안내드리겠습니다.'},
     {id:'아이폰기종', label:'아이폰 기종 정보 요청', key:['아이폰','iphone','ios'], trig:['앱오류','버그','튕김','먹통'], text:'현재 서버 측에서는 별도의 오류가 확인되지 않고 있습니다.\n번거로우시겠지만, 해당 현상을 확인할 수 있는 화면 녹화본과 함께 아래 정보를 전달해 주시면 면밀히 확인 후 안내드리겠습니다.\n\n* iOS 버전 : 설정 → 일반 → 정보 → iOS 버전\n* 사용 중인 기기명 : (예: iPhone 15, iPhone 14 Pro 등)\n* 오류 화면 녹화본 : (파일 첨부 필요)\n\n아울러 타다 앱 내 로그 전송 방법은 아래와 같습니다.\n타다 앱 실행 → 우측 상단 프로필 또는 메뉴(≡) → 설정 → 로그 전송\n위 경로를 통해 로그를 전송해 주시면 전달해 주신 자료와 함께 확인하여 보다 정확한 안내를 드리겠습니다.\n\n시간을 내어 문의해 주셨음에도 즉시 도움을 드리지 못한 점 진심으로 사과드리며, 번거로우시겠지만 관련 자료를 전달해 주시면 신속히 확인 후 안내드리겠습니다.'},
     {id:'자료요청', label:'자료 요청', key:[], trig:['캡처','스크린샷','증빙','자료'], text:'정확한 확인을 위해 해당 운행 일시·출발>도착지 및 결제 내역 캡처를 공유해 주시면 신속히 검토하겠습니다.'},
     {id:'유선상담', label:'전화상담→이메일', key:['유선','콜센터','전화상담'], trig:['통화상담','전화로'], text:'타다는 보다 많은 문의를 폭넓게 접수하고 정확히 안내드리기 위해 유선 채널이 아닌 이메일(문의하기)을 통해 상담을 진행하고 있습니다.\n\n번거로우시더라도 문의 내용을 남겨 주시면 신속히 확인하여 안내드리겠습니다.'},
     {id:'셔틀불만파트너', label:'셔틀 불만(파트너)', key:['셔틀','b2b'], trig:['스케줄','구간','매출','파트너'], text:'B2B 셔틀 운행 건의 경우, 수락 이후에도 고객사 운영 스케줄에 따라 일정이 변동될 수 있는 점 안내드립니다.\n\n또한 요금은 운행 거리 구간에 따라 산정되며, 해당 셔틀 운행 건의 요금은 정상적으로 적용된 것으로 확인됩니다.\n\n아래 도움말을 참고하시어 운행 부탁드리며, 앞으로도 파트너님들의 매출 향상에 실질적으로 기여할 수 있는 운영 환경을 만들기 위해 지속적으로 고민하고 최선을 다하겠습니다.\n\n도움말 - [B2B 셔틀운행](https://help.tadatada.com/hc/ko/articles/50835140923417--25-09-%ED%83%80%EB%8B%A4-B2B-%EC%85%94%ED%8B%80-%EC%84%9C%EB%B9%84%EC%8A%A4-%EC%95%88%EB%82%B4)'},
     {id:'파트너불만족', label:'파트너 불만족 사유', key:['불만족','만족도'], trig:['평가','별점','사유'], text:'문의해 주신 운행 건을 확인한 결과, 별도의 특이사항이나 기재된 사유 없이 이용자 만족도가 \'불만족\'으로만 확인되는 점 안내드립니다.\n\n만족도 평가는 이용자가 직접 남기는 항목으로, 구체적인 사유가 함께 기재되지 않은 경우 불만의 상세 내용까지 확인하기는 어려운 점 양해 부탁드립니다.\n\n다만 말씀해 주신 내용은 운행 환경 개선을 위한 참고 자료로 활용하며, 파트너님께서 안정적으로 운행하실 수 있도록 지속적으로 살펴보겠습니다.'},
-    {id:'배차불만파트너', label:'배차 관련 불만(파트너)', key:['배차'], trig:['콜','추천','라인업','지정'], text:'타다의 배차는 호출 발생 시 센터에서 개별적으로 배차를 지정하는 방식이 아니라, 다양한 조건을 종합하여 시스템이 자동으로 배차를 추천하는 구조입니다.\n\n일반적으로는 승차지와 가장 가까운 파트너님께 우선적으로 호출이 추천되지만, 배차 과정에서는 기예약 충돌 여부, 라인업 상태, 목적지 방향 콜 여부, 퇴근 콜 여부, 이용자와의 차단 설정 여부 등 실제 운행 수행이 가능한 상태인지를 포함한 여러 요소가 종합적으로 반영되는 점 참고 부탁드립니다.'},
+    {id:'배차불만파트너', label:'배차 관련 불만(파트너)', key:['배차'], trig:['콜','추천','라인업','지정'], text:'타다의 배차는 호출 발생 시 센터에서 개별적으로 배차를 지정하는 방식이 아니라, 다양한 조건을 종합하여 시스템이 자동으로 배차를 추천하는 구조입니다.\n\n일반적으로는 승차지와 가장 가까운 파트너님께 우선적으로 호출이 추천되지만, 배차 과정에서는 기예약 호출 여부, 라인업 상태, 목적지 방향 콜 여부, 퇴근 콜 여부, 이용자와의 차단 설정 여부 등 실제 운행 수행이 가능한 상태인지를 포함한 여러 요소가 종합적으로 반영되는 점 참고 부탁드립니다.'},
     {id:'사과마무리', label:'사과(마무리)', key:[], trig:[], text:'다시 한번 불편을 드린 점 진심으로 사과드립니다.'},
     {id:'감사마무리', label:'감사(마무리)', key:[], trig:[], text:'시간 내어 문의 주셔서 감사드립니다.'}
   ];
@@ -378,6 +385,7 @@ async function runBookmarklet() {
       <input id="zd_ment_filter" type="text" placeholder="멘트 검색 (예: 요금, 분실물, 가결제)" style="width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid #cdeae6;border-radius:6px;font-size:11.5px;margin-bottom:6px;">
       <div id="zd_ment_status" style="font-size:10px;color:#aaa;margin-bottom:6px;"></div>
       <div id="zd_ment_chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+      <div id="zd_ment_variant" style="display:none;margin-bottom:8px;"></div>
       <label id="zd_ment_optwrap" style="display:none;align-items:center;gap:6px;margin-bottom:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;user-select:none;"><input type="checkbox" id="zd_ment_opt" style="accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;"> <span>영구 차단 등 선택 문구 포함 (체크 후 칩 클릭 / 또는 추가 직후 토글)</span></label>
       <textarea id="zd_ment_preview" rows="6" placeholder="멘트 칩을 누르면 여기에 누적됩니다. 자유롭게 수정 후 복사하세요." style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cdeae6;border-radius:6px;font-size:12.5px;line-height:1.7;resize:vertical;background:#fbfdfc;margin-bottom:6px;min-height:120px;"></textarea>
       <div style="display:flex;gap:6px;">
@@ -432,6 +440,7 @@ async function runBookmarklet() {
   const mentClearBtn=document.getElementById('zd_ment_clear');
   const optBox=document.getElementById('zd_ment_opt');
   const optwrap=document.getElementById('zd_ment_optwrap');
+  const variantBox=document.getElementById('zd_ment_variant');
 
   const norm=(s)=>(s||'').toLowerCase();
   // 고객 인입 문의 + 작성 중인 답변을 함께 신호로 사용 (작성 전에도 문의 기준 추천)
@@ -460,16 +469,36 @@ async function runBookmarklet() {
     while((mm=re.exec(t))){ const i=mm[1].trim(); if(i.length>15||/[.!?。]/.test(i)) return true; }
     return false;
   }
-  function addMent(m){
-    const seg=processBrackets(m.text,optBox.checked);
+  function addMent(m,textOverride){
+    const useText=(textOverride!=null)?textOverride:m.text;
+    const seg=processBrackets(useText,optBox.checked);
     const cur=previewEl.value;
     previewEl.value=cur.trim()?(cur.replace(/\s+$/,'')+'\n\n'+seg):seg;
-    lastMent=m; lastSeg=seg;
+    lastMent={text:useText}; lastSeg=seg;
     // 영구 차단 등 선택 문구(문장형 대괄호)가 있는 멘트(드라이버 빠따)에서만 체크박스 노출
-    if(hasOptionalBracket(m.text)){ optwrap.style.display='flex'; }
+    if(hasOptionalBracket(useText)){ optwrap.style.display='flex'; }
     else { optwrap.style.display='none'; optBox.checked=false; }
     previewEl.focus();
     previewEl.scrollTop=previewEl.scrollHeight;
+  }
+  // 변형(variants) 멘트: 칩 클릭 시 경우 선택 드롭다운 노출
+  function closeVariants(){ variantBox.style.display='none'; variantBox.innerHTML=''; }
+  function showVariants(m){
+    variantBox.innerHTML='';
+    const wrap=document.createElement('div');
+    wrap.style.cssText='display:flex;align-items:center;gap:6px;';
+    const lab=document.createElement('span');
+    lab.textContent=m.label+' →';
+    lab.style.cssText='font-size:11px;color:#0a5d54;font-weight:bold;white-space:nowrap;';
+    const sel=document.createElement('select');
+    sel.style.cssText='flex:1;padding:5px 8px;border:1px solid #cdeae6;border-radius:6px;font-size:11.5px;background:#fff;color:#333;cursor:pointer;';
+    const def=document.createElement('option'); def.value=''; def.textContent='경우 선택…'; sel.appendChild(def);
+    m.variants.forEach((v,i)=>{ const o=document.createElement('option'); o.value=String(i); o.textContent=v.label; sel.appendChild(o); });
+    sel.onchange=()=>{ if(sel.value===''){return;} addMent(m,m.variants[+sel.value].text); closeVariants(); };
+    wrap.appendChild(lab); wrap.appendChild(sel);
+    variantBox.appendChild(wrap);
+    variantBox.style.display='block';
+    sel.focus();
   }
   function renderMents(){
     const txt=signalText();
@@ -486,13 +515,14 @@ async function runBookmarklet() {
           ? (matched.length>0?'문의·작성 글 기준 추천입니다 (★ = 관련도 높음). 칩을 누르면 아래에 누적됩니다.':'추천 단서를 못 찾아 전체 멘트를 표시합니다.')
           : '문의 내용 기준으로 정렬했습니다. 답변 작성 후 🔄로 갱신하세요.');
     chipsBox.innerHTML='';
+    if(typeof closeVariants==='function') closeVariants();
     ordered.forEach(({m,score,hits})=>{
       const b=document.createElement('button');
       const hot=score>0;
       b.style.cssText='padding:4px 9px;border-radius:13px;cursor:pointer;font-size:11px;border:1px solid '+(hot?'#0a7d72':'#cfd6d4')+';background:'+(hot?'#e6f7f4':'#fff')+';color:'+(hot?'#0a5d54':'#555')+';font-weight:'+(hot?'bold':'normal')+';';
-      b.textContent=(hot?'★ ':'')+m.label;
-      b.title=(hits&&hits.length?('추천 근거: '+hits.join(', ')+'\n\n'):'')+m.text;
-      b.onclick=()=>addMent(m);
+      b.textContent=(hot?'★ ':'')+m.label+(m.variants?' ▾':'');
+      b.title=(hits&&hits.length?('추천 근거: '+hits.join(', ')+'\n\n'):'')+(m.variants?('경우 선택: '+m.variants.map(v=>v.label).join(' / ')):m.text);
+      b.onclick=m.variants?(()=>showVariants(m)):(()=>addMent(m));
       chipsBox.appendChild(b);
     });
   }
