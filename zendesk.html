@@ -244,7 +244,28 @@ async function runBookmarklet() {
           const commentPosInBody=bodyText.indexOf(rawTxt.slice(0,20).trim());
           if(commentPosInBody>=0&&commentPosInBody>bodyLimit) continue;
         }
-        if(/타다 팀 드림|타다를 이용해 주셔서|이용 경험 평가하기|안녕하세요\.\s*[가-힣]+님\s*타다/.test(rawTxt)){
+        // 타다 발신(아웃바운드) 자동안내 코멘트는 제외.
+        // 단, 고객이 안내문을 "인용"하고 그 뒤에 실제 문의(예: 발송경위 확인)를 덧붙인 경우는 살린다.
+        const OUT_SIG=[/타다 팀 드림/,/타다를 이용해 주셔서/,/이용 경험 평가하기/,/안녕하세요\.\s*[가-힣]+님\s*타다/];
+        let sigEnd=-1;
+        for(const re of OUT_SIG){ const m=rawTxt.match(re); if(m){ const e=rawTxt.lastIndexOf(m[0])+m[0].length; if(e>sigEnd) sigEnd=e; } }
+        if(sigEnd>=0){
+          const after=rawTxt.slice(sigEnd)
+            .split('\n').map(s=>s.trim())
+            .filter(s=>s && !/^[·•\-]$/.test(s) && !/^\d{1,2}:\d{2}$/.test(s)
+              && !/^타다를 이용해 주셔서|^이용 경험 평가하기|^타다 팀 드림/.test(s))
+            .join(' ').trim();
+          if(after.length<2){ continue; } // 시그니처 뒤 실질 발화 없음 → 순수 아웃바운드 제외
+          // 인용+문의 코멘트: 노이즈만 제거하고 인용 본문·문단 빈 줄은 보존하여 그대로 적재
+          const quoted=rawTxt.split('\n').filter(l=>{ const t=l.trim();
+            if(/^https?:\/\//.test(t)) return false;
+            if(/^\d{1,2}:\d{2}$/.test(t)) return false;
+            if(/\.(png|jpg|jpeg|gif|pdf)$/i.test(t)) return false;
+            if(/^수신자:$|^자세히 보기$|^원본 메일|^-{3,}/.test(t)) return false;
+            if(/^메시지 작성기$|^메시징$|^보내기$|^사진 또는 자료|^상담 중인 날짜/.test(t)) return false;
+            return true;
+          }).join('\n').replace(/[ \t]+$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
+          if(quoted.length>0) customerMsgs.push(quoted);
           continue;
         }
         const cutIdx=rawTxt.indexOf('메시지 작성기');
