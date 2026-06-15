@@ -4,53 +4,53 @@
 <meta charset="UTF-8">
 <title>🎫 티켓 뷰 설치</title>
 <style>
-  body{font-family:-apple-system,sans-serif;max-width:600px;margin:40px auto;padding:0 20px;background:#f8f9fa;color:#333;}
-  .card{background:#fff;border-radius:12px;padding:24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
-  h1{font-size:22px;margin:0 0 4px;} .sub{color:#666;font-size:14px;margin-bottom:20px;}
-  .bookmark-btn{display:inline-block;padding:12px 24px;background:#0a7d72;color:#fff;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;cursor:grab;}
-  .drag-hint{font-size:13px;color:#888;margin-top:8px;}
-  .step{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px;font-size:14px;}
-  .num{background:#0a7d72;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:1px;}
-  .code-box{background:#f1f3f5;border-radius:6px;padding:12px;font-size:11px;word-break:break-all;font-family:monospace;max-height:80px;overflow:auto;margin-top:12px;}
-  .copy-manual{margin-top:8px;} .copy-manual button{padding:6px 14px;background:#059669;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;}
-  h2{font-size:15px;margin:0 0 12px;}
-  .feat{background:#e6f7f4;border-radius:6px;padding:10px 12px;font-size:13px;color:#0a5d54;margin-bottom:12px;}
-  .fix-list{font-size:13px;color:#555;padding-left:18px;margin:0;} .fix-list li{margin-bottom:5px;}
-  .tag-r{display:inline-block;background:#0a7d72;color:#fff;font-size:11px;padding:1px 6px;border-radius:4px;margin-right:4px;}
+body{font-family:-apple-system,sans-serif;max-width:600px;margin:40px auto;padding:0 20px;background:#f8f9fa;color:#333;}
+.card{background:#fff;border-radius:12px;padding:24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+h1{font-size:22px;margin:0 0 4px;} .sub{color:#666;font-size:14px;margin-bottom:20px;}
+.bookmark-btn{display:inline-block;padding:12px 24px;background:#0a7d72;color:#fff;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;cursor:grab;}
+.drag-hint{font-size:13px;color:#888;margin-top:8px;}
+.step{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px;font-size:14px;}
+.num{background:#0a7d72;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:1px;}
+.code-box{background:#f1f3f5;border-radius:6px;padding:12px;font-size:11px;word-break:break-all;font-family:monospace;max-height:80px;overflow:auto;margin-top:12px;}
+.copy-manual{margin-top:8px;} .copy-manual button{padding:6px 14px;background:#059669;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;}
+h2{font-size:15px;margin:0 0 12px;}
+.feat{background:#e6f7f4;border-radius:6px;padding:10px 12px;font-size:13px;color:#0a5d54;margin-bottom:12px;}
+.fix-list{font-size:13px;color:#555;padding-left:18px;margin:0;} .fix-list li{margin-bottom:5px;}
+.tag-r{display:inline-block;background:#0a7d72;color:#fff;font-size:11px;padding:1px 6px;border-radius:4px;margin-right:4px;}
 </style>
 </head>
 <body>
 <div class="card">
-  <h1>🎫 티켓 뷰</h1>
-  <p class="sub">고객 문의·작성 답변 기준 멘트 추천 + 누적 작성 + 슬랙 적재</p>
-  <div class="step"><div class="num">1</div><p>아래 버튼을 북마크바로 <strong>드래그</strong>하세요</p></div>
-  <div class="step"><div class="num">2</div>
-    <div><a href="HREF_PLACEHOLDER" class="bookmark-btn">🎫 티켓 뷰</a>
-    <div class="drag-hint">↑ 이 버튼을 북마크바로 끌어다 놓으세요</div></div>
-  </div>
-  <div class="step"><div class="num">3</div><p>젠데스크 티켓 화면에서 북마크를 클릭하면 우측에 패널이 열립니다</p></div>
+<h1>🎫 티켓 뷰</h1>
+<p class="sub">고객 문의·작성 답변 기준 멘트 추천 + 누적 작성 + 슬랙 적재</p>
+<div class="step"><div class="num">1</div><p>아래 버튼을 북마크바로 <strong>드래그</strong>하세요</p></div>
+<div class="step"><div class="num">2</div>
+<div><a href="HREF_PLACEHOLDER" class="bookmark-btn">🎫 티켓 뷰</a>
+<div class="drag-hint">↑ 이 버튼을 북마크바로 끌어다 놓으세요</div></div>
+</div>
+<div class="step"><div class="num">3</div><p>젠데스크 티켓 화면에서 북마크를 클릭하면 우측에 패널이 열립니다</p></div>
 </div>
 
 <div class="card">
-  <h2>💬 추천 멘트 — 이렇게 씁니다</h2>
-    <div class="feat">상담사가 매크로로 답변을 작성하면, 도구가 <strong>고객 인입 문의와 작성 중인 답변</strong>을 함께 읽어 어울리는 보조 멘트(중개 플랫폼 한계, 능동 제재 등)를 추천합니다. 답변을 아직 안 썼어도 <strong>문의 내용만으로</strong> 관련 멘트가 위로 정렬됩니다.</div>
-  <ul class="fix-list">
-    <li><span class="tag-r">개선</span> 추천 점수에 <strong>가중치</strong>를 적용했습니다. 결정적 단서(우회·영업손실비·가결제 등)는 크게, 보조어는 작게 반영하고 빈출어(불편·확인 등)는 점수에서 제외해 <strong>★ 정확도</strong>를 높였습니다</li>
-    <li><span class="tag-r">개선</span> 칩을 누르면 아래 칸에 <strong>누적</strong>됩니다(덮어쓰지 않음). 사과 시작 + 본문 + 마무리처럼 <strong>여러 멘트를 쌓아</strong> 한 번에 복사하세요. 직접 수정한 내용도 보존됩니다</li>
-    <li><span class="tag-r">추가</span> 상단 <strong>검색창</strong>으로 멘트를 라벨로 바로 찾을 수 있고, <strong>비우기</strong>로 누적 칸을 초기화합니다</li>
-    <li><span class="tag-r">개선</span> <strong>📋 슬랙 적재(티켓 복사)를 패널 상단</strong>으로 올렸습니다. 추천 멘트가 길어져도 티켓 단순 복사 시 스크롤 없이 바로 쓸 수 있습니다</li>
-    <li><span class="tag-r">추가</span> <strong>카시트 환불관련</strong> 멘트 추가 — 칩을 누르면 <strong>드롭다운</strong>에서 경우(이너시트 미제공·카시트 미숙지·카시트 오염·환불 불가)를 골라 해당 안내문을 누적합니다</li>
-    <li><span class="tag-r">개선</span> 멘트 <strong>21종</strong>으로 정리 — <strong>파트너 대응 멘트</strong>(셔틀 불만·만족도 불만족·배차 추천 구조 안내)와 <strong>카시트 환불</strong> 추가, 사용 빈도 낮은 멘트(취소/노쇼 수수료·엄마포인트 후적용·영손비·분실물) 정리</li>
-    <li><span class="tag-r">개선</span> <strong>대괄호 선택 문구 포함</strong> 체크박스는 이제 <strong>드라이버 빠따</strong>처럼 [영구 차단] 같은 문장형 대괄호가 있는 멘트를 누를 때만 표시됩니다. 다른 멘트에서는 숨겨집니다. <strong>[   ]</strong> 같은 짧은 채워넣기 표시는 항상 유지됩니다</li>
-    <li>패널의 <strong>🔄 다시 읽기</strong>로 현재 답변 에디터 내용을 다시 읽어 추천을 갱신합니다</li>
-  </ul>
+<h2>💬 추천 멘트 — 이렇게 씁니다</h2>
+<div class="feat">상담사가 매크로로 답변을 작성하면, 도구가 <strong>고객 인입 문의와 작성 중인 답변</strong>을 함께 읽어 어울리는 보조 멘트(중개 플랫폼 한계, 능동 제재 등)를 추천합니다. 답변을 아직 안 썼어도 <strong>문의 내용만으로</strong> 관련 멘트가 위로 정렬됩니다.</div>
+<ul class="fix-list">
+<li><span class="tag-r">개선</span> 추천 점수에 <strong>가중치</strong>를 적용했습니다. 결정적 단서(우회·영업손실비·가결제 등)는 크게, 보조어는 작게 반영하고 빈출어(불편·확인 등)는 점수에서 제외해 <strong>★ 정확도</strong>를 높였습니다</li>
+<li><span class="tag-r">개선</span> 칩을 누르면 아래 칸에 <strong>누적</strong>됩니다(덮어쓰지 않음). 사과 시작 + 본문 + 마무리처럼 <strong>여러 멘트를 쌓아</strong> 한 번에 복사하세요. 직접 수정한 내용도 보존됩니다</li>
+<li><span class="tag-r">추가</span> 상단 <strong>검색창</strong>으로 멘트를 라벨로 바로 찾을 수 있고, <strong>비우기</strong>로 누적 칸을 초기화합니다</li>
+<li><span class="tag-r">개선</span> <strong>📋 슬랙 적재(티켓 복사)를 패널 상단</strong>으로 올렸습니다. 추천 멘트가 길어져도 티켓 단순 복사 시 스크롤 없이 바로 쓸 수 있습니다</li>
+<li><span class="tag-r">추가</span> <strong>카시트 환불관련</strong> 멘트 추가 — 칩을 누르면 <strong>드롭다운</strong>에서 경우(이너시트 미제공·카시트 미숙지·카시트 오염·환불 불가)를 골라 해당 안내문을 누적합니다</li>
+<li><span class="tag-r">개선</span> 멘트 <strong>21종</strong>으로 정리 — <strong>파트너 대응 멘트</strong>(셔틀 불만·만족도 불만족·배차 추천 구조 안내)와 <strong>카시트 환불</strong> 추가, 사용 빈도 낮은 멘트(취소/노쇼 수수료·엄마포인트 후적용·영손비·분실물) 정리</li>
+<li><span class="tag-r">개선</span> <strong>대괄호 선택 문구 포함</strong> 체크박스는 이제 <strong>드라이버 빠따</strong>처럼 [영구 차단] 같은 문장형 대괄호가 있는 멘트를 누를 때만 표시됩니다. 다른 멘트에서는 숨겨집니다. <strong>[   ]</strong> 같은 짧은 채워넣기 표시는 항상 유지됩니다</li>
+<li>패널의 <strong>🔄 다시 읽기</strong>로 현재 답변 에디터 내용을 다시 읽어 추천을 갱신합니다</li>
+</ul>
 </div>
 
 <div class="card">
-  <h2>버튼이 드래그가 안 되면</h2>
-  <p style="font-size:13px;color:#555;margin:0 0 8px;">아래 코드를 복사해 북마크를 새로 만들고 URL 칸에 붙여넣으세요.</p>
-  <div class="code-box" id="codeBox"></div>
-  <div class="copy-manual"><button onclick="copyCode()">📋 코드 복사</button></div>
+<h2>버튼이 드래그가 안 되면</h2>
+<p style="font-size:13px;color:#555;margin:0 0 8px;">아래 코드를 복사해 북마크를 새로 만들고 URL 칸에 붙여넣으세요.</p>
+<div class="code-box" id="codeBox"></div>
+<div class="copy-manual"><button onclick="copyCode()">📋 코드 복사</button></div>
 </div>
 
 <script>
@@ -58,192 +58,193 @@
 // 북마크릿 실제 작동 코드 (수정·유지보수는 여기서 하시면 됩니다)
 // =========================================================================
 async function runBookmarklet() {
-  const urlMatch=location.href.match(/zendesk\.com\/agent\/tickets\/(\d+)/);
-  if(!urlMatch){alert('젠데스크 티켓 페이지에서 실행해주세요.');return;}
-  const ticketNum=urlMatch[1];
-  const ticketUrl=`https://tadatadahelp.zendesk.com/agent/tickets/${ticketNum}`;
+const urlMatch=location.href.match(/zendesk\.com\/agent\/tickets\/(\d+)/);
+if(!urlMatch){alert('젠데스크 티켓 페이지에서 실행해주세요.');return;}
+const ticketNum=urlMatch[1];
+const ticketUrl=`https://tadatadahelp.zendesk.com/agent/tickets/${ticketNum}`;
 
-  // 이미 팝업 열려있으면 닫고 재실행 (중복 방지)
-  const existing=document.getElementById('zd_overlay_'+ticketNum);
-  if(existing){existing.remove();}
+// 이미 팝업 열려있으면 닫고 재실행 (중복 방지)
+const existing=document.getElementById('zd_overlay_'+ticketNum);
+if(existing){existing.remove();}
 
-  // DOM이 현재 티켓으로 업데이트됐는지 확인
-  const isDomReady=()=>document.body.innerText.includes('#'+ticketNum);
-  if(!isDomReady()){
-    alert('⏳ 티켓 로딩 중이거나 다른 탭이에요!\n현재 티켓(#'+ticketNum+') 화면에서 잠시 후 다시 눌러주세요.');
-    return;
-  }
+// DOM이 현재 티켓으로 업데이트됐는지 확인
+const isDomReady=()=>document.body.innerText.includes('#'+ticketNum);
+if(!isDomReady()){
+alert('⏳ 티켓 로딩 중이거나 다른 탭이에요!\n현재 티켓(#'+ticketNum+') 화면에서 잠시 후 다시 눌러주세요.');
+return;
+}
 
-  function blinkTitle(msg){
-    const old=document.title;
-    document.title=msg;
-    setTimeout(()=>document.title=old,1200);
-  }
+function blinkTitle(msg){
+const old=document.title;
+document.title=msg;
+setTimeout(()=>document.title=old,1200);
+}
 
-  // ── 고객 메시지 추출 ──
-  let customerMsg='';
-  let customerMsgs=[]; // 고객이 여러 번 인입한 경우 모두 수집
+// ── 고객 메시지 추출 ──
+let customerMsg='';
+let customerMsgs=[]; // 고객이 여러 번 인입한 경우 모두 수집
 
-  // 이메일/일반 티켓: 첫 문의가 제목에 담기는 경우가 있어 티켓 제목을 인입 후보로 확보
-  function cleanSubj(t){
-    return (t||'')
-      .replace(/^\s*(티켓|제목|subject)\s*[:：]\s*/i,'')                                  // 라벨 접두
-      .replace(/\s*[–\-|]\s*(VCNC|TADA|타다|Zendesk|젠데스크|Agent\s*Workspace)\s*$/i,'') // 사이트 접미
-      .replace(/:\s*[^\s:]+\.(png|jpe?g|gif|pdf|heic|webp)\s*$/i,'')                       // 첨부 파일명 접미
-      .replace(/\s*[.…]{1,3}\s*$/,'')                                                       // 말줄임표
-      .trim();
-  }
-  function getTicketSubject(){
-    try{
-      const sels=['[data-test-id="ticketHeader-subject"]','[data-test-id="ticket-pane-subject"]','input[data-test-id="ticket-subject-field"]','input[name="subject"]','[data-test-id="ticketFieldSubject"] input'];
-      for(const s of sels){
-        const el=document.querySelector(s);
-        if(el){ const t=(el.value||el.innerText||'').trim(); if(t.length>1) return cleanSubj(t); }
-      }
-      let t=(document.title||'').trim().replace(/^\(\d+\)\s*/,'');
-      if(t.length>1 && !/^https?:/i.test(t) && !/응대 도우미|티켓 뷰|적재 복사|적재 완료/.test(t)) return cleanSubj(t);
-    }catch(e){}
-    return '';
-  }
+// 이메일/일반 티켓: 첫 문의가 제목에 담기는 경우가 있어 티켓 제목을 인입 후보로 확보
+function cleanSubj(t){
+return (t||'')
+.replace(/^\s*(티켓|제목|subject)\s*[:：]\s*/i,'')                                  // 라벨 접두
+.replace(/\s*[–\-|]\s*(VCNC|TADA|타다|Zendesk|젠데스크|Agent\s*Workspace)\s*$/i,'') // 사이트 접미
+.replace(/:\s*[^\s:]+\.(png|jpe?g|gif|pdf|heic|webp)\s*$/i,'')                       // 첨부 파일명 접미
+.replace(/\s*[.…]{1,3}\s*$/,'')                                                       // 말줄임표
+.trim();
+}
+function getTicketSubject(){
+try{
+const sels=['[data-test-id="ticketHeader-subject"]','[data-test-id="ticket-pane-subject"]','input[data-test-id="ticket-subject-field"]','input[name="subject"]','[data-test-id="ticketFieldSubject"] input'];
+for(const s of sels){
+const el=document.querySelector(s);
+if(el){ const t=(el.value||el.innerText||'').trim(); if(t.length>1) return cleanSubj(t); }
+}
+let t=(document.title||'').trim().replace(/^\(\d+\)\s*/,'');
+if(t.length>1 && !/^https?:/i.test(t) && !/응대 도우미|티켓 뷰|적재 복사|적재 완료/.test(t)) return cleanSubj(t);
+}catch(e){}
+return '';
+}
 
-  try{
-    const bodyText=document.body.innerText;
-    const bodyLimit=bodyText.indexOf('메시지 작성기');
+try{
+const bodyText=document.body.innerText;
+const bodyLimit=bodyText.indexOf('메시지 작성기');
 
-    let activeConv=null;
-    const allConvs=[...document.querySelectorAll('[data-test-id="ticket-main-conversation"]')];
-    if(allConvs.length===0){
-      allConvs.push(...document.querySelectorAll('[class*="conversation"]'));
-    }
-    for(const c of allConvs){
-      const r=c.getBoundingClientRect();
-      const st=getComputedStyle(c);
-      const isVisible=r.width>0&&r.height>0&&st.visibility!=='hidden'&&st.display!=='none';
-      const hasContent=(c.innerText||'').trim().length>5;
-      if(isVisible&&hasContent){activeConv=c;break;}
-    }
-    const convEl=activeConv
-      ||document.querySelector('[data-test-id="ticket-main-conversation"]')
-      ||document.querySelector('[class*="conversation"]')
-      ||document.querySelector('main')
-      ||document.body;
+let activeConv=null;
+const allConvs=[...document.querySelectorAll('[data-test-id="ticket-main-conversation"]')];
+if(allConvs.length===0){
+allConvs.push(...document.querySelectorAll('[class*="conversation"]'));
+}
+for(const c of allConvs){
+const r=c.getBoundingClientRect();
+const st=getComputedStyle(c);
+const isVisible=r.width>0&&r.height>0&&st.visibility!=='hidden'&&st.display!=='none';
+const hasContent=(c.innerText||'').trim().length>5;
+if(isVisible&&hasContent){activeConv=c;break;}
+}
+const convEl=activeConv
+||document.querySelector('[data-test-id="ticket-main-conversation"]')
+||document.querySelector('[class*="conversation"]')
+||document.querySelector('main')
+||document.body;
 
-    const scopedComments=(convEl&&convEl.querySelectorAll('.zd-comment').length>0)
-      ?convEl.querySelectorAll('.zd-comment')
-      :document.querySelectorAll('.zd-comment');
+const scopedComments=(convEl&&convEl.querySelectorAll('.zd-comment').length>0)
+?convEl.querySelectorAll('.zd-comment')
+:document.querySelectorAll('.zd-comment');
 
-    const isMessaging = !!(convEl && /Web User [a-f0-9]+/.test(convEl.innerText));
-    if(isMessaging){
-      const rawLines=convEl.innerText.split('\n');
-      const cutLineIdx=rawLines.findIndex(l=>l.trim()==='메시지 작성기');
-      const allLines=cutLineIdx>=0?rawLines.slice(0,cutLineIdx):rawLines;
+const isMessaging = !!(convEl && /Web User [a-f0-9]+/.test(convEl.innerText));
+if(isMessaging){
+const rawLines=convEl.innerText.split('\n');
+const cutLineIdx=rawLines.findIndex(l=>l.trim()==='메시지 작성기');
+const allLines=cutLineIdx>=0?rawLines.slice(0,cutLineIdx):rawLines;
 
-      let lastAgentIdx=-1;
-      for(let k=0;k<allLines.length;k++){
-        if(allLines[k].trim()==='드라이버 상담사') lastAgentIdx=k;
-      }
-      const scanFrom=0; void lastAgentIdx;
+let lastAgentIdx=-1;
+for(let k=0;k<allLines.length;k++){
+if(allLines[k].trim()==='드라이버 상담사') lastAgentIdx=k;
+}
+const scanFrom=0; void lastAgentIdx;
 
-      const isNoise=(ml)=>(
-        !ml||ml==='•'||ml==='A form was sent:'||ml==='내부'||
-        ml==='드라이버 상담사'||/^TADA /.test(ml)||/^Web User [a-f0-9]/.test(ml)||
-        ml==='대화'||/님과의 대화$/.test(ml)||/^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(ml)||
-        /^(오늘|어제|그제|월요일|화요일|수요일|목요일|금요일|토요일|일요일) \d{1,2}:\d{2}$/.test(ml)||
-        /^\d{1,2}:\d{2}$/.test(ml)||
-        /^메시지 작성기$|^메시징$|^보내기$/.test(ml)||
-        /^존함을 말씀|^필요시 추가확인|^사진 또는 자료/.test(ml)||
-        /^상담 중인 날짜|^감사합니다|^오늘도 안전/.test(ml)||
-        /^\d{4}-\d{2}-\d{2}$|^\d{2}-\d{2}$/.test(ml)||
-        /^오류 제보|^유선 상담 중 자료|^계약 및 해지|^기타$/.test(ml)||
-        /^\d{10,11}$/.test(ml)||
-        /^\d{3,4}-\d{3,4}-\d{4}$/.test(ml)
-      );
+const isNoise=(ml)=>(
+!ml||ml==='•'||ml==='A form was sent:'||ml==='내부'||
+ml==='드라이버 상담사'||/^TADA /.test(ml)||/^Web User [a-f0-9]/.test(ml)||
+ml==='대화'||/님과의 대화$/.test(ml)||/^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(ml)||
+/^(오늘|어제|그제|월요일|화요일|수요일|목요일|금요일|토요일|일요일) \d{1,2}:\d{2}$/.test(ml)||
+/^\d{1,2}:\d{2}$/.test(ml)||
+/^메시지 작성기$|^메시징$|^보내기$/.test(ml)||
+/^존함을 말씀|^필요시 추가확인|^사진 또는 자료/.test(ml)||
+/^상담 중인 날짜|^감사합니다|^오늘도 안전/.test(ml)||
+/^\d{4}-\d{2}-\d{2}$|^\d{2}-\d{2}$/.test(ml)||
+/^오류 제보|^유선 상담 중 자료|^계약 및 해지|^기타$/.test(ml)||
+/^\d{10,11}$/.test(ml)||
+/^\d{3,4}-\d{3,4}-\d{4}$/.test(ml)
+);
 
-      const blocks=[];
-      let i=scanFrom;
-      while(i<allLines.length){
-        const l=allLines[i].trim();
-        if(/^Web User [a-f0-9]/.test(l)){
-          let j=i+1;
-          const msgLines=[];
-          let skipName=false; // '존함을 말씀' 폼 직후 이름 답변 1회 제외
-          while(j<allLines.length){
-            const ml=allLines[j].trim();
-            if(ml==='드라이버 상담사'||/^TADA /.test(ml)||/^Web User [a-f0-9]/.test(ml)) break;
-            if(ml==='메시지 작성기') break;
-            if(/^존함을 말씀/.test(ml)){ skipName=true; j++; continue; }
-            if(skipName && ml && !isNoise(ml)){
-              if(/^[가-힣]{2,5}$/.test(ml)){ skipName=false; j++; continue; }
-              skipName=false;
-            }
-            if(!isNoise(ml)) msgLines.push(ml);
-            j++;
-          }
-          if(msgLines.length>0) blocks.push(msgLines.join('\n'));
-          i=j;
-        }else{
-          i++;
-        }
-      }
-      if(blocks.length>0){
-        customerMsgs=blocks.map(b=>b.trim()).filter(b=>b.length>0);
-        customerMsg=customerMsgs.length>0?customerMsgs[customerMsgs.length-1]:'';
-      }
-    }
+const blocks=[];
+let i=scanFrom;
+while(i<allLines.length){
+const l=allLines[i].trim();
+if(/^Web User [a-f0-9]/.test(l)){
+let j=i+1;
+const msgLines=[];
+let skipName=false; // '존함을 말씀' 폼 직후 이름 답변 1회 제외
+while(j<allLines.length){
+const ml=allLines[j].trim();
+if(ml==='드라이버 상담사'||/^TADA /.test(ml)||/^Web User [a-f0-9]/.test(ml)) break;
+if(ml==='메시지 작성기') break;
+if(/^존함을 말씀/.test(ml)){ skipName=true; j++; continue; }
+if(skipName && ml && !isNoise(ml)){
+if(/^[가-힣]{2,5}$/.test(ml)){ skipName=false; j++; continue; }
+skipName=false;
+}
+if(!isNoise(ml)) msgLines.push(ml);
+j++;
+}
+if(msgLines.length>0) blocks.push(msgLines.join('\n'));
+i=j;
+}else{
+i++;
+}
+}
+if(blocks.length>0){
+customerMsgs=blocks.map(b=>b.trim()).filter(b=>b.length>0);
+customerMsg=customerMsgs.length>0?customerMsgs[customerMsgs.length-1]:'';
+}
+}
 
-    if(!customerMsg){
-      const bubbleSelectors=[
-        '[data-test-id*="message"][class*="end"]',
-        '[class*="message-bubble"]',
-        '[class*="chat-bubble"]',
-      ];
-      const _scope=convEl||document;
-      for(const sel of bubbleSelectors){
-        const bubbles=_scope.querySelectorAll(sel);
-        if(bubbles.length>0){
-          const texts=[...bubbles].map(b=>b.innerText?.trim()).filter(Boolean);
-          if(texts.length>0){customerMsg=texts[texts.length-1];break;}
-        }
-      }
-    }
+if(!customerMsg){
+const bubbleSelectors=[
+'[data-test-id*="message"][class*="end"]',
+'[class*="message-bubble"]',
+'[class*="chat-bubble"]',
+];
+const _scope=convEl||document;
+for(const sel of bubbleSelectors){
+const bubbles=_scope.querySelectorAll(sel);
+if(bubbles.length>0){
+const texts=[...bubbles].map(b=>b.innerText?.trim()).filter(Boolean);
+if(texts.length>0){customerMsg=texts[texts.length-1];break;}
+}
+}
+}
 
-    if(!customerMsg&&convEl){
-      const fullT=convEl.innerText||'';
-      const webUserBlocks=fullT.split(/Web User [a-f0-9]+\n•\n/);
-      if(webUserBlocks.length>1){
-        const lastBlock=webUserBlocks[webUserBlocks.length-1];
-        const msgLines=lastBlock.split('\n');
-        const msgContent=[];
-        for(const line of msgLines){
-          if(/^오늘 \d|^어제 \d|^드라이버|^TADA|^사진 또는|^상담 중인|^감사합니다|^오늘도/.test(line.trim())) break;
-          const l=line.trim();
-          if(!l||/^\d{1,2}:\d{2}$/.test(l)) continue;
-          if(l==='기타'||l==='오류 제보 하기'||l==='대화'||/님과의 대화$/.test(l)) continue;
-          if(/^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(l)) continue;
-          msgContent.push(l);
-        }
-        const _m=msgContent.join('\n').trim();
-        if(_m.length>0) customerMsg=_m;
-      }
-    }
+if(!customerMsg&&convEl){
+const fullT=convEl.innerText||'';
+const webUserBlocks=fullT.split(/Web User [a-f0-9]+\n•\n/);
+if(webUserBlocks.length>1){
+const lastBlock=webUserBlocks[webUserBlocks.length-1];
+const msgLines=lastBlock.split('\n');
+const msgContent=[];
+for(const line of msgLines){
+if(/^오늘 \d|^어제 \d|^드라이버|^TADA|^사진 또는|^상담 중인|^감사합니다|^오늘도/.test(line.trim())) break;
+const l=line.trim();
+if(!l||/^\d{1,2}:\d{2}$/.test(l)) continue;
+if(l==='기타'||l==='오류 제보 하기'||l==='대화'||/님과의 대화$/.test(l)) continue;
+if(/^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(l)) continue;
+msgContent.push(l);
+}
+const _m=msgContent.join('\n').trim();
+if(_m.length>0) customerMsg=_m;
+}
+}
 
-    if(!customerMsg && !isMessaging){
-      const comments=scopedComments;
-      for(let i=0;i<comments.length;i++){
-        const _box=comments[i].closest('article, li, [data-comment-id], [class*="event"]')||comments[i].parentElement;
-        const _boxTxt=_box?_box.innerText:'';
-        const _author=(_boxTxt.split('\n').map(x=>x.trim()).filter(Boolean)[0])||'';
-        if(/^TADA\b/.test(_author)||/(^|\n)\s*내부\s*(\n|$)/.test(_boxTxt)) continue;
-        const tmp=document.createElement('div');
-        tmp.innerHTML=comments[i].innerHTML;
-        let rawTxt=tmp.innerText||tmp.textContent||'';
-        if(/전화구분\s*[:：]|통화시간\s*[:：]|발신내선\s*[:：]|수신번호\s*[:：]/.test(rawTxt)){continue;}
-        const origMailIdx=rawTxt.search(/-{2,}\s*원본 메일|원본 메일\s*-{2,}|-{3,}\s*Original/);
-        if(origMailIdx>=0) rawTxt=rawTxt.slice(0,origMailIdx);
-        if(bodyLimit>=0){
-          const commentPosInBody=bodyText.indexOf(rawTxt.slice(0,20).trim());
-          if(commentPosInBody>=0&&commentPosInBody>bodyLimit) continue;
-        }
+if(!customerMsg && !isMessaging){
+const comments=scopedComments;
+for(let i=0;i<comments.length;i++){
+const _box=comments[i].closest('article, li, [data-comment-id], [class*="event"]')||comments[i].parentElement;
+const _boxTxt=_box?_box.innerText:'';
+const _author=(_boxTxt.split('\n').map(x=>x.trim()).filter(Boolean)[0])||'';
+if(/^TADA\b/.test(_author)||/(^|\n)\s*내부\s*(\n|$)/.test(_boxTxt)) continue;
+const tmp=document.createElement('div');
+tmp.innerHTML=comments[i].innerHTML;
+let rawTxt=tmp.innerText||tmp.textContent||'';
+if(/전화구분\s*[:：]|통화시간\s*[:：]|발신내선\s*[:：]|수신번호\s*[:：]/.test(rawTxt)){continue;}
+const origMailIdx=rawTxt.search(/-{2,}\s*원본 메일|원본 메일\s*-{2,}|-{3,}\s*Original/);
+if(origMailIdx>=0) rawTxt=rawTxt.slice(0,origMailIdx);
+if(bodyLimit>=0){
+const commentPosInBody=bodyText.indexOf(rawTxt.slice(0,20).trim());
+if(commentPosInBody>=0&&commentPosInBody>bodyLimit) continue;
+}
+        if(/타다 팀 드림|타다를 이용해 주셔서|이용 경험 평가하기|안녕하세요\.\s*[가-힣]+님\s*타다/.test(rawTxt)){
         // 타다 발신(아웃바운드) 자동안내 코멘트는 제외.
         // 단, 고객이 안내문을 "인용"하고 그 뒤에 실제 문의(예: 발송경위 확인)를 덧붙인 경우는 살린다.
         const OUT_SIG=[/타다 팀 드림/,/타다를 이용해 주셔서/,/이용 경험 평가하기/,/안녕하세요\.\s*[가-힣]+님\s*타다/];
@@ -266,337 +267,338 @@ async function runBookmarklet() {
             return true;
           }).join('\n').replace(/[ \t]+$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
           if(quoted.length>0) customerMsgs.push(quoted);
-          continue;
-        }
-        const cutIdx=rawTxt.indexOf('메시지 작성기');
-        const txt=cutIdx>=0?rawTxt.slice(0,cutIdx):rawTxt;
-        const lines=txt.split('\n').map(l=>l.trim()).filter(l=>{
-          if(!l) return false;
-          if(/^https?:\/\//.test(l)) return false;
-          if(/^\d{4}\.\d{2}\.\d{2}( \d{1,2}:\d{2}(:\d{2})?)?$/.test(l)) return false;
-          if(/^(오늘|어제|그제) \d{1,2}:\d{2}$/.test(l)) return false;
-          if(/^\d+분 전$/.test(l)||/^\d+시간 전$/.test(l)) return false;
-          if(/^\d{1,2}:\d{2}$/.test(l)) return false;
-          if(/\.(png|jpg|jpeg|gif|pdf)$/i.test(l)) return false;
-          if(l==='·'||l==='•'||l==='-') return false;
-          if(/^수신자:$|^자세히 보기$|^원본 메일|^-{3,}/.test(l)) return false;
-          if(/^메시지 작성기$|^메시징$|^보내기$|^사진 또는 자료|^상담 중인 날짜/.test(l)) return false;
-          if(l==='대화'||/님과의 대화$/.test(l)||/^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(l)) return false;
-          if(l==='기타'||l==='오류 제보 하기'||/^타다에 전달 하고 싶은/.test(l)||/^이외 문의를 남겨주시면/.test(l)) return false;
-          return true;
-        });
-        if(lines.length>0){
-          const msg=lines.join('\n').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
-          if(msg.length>0) customerMsgs.push(msg);
-        }
-      }
-      if(customerMsgs.length>0) customerMsg=customerMsgs[0];
-    }
+continue;
+}
+}
+const cutIdx=rawTxt.indexOf('메시지 작성기');
+const txt=cutIdx>=0?rawTxt.slice(0,cutIdx):rawTxt;
+const lines=txt.split('\n').map(l=>l.trim()).filter(l=>{
+if(!l) return false;
+if(/^https?:\/\//.test(l)) return false;
+if(/^\d{4}\.\d{2}\.\d{2}( \d{1,2}:\d{2}(:\d{2})?)?$/.test(l)) return false;
+if(/^(오늘|어제|그제) \d{1,2}:\d{2}$/.test(l)) return false;
+if(/^\d+분 전$/.test(l)||/^\d+시간 전$/.test(l)) return false;
+if(/^\d{1,2}:\d{2}$/.test(l)) return false;
+if(/\.(png|jpg|jpeg|gif|pdf)$/i.test(l)) return false;
+if(l==='·'||l==='•'||l==='-') return false;
+if(/^수신자:$|^자세히 보기$|^원본 메일|^-{3,}/.test(l)) return false;
+if(/^메시지 작성기$|^메시징$|^보내기$|^사진 또는 자료|^상담 중인 날짜/.test(l)) return false;
+if(l==='대화'||/님과의 대화$/.test(l)||/^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(l)) return false;
+if(l==='기타'||l==='오류 제보 하기'||/^타다에 전달 하고 싶은/.test(l)||/^이외 문의를 남겨주시면/.test(l)) return false;
+return true;
+});
+if(lines.length>0){
+const msg=lines.join('\n').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+if(msg.length>0) customerMsgs.push(msg);
+}
+}
+if(customerMsgs.length>0) customerMsg=customerMsgs[0];
+}
 
-    // 비메시징(이메일/일반) 티켓: 첫 문의가 제목에만 담긴 경우 대비해 제목을 후보로 추가
-    // (단, 제목이 본문 발화와 사실상 같으면 추가하지 않음 → 중복 칩 방지)
-    if(!isMessaging){
-      try{
-        const subj=getTicketSubject(); // cleanSubj가 라벨·사이트접미·말줄임까지 정리
-        if(subj){
-          const key=s=>s.replace(/[^0-9a-z가-힣]/gi,'').toLowerCase(); // 비교용 핵심 키
-          const sk=key(subj);
-          const dup = sk.length<6 || customerMsgs.some(b=>{
-            const bk=key(b);
-            if(bk.length<6) return false;
-            if(bk.includes(sk)||sk.includes(bk)||bk.startsWith(sk)||sk.startsWith(bk)) return true;
-            // 잘린 제목 대응: 공통 앞부분이 12자 이상이면 같은 글로 간주
-            let n=0; while(n<sk.length&&n<bk.length&&sk[n]===bk[n]) n++;
-            return n>=12;
-          });
-          if(!dup) customerMsgs.unshift(subj);
-        }
-      }catch(e){}
-      if(customerMsgs.length>0 && !customerMsg) customerMsg=customerMsgs[0];
-    }
+// 비메시징(이메일/일반) 티켓: 첫 문의가 제목에만 담긴 경우 대비해 제목을 후보로 추가
+// (단, 제목이 본문 발화와 사실상 같으면 추가하지 않음 → 중복 칩 방지)
+if(!isMessaging){
+try{
+const subj=getTicketSubject(); // cleanSubj가 라벨·사이트접미·말줄임까지 정리
+if(subj){
+const key=s=>s.replace(/[^0-9a-z가-힣]/gi,'').toLowerCase(); // 비교용 핵심 키
+const sk=key(subj);
+const dup = sk.length<6 || customerMsgs.some(b=>{
+const bk=key(b);
+if(bk.length<6) return false;
+if(bk.includes(sk)||sk.includes(bk)||bk.startsWith(sk)||sk.startsWith(bk)) return true;
+// 잘린 제목 대응: 공통 앞부분이 12자 이상이면 같은 글로 간주
+let n=0; while(n<sk.length&&n<bk.length&&sk[n]===bk[n]) n++;
+return n>=12;
+});
+if(!dup) customerMsgs.unshift(subj);
+}
+}catch(e){}
+if(customerMsgs.length>0 && !customerMsg) customerMsg=customerMsgs[0];
+}
 
-    if(!customerMsg) customerMsg='(내용을 직접 입력해주세요)';
-  }catch(e){customerMsg='(내용 파싱 실패 - 직접 입력해주세요)';}
+if(!customerMsg) customerMsg='(내용을 직접 입력해주세요)';
+}catch(e){customerMsg='(내용 파싱 실패 - 직접 입력해주세요)';}
 
-  // ── 작성 중인 답변(에디터) 텍스트 읽기 ──
-  // 젠데스크 답변 에디터의 contenteditable/textarea 중 화면에 보이고 내용이 가장 많은 것을 채택.
-  // 내 팝업(overlay) 내부 요소는 제외.
-  function getDraftText(){
-    const sels=['[data-test-id="omni-log-editor"]','.ProseMirror','.zendesk-editor--rich-text-comment','[contenteditable="true"]','textarea'];
-    let best='';
-    const ovId='zd_overlay_'+ticketNum;
-    sels.forEach(s=>{
-      document.querySelectorAll(s).forEach(el=>{
-        if(el.closest('#'+ovId)) return; // 내 팝업 내부 제외
-        const r=el.getBoundingClientRect();
-        if(r.width<=0||r.height<=0) return;
-        const t=(el.innerText||el.value||'').trim();
-        if(t.length>best.length) best=t;
-      });
-    });
-    return best;
-  }
-  let draftText=getDraftText();
+// ── 작성 중인 답변(에디터) 텍스트 읽기 ──
+// 젠데스크 답변 에디터의 contenteditable/textarea 중 화면에 보이고 내용이 가장 많은 것을 채택.
+// 내 팝업(overlay) 내부 요소는 제외.
+function getDraftText(){
+const sels=['[data-test-id="omni-log-editor"]','.ProseMirror','.zendesk-editor--rich-text-comment','[contenteditable="true"]','textarea'];
+let best='';
+const ovId='zd_overlay_'+ticketNum;
+sels.forEach(s=>{
+document.querySelectorAll(s).forEach(el=>{
+if(el.closest('#'+ovId)) return; // 내 팝업 내부 제외
+const r=el.getBoundingClientRect();
+if(r.width<=0||r.height<=0) return;
+const t=(el.innerText||el.value||'').trim();
+if(t.length>best.length) best=t;
+});
+});
+return best;
+}
+let draftText=getDraftText();
 
-  // ── 보조 멘트 라이브러리 (지침 자주 쓰는 멘트) ──
-  // trig: 작성 중인 답변에 이 단어가 있으면 추천으로 끌어올림
-    const MENTS=[
-    {id:'사과시작', label:'사과(시작)', key:[], trig:[], text:'먼저 타다 이용에 불편을 드려 대단히 죄송합니다.'},
-    {id:'요금방어', label:'요금 징징이들 방어', key:['우회','gps','경로'], trig:['요금','환불','정정','권한','예상','통행료','거리','넥스트','탄력','유료도로'], text:'당사 서버에 기록된 GPS 실제 운행 경로를 확인하여 고의적인 경로 우회 여부를 면밀히 검토하였습니다.\n\n확인 결과, 해당 운행은 내비게이션 안내 경로에 따라 정상적으로 이동한 것으로 확인되었으며, 이용 요금에 영향을 줄 수 있을 정도의 고의적이거나 임의적인 우회 운행 정황은 확인되지 않았습니다.\n\n타다에 소속된 모든 드라이버는 원칙적으로 차량 내 내비게이션의 추천 경로를 우선하여 운행하고 있으며, 해당 운행 건 또한 드라이버가 안내받은 경로를 기준으로 실제 운행 거리·운행 시간·통행료 등에 따라 정상적으로 요금이 산정된 것으로 확인됩니다.\n\n또한 타다는 고객님 탑승 시점의 실시간 교통 상황을 반영하여 추천 경로를 안내하고 있으며, 드라이버는 고객님의 별도 요청이 없는 경우 시스템에서 제공되는 추천 경로를 기준으로 운행하게 됩니다.\n\n다만 드라이버 역시 운행 전 사전에 어떤 도로 및 경로로 최종 안내될지 별도로 확인하기 어려운 구조이며, 실제 운행 중 실시간 교통 상황 변화에 따라 고속화도로 또는 우회 경로가 포함될 수 있는 점 참고 부탁드립니다.\n\n아울러 앱 내 표시되는 예상 요금은 거리 기준으로 단순 계산된 최저 예상치로, 실제 운행 시 교통 상황·경로 변경 등으로 차이가 발생할 수 있습니다.\n\n본 운행 건은 유료도로 이용 및 실제 이동 거리 증가로 인해 최초 안내 금액 대비 추가 요금이 발생한 것으로 확인되며, 운행 내역에 따른 이용 요금으로 판단되어 플랫폼 차원에서 임의 조정 또는 환불을 진행하기 어려운 점 너른 양해 부탁드립니다.\n\n아울러 고객님께서 말씀하시는 상황과 불편함을 이해하지 못하는 것은 아니나, 타다는 이용자와 드라이버를 연결하는 플랫폼 서비스로 운영되고 있어 역할 및 권한에 일정 부분 한계가 있는 점 양해 부탁드립니다.\n\n결제된 이용 요금 및 수수료에 대한 정산 권한은 실제 운행을 수행한 드라이버에게 귀속되며, 플랫폼 운영 센터에서는 드라이버의 동의 없이 임의로 환불 또는 요금 정정을 진행하기 어려운 구조로 운영되고 있습니다.\n\n시간을 내어 문의해 주셨음에도 만족스러운 답변을 드리지 못한 점 저희 또한 무겁게 생각하고 있으며, 고객님의 입장에서 더욱 만족스러운 이용 경험을 제공해드릴 수 있도록 지속적으로 노력하겠습니다.'},
-    {id:'가결제설명', label:'이중결제·가결제 안내', key:['가결제','가승인','이중결제','중복결제'], trig:['두번결제','두번','환불안'], text:'결제 관련하여 혼란을 드린 점 먼저 사과드립니다.\n\n타다는 호출·예약 시 결제수단의 유효성 확인을 위해 예상 요금을 먼저 가결제(가승인) 처리하며, 하차가 완료되면 해당 가결제는 자동으로 취소되고 실제 운행 요금이 다시 결제됩니다. 따라서 운행 1건당 실제 결제는 1회만 이루어집니다.\n\n다만 가결제 취소 내역이 카드사 사정에 따라 영업일 기준 2~3일 이후에 반영되는 경우가 있어, 일시적으로 두 건이 결제된 것처럼 보일 수 있는 점 참고 부탁드립니다.\n\n혹시 기간이 지난 후에도 가결제 금액이 환불되지 않는다면, 결제 카드사·승인 일시·금액을 함께 전달해 주시면 신속히 확인 후 안내드리겠습니다.'},
-    {id:'클레임케어', label:'드라이버 클레임 케어(차단X)', key:[], trig:['불친절','응대','난폭','태도','클레임','제보','피드백','불쾌','기사','드라이버'], text:'타다를 이용하시는 과정에서 불편을 겪으신 점, 드라이버를 대신하여 깊이 사과드립니다.\n\n타다는 내부적으로 드라이버 모니터링을 실시하고 있으며, 고객님들의 제보와 신고가 누적될 경우 해당 드라이버에게 배차 제한 및 서비스 이용 제한 등 제재 조치를 취하고 있습니다.\n\n말씀해 주신 내용은 해당 드라이버에게 제재 조치가 이루어질 수 있도록 담당 부서로 전달하였으며, 모니터링 강화 및 내부 규정에 따라 조치할 예정입니다.\n\n불편하셨던 부분을 직접 말씀해 주신 덕분에 서비스 개선에 큰 도움이 되었으며, 같은 불편을 다시 겪지 않으시도록 최선을 다하겠습니다.'},
-    {id:'빠따차단', label:'드라이버 빠따+영구차단', key:['차단','영구','블랙리스트'], trig:['폭언','폭행','협박'], text:'타다를 이용하여 보다 편안하고 신속한 이동을 기대하셨을 텐데, 이용에 불편을 드린 점 드라이버를 대신하여 깊이 사과드립니다.\n\n[고객님께 본의 아니게 불편을 드린 점에 대한 죄송한 마음을 담아, 해당 드라이버가 다시는 배차되지 않도록 영구 배차 차단 조치하였습니다.]\n\n타다는 내부적으로 드라이버 모니터링을 실시하고 있으며, 고객님들의 제보와 신고가 누적될 경우 해당 드라이버에게 배차 제한 및 서비스 이용 제한 등 제재 조치를 취하고 있습니다.\n가능한 범위 내에서 문제 드라이버에 대한 이용 제한 조치를 적극적으로 시행하고 있음을 안내드립니다.\n\n드라이버의 의도가 없었다 할지라도, 해당일 고객님께서 드라이버의 미흡한 대처로 인해 불편을 겪으신 내용에 대해서는 제재 조치를 취할 수 있도록 담당 부서로 전달하였으며, 해당 드라이버 모니터링 강화 및 내부 규정에 따라 조치를 취할 예정입니다.\n\n고객님께서 타다 이용에 불편하셨던 부분을 직접적으로 말씀해주셔서 드라이버 운행 실태 확인 및 타다 서비스 개선에 큰 기여를 해주신 점에 진심으로 감사드리며, 이번과 같은 불편한 상황을 경험하시지 않도록 최선을 다해 서비스를 개선해 나가도록 하겠습니다.\n\n다시 한번 큰 실망과 불편을 드린 고객님께 진심으로 고개 숙여 깊은 사과 말씀을 드립니다. 죄송합니다.'},
-    {id:'운행의무외', label:'운행 의무 외 강제 불가', key:['적재','짐'], trig:['전화','통화','연락','강제','협조'], text:'타다는 이용자와 드라이버를 연결하는 플랫폼 서비스로 운영되고 있어 역할 및 권한에 일정 부분 한계가 있는 점 양해 부탁드립니다.\n\n또한 드라이버는 이용자의 이동을 위한 운행 서비스를 제공하는 주체로, 전화 연락이나 짐 적재 등 운행 외적인 사항에 대해서는 협조를 요청드릴 수는 있으나 이를 강제하기는 어려운 점 양해 부탁드립니다.'},
-    {id:'일반크레딧후적용', label:'일반 크레딧 후적용 불가', key:['후적용','소급'], trig:['크레딧','쿠폰','적립금'], text:'타다의 일반 크레딧은 하차와 동시에 결제와 크레딧 사용·적립이 함께 처리되며, 이 과정이 완료된 이후에는 시스템상 이전 상태로 되돌려 크레딧을 적용하는 것이 어렵습니다.\n\n고객님께서 말씀 주신 취지에는 충분히 공감하나, 이미 결제가 완료된 이후에는 정책상 추가 적용이나 소급 적용을 도와드리기 어려운 점 양해 부탁드립니다.\n\n번거로우시겠지만, 크레딧 혜택을 놓치지 않으시도록 반드시 하차 전 고객님께서 크레딧 적용 여부를 확인해 주시길 부탁드립니다.'},
-    {id:'현금미수금', label:'현금 결제·미수금', key:['미수금','미결제','현금요구'], trig:['현금','납부'], text:'타다는 앱 내 등록된 결제수단으로 자동 결제되는 구조로, 드라이버가 현장에서 현금을 요구할 수 없습니다.\n\n카드 결제가 일시적으로 실패하더라도 결제수단이 정상화되면 자동으로 재결제가 이루어지므로, 현금으로 결제하실 필요가 없으며 현금 결제 시 이중결제가 발생할 수 있습니다.\n\n미결제 요금이 등록된 경우 안내드린 납부 절차를 통해 정산해 주시면 서비스 이용이 즉시 정상화됩니다.'},
-    {id:'영수증발급', label:'영수증 발급 방법', key:['영수증','세금계산서'], trig:['발급'], text:'영수증은 아래 경로로 발급하실 수 있습니다.\n\n타다 앱 > 이용내역 > 이용완료 > 해당 내역 선택 > [이메일로 전송] > 받으실 이메일 주소 입력 > [영수증 전송하기]'},
-    {id:'환불소요', label:'환불 처리 소요', key:['환불반영','환불소요','환불처리','환불언제'], trig:['며칠','입금','얼마나'], text:'환불은 결제하신 카드 승인 내역에 대한 취소 방식으로만 진행되며, 현금 환불은 불가한 점 양해 부탁드립니다.\n\n취소 처리 후 실제 환불 반영까지는 카드사 사정에 따라 영업일 기준 며칠 정도 소요될 수 있습니다.'},
-    {id:'분리청구', label:'이용료·부가 분리청구', key:['분리청구','부가서비스결제'], trig:['따로결제','별도청구','두건'], text:'이용 요금과 카시트 등 부가서비스 요금은 각각 별도로 청구되어 결제 내역에 두 건으로 표시될 수 있으나, 이는 정상적인 청구 방식인 점 안내드립니다.'},
-    {id:'카시트환불', label:'카시트 환불관련', key:['카시트','이너시트'], trig:['환불','오염','미비치','옵션','부가서비스'], text:'카시트 부가서비스 환불 관련 안내 (경우를 선택하세요)', variants:[
-      {label:'이너시트 미제공 환불', text:'먼저 영아와 함께하는 중요한 이동 과정에서 불편과 심려를 끼쳐드린 점 진심으로 사과드립니다.\n\n특히 고객님께서는 영아 카시트 이용을 위해 타다를 선택해 주셨음에도, 사전에 요청하신 영아용 이너시트가 실제 차량에 준비되어 있지 않아 아기의 안전과 편안함에 대해 큰 불안과 불편을 겪으신 것으로 확인되었습니다.\n\n고객님께서 전달해 주신 내용과 드라이버 확인 결과를 종합해 본 결과, 해당 차량에는 영아용 이너시트가 비치되어 있지 않았던 것으로 확인되었습니다.\n\n고객님 말씀처럼 영아의 경우 이너시트 유무가 탑승 편의와 안전에 중요한 요소가 될 수 있음에도, 운행 전 해당 사항이 정확히 안내되지 못한 점에 대해서는 아쉬움이 있었다고 판단하고 있습니다.\n\n이에 해당 내용은 드라이버 관리 부서에 전달하여 카시트 구성품 관리 및 고객 응대 과정에 대한 재교육이 진행될 수 있도록 조치하겠습니다.\n\n또한 고객님께서 이용하신 카시트 부가서비스에 대해서는 정상적인 서비스 제공이 이루어지지 못한 것으로 판단되어 카시트 옵션 이용요금은 전액 환불 처리해 드릴 예정입니다.\n\n다만 본 이용 건은 실제 목적지까지 정상적으로 운행이 완료된 점과, 운행 자체가 제공된 점을 고려할 때 이용요금 전체 환불은 어려운 점 양해 부탁드립니다.\n\n타다는 차량 운행 서비스를 중개하는 플랫폼으로서, 운행이 완료된 건에 대한 전체 운행요금을 드라이버에게 일괄적으로 환불하도록 강제하기 어려운 구조인 점 또한 함께 양해 부탁드립니다.\n\n그럼에도 고객님께서 기대하셨던 수준의 서비스를 제공해 드리지 못한 점에 대해서는 무겁게 받아들이고 있으며, 특히 영아 동반 이용 고객이 보다 안심하고 서비스를 이용하실 수 있도록 카시트 관리 기준 및 안내 절차 개선에 참고하겠습니다.\n\n소중한 의견 남겨주셔서 감사드리며, 다시 한번 이용 과정에서 불편을 드린 점 진심으로 사과드립니다.'},
-      {label:'카시트 미숙지(장착·조작) 환불', text:'먼저 영아와 함께하는 중요한 이동 과정에서 불편과 심려를 끼쳐드린 점 진심으로 사과드립니다.\n\n특히 고객님께서는 영아 카시트 이용을 위해 타다를 선택해 주셨음에도, 드라이버의 카시트 장착 및 조작 미흡으로 인해 카시트를 정상적으로 이용하지 못하시어 아기의 안전과 편안함에 대해 큰 불안과 불편을 겪으신 것으로 확인되었습니다.\n\n고객님께서 전달해 주신 내용과 드라이버 확인 결과를 종합해 본 결과, 해당 운행 건에서 카시트가 정상적으로 장착·제공되지 못한 것으로 확인되었습니다.\n\n고객님 말씀처럼 영아의 경우 카시트의 올바른 장착 여부가 탑승 편의와 안전에 직결되는 중요한 요소임에도, 운행 과정에서 이를 제대로 제공해 드리지 못한 점에 대해서는 아쉬움이 있었다고 판단하고 있습니다.\n\n이에 해당 내용은 드라이버 관리 부서에 전달하여 카시트 장착·조작 및 고객 응대 과정에 대한 재교육이 진행될 수 있도록 조치하겠습니다.\n\n또한 고객님께서 이용하신 카시트 부가서비스에 대해서는 정상적인 서비스 제공이 이루어지지 못한 것으로 판단되어 카시트 옵션 이용요금은 전액 환불 처리해 드릴 예정입니다.\n\n다만 본 이용 건은 실제 목적지까지 정상적으로 운행이 완료된 점과, 운행 자체가 제공된 점을 고려할 때 이용요금 전체 환불은 어려운 점 양해 부탁드립니다.\n\n타다는 차량 운행 서비스를 중개하는 플랫폼으로서, 운행이 완료된 건에 대한 전체 운행요금을 드라이버에게 일괄적으로 환불하도록 강제하기 어려운 구조인 점 또한 함께 양해 부탁드립니다.\n\n그럼에도 고객님께서 기대하셨던 수준의 서비스를 제공해 드리지 못한 점에 대해서는 무겁게 받아들이고 있으며, 특히 영아 동반 이용 고객이 보다 안심하고 서비스를 이용하실 수 있도록 카시트 장착·관리 기준 및 안내 절차 개선에 참고하겠습니다.\n\n소중한 의견 남겨주셔서 감사드리며, 다시 한번 이용 과정에서 불편을 드린 점 진심으로 사과드립니다.'},
-      {label:'카시트 오염 환불', text:'먼저 영아와 함께하는 중요한 이동 과정에서 불편과 심려를 끼쳐드린 점 진심으로 사과드립니다.\n\n특히 고객님께서는 영아 카시트 이용을 위해 타다를 선택해 주셨음에도, 카시트가 오염된 상태로 비치되어 있어 아기를 위생적으로 안심하고 탑승시키기 어려운 불편을 겪으신 것으로 확인되었습니다.\n\n고객님께서 전달해 주신 내용과 드라이버 확인 결과를 종합해 본 결과, 해당 차량의 카시트가 청결하지 못한 상태였던 것으로 확인되었습니다.\n\n고객님 말씀처럼 영아의 경우 카시트의 청결 상태가 탑승 위생과 안전에 중요한 요소가 될 수 있음에도, 운행 전 카시트 상태가 제대로 관리되지 못한 점에 대해서는 아쉬움이 있었다고 판단하고 있습니다.\n\n이에 해당 내용은 드라이버 관리 부서에 전달하여 카시트 청결·소독 관리 및 고객 응대 과정에 대한 재교육이 진행될 수 있도록 조치하겠습니다.\n\n또한 고객님께서 이용하신 카시트 부가서비스에 대해서는 정상적인 서비스 제공이 이루어지지 못한 것으로 판단되어 카시트 옵션 이용요금은 전액 환불 처리해 드릴 예정입니다.\n\n다만 본 이용 건은 실제 목적지까지 정상적으로 운행이 완료된 점과, 운행 자체가 제공된 점을 고려할 때 이용요금 전체 환불은 어려운 점 양해 부탁드립니다.\n\n타다는 차량 운행 서비스를 중개하는 플랫폼으로서, 운행이 완료된 건에 대한 전체 운행요금을 드라이버에게 일괄적으로 환불하도록 강제하기 어려운 구조인 점 또한 함께 양해 부탁드립니다.\n\n그럼에도 고객님께서 기대하셨던 수준의 서비스를 제공해 드리지 못한 점에 대해서는 무겁게 받아들이고 있으며, 특히 영아 동반 이용 고객이 보다 안심하고 서비스를 이용하실 수 있도록 카시트 위생 관리 기준 및 안내 절차 개선에 참고하겠습니다.\n\n소중한 의견 남겨주셔서 감사드리며, 다시 한번 이용 과정에서 불편을 드린 점 진심으로 사과드립니다.'},
-      {label:'환불 불가', text:'문의주신 카시트 부가서비스의 경우, 카시트 오염, 카시트 미비치, 또는 드라이버의 카시트 장착·조작 미흡 등으로 정상적인 서비스가 제공되지 않은 경우에는 환불이 가능합니다.\n\n다만 본 건은 부가서비스가 제공되지 않았거나 정상적으로 제공되지 않은 경우에 해당하지 않아, 카시트 부가서비스 요금 환불은 어려운 점 너른 양해 부탁드립니다.'}
-    ]},
-    {id:'안드로이드기종', label:'안드로이드 기종 정보 요청', key:['안드로이드','갤럭시','android'], trig:['앱오류','버그','튕김','먹통'], text:'현재 서버 측에서는 별도의 오류가 확인되지 않고 있습니다.\n번거로우시겠지만, 해당 현상을 확인할 수 있는 화면 녹화본과 함께 아래 정보를 전달해 주시면 면밀히 확인 후 안내드리겠습니다.\n\n* ONE UI 버전 : 설정 → 휴대전화 정보 → 소프트웨어 정보\n* 사용 중인 기기명 :\n* 오류 화면 녹화본 : (파일 첨부 필요)\n\n시간을 내어 문의해 주셨음에도 즉시 도움을 드리지 못한 점 진심으로 사과드리며, 자료를 전달해 주시면 신속히 확인 후 안내드리겠습니다.'},
-    {id:'아이폰기종', label:'아이폰 기종 정보 요청', key:['아이폰','iphone','ios'], trig:['앱오류','버그','튕김','먹통'], text:'현재 서버 측에서는 별도의 오류가 확인되지 않고 있습니다.\n번거로우시겠지만, 해당 현상을 확인할 수 있는 화면 녹화본과 함께 아래 정보를 전달해 주시면 면밀히 확인 후 안내드리겠습니다.\n\n* iOS 버전 : 설정 → 일반 → 정보 → iOS 버전\n* 사용 중인 기기명 : (예: iPhone 15, iPhone 14 Pro 등)\n* 오류 화면 녹화본 : (파일 첨부 필요)\n\n아울러 타다 앱 내 로그 전송 방법은 아래와 같습니다.\n타다 앱 실행 → 우측 상단 프로필 또는 메뉴(≡) → 설정 → 로그 전송\n위 경로를 통해 로그를 전송해 주시면 전달해 주신 자료와 함께 확인하여 보다 정확한 안내를 드리겠습니다.\n\n시간을 내어 문의해 주셨음에도 즉시 도움을 드리지 못한 점 진심으로 사과드리며, 번거로우시겠지만 관련 자료를 전달해 주시면 신속히 확인 후 안내드리겠습니다.'},
-    {id:'자료요청', label:'자료 요청', key:[], trig:['캡처','스크린샷','증빙','자료'], text:'정확한 확인을 위해 해당 운행 일시·출발>도착지 및 결제 내역 캡처를 공유해 주시면 신속히 검토하겠습니다.'},
-    {id:'유선상담', label:'전화상담→이메일', key:['유선','콜센터','전화상담'], trig:['통화상담','전화로'], text:'타다는 보다 많은 문의를 폭넓게 접수하고 정확히 안내드리기 위해 유선 채널이 아닌 이메일(문의하기)을 통해 상담을 진행하고 있습니다.\n\n번거로우시더라도 문의 내용을 남겨 주시면 신속히 확인하여 안내드리겠습니다.'},
-    {id:'셔틀불만파트너', label:'셔틀 불만(파트너)', key:['셔틀','b2b'], trig:['스케줄','구간','매출','파트너'], text:'B2B 셔틀 운행 건의 경우, 수락 이후에도 고객사 운영 스케줄에 따라 일정이 변동될 수 있는 점 안내드립니다.\n\n또한 요금은 운행 거리 구간에 따라 산정되며, 해당 셔틀 운행 건의 요금은 정상적으로 적용된 것으로 확인됩니다.\n\n아래 도움말을 참고하시어 운행 부탁드리며, 앞으로도 파트너님들의 매출 향상에 실질적으로 기여할 수 있는 운영 환경을 만들기 위해 지속적으로 고민하고 최선을 다하겠습니다.\n\n도움말 - [B2B 셔틀운행](https://help.tadatada.com/hc/ko/articles/50835140923417--25-09-%ED%83%80%EB%8B%A4-B2B-%EC%85%94%ED%8B%80-%EC%84%9C%EB%B9%84%EC%8A%A4-%EC%95%88%EB%82%B4)'},
-    {id:'파트너불만족', label:'파트너 불만족 사유', key:['불만족','만족도'], trig:['평가','별점','사유'], text:'문의해 주신 운행 건을 확인한 결과, 별도의 특이사항이나 기재된 사유 없이 이용자 만족도가 \'불만족\'으로만 확인되는 점 안내드립니다.\n\n만족도 평가는 이용자가 직접 남기는 항목으로, 구체적인 사유가 함께 기재되지 않은 경우 불만의 상세 내용까지 확인하기는 어려운 점 양해 부탁드립니다.\n\n다만 말씀해 주신 내용은 운행 환경 개선을 위한 참고 자료로 활용하며, 파트너님께서 안정적으로 운행하실 수 있도록 지속적으로 살펴보겠습니다.'},
-    {id:'배차불만파트너', label:'배차 관련 불만(파트너)', key:['배차'], trig:['콜','추천','라인업','지정'], text:'타다의 배차는 호출 발생 시 센터에서 개별적으로 배차를 지정하는 방식이 아니라, 다양한 조건을 종합하여 시스템이 자동으로 배차를 추천하는 구조입니다.\n\n일반적으로는 승차지와 가장 가까운 파트너님께 우선적으로 호출이 추천되지만, 배차 과정에서는 기예약 호출 여부, 라인업 상태, 목적지 방향 콜 여부, 퇴근 콜 여부, 이용자와의 차단 설정 여부 등 실제 운행 수행이 가능한 상태인지를 포함한 여러 요소가 종합적으로 반영되는 점 참고 부탁드립니다.'},
-    {id:'사과마무리', label:'사과(마무리)', key:[], trig:[], text:'다시 한번 불편을 드린 점 진심으로 사과드립니다.'},
-    {id:'감사마무리', label:'감사(마무리)', key:[], trig:[], text:'시간 내어 문의 주셔서 감사드립니다.'}
-  ];
+// ── 보조 멘트 라이브러리 (지침 자주 쓰는 멘트) ──
+// trig: 작성 중인 답변에 이 단어가 있으면 추천으로 끌어올림
+const MENTS=[
+{id:'사과시작', label:'사과(시작)', key:[], trig:[], text:'먼저 타다 이용에 불편을 드려 대단히 죄송합니다.'},
+{id:'요금방어', label:'요금 징징이들 방어', key:['우회','gps','경로'], trig:['요금','환불','정정','권한','예상','통행료','거리','넥스트','탄력','유료도로'], text:'당사 서버에 기록된 GPS 실제 운행 경로를 확인하여 고의적인 경로 우회 여부를 면밀히 검토하였습니다.\n\n확인 결과, 해당 운행은 내비게이션 안내 경로에 따라 정상적으로 이동한 것으로 확인되었으며, 이용 요금에 영향을 줄 수 있을 정도의 고의적이거나 임의적인 우회 운행 정황은 확인되지 않았습니다.\n\n타다에 소속된 모든 드라이버는 원칙적으로 차량 내 내비게이션의 추천 경로를 우선하여 운행하고 있으며, 해당 운행 건 또한 드라이버가 안내받은 경로를 기준으로 실제 운행 거리·운행 시간·통행료 등에 따라 정상적으로 요금이 산정된 것으로 확인됩니다.\n\n또한 타다는 고객님 탑승 시점의 실시간 교통 상황을 반영하여 추천 경로를 안내하고 있으며, 드라이버는 고객님의 별도 요청이 없는 경우 시스템에서 제공되는 추천 경로를 기준으로 운행하게 됩니다.\n\n다만 드라이버 역시 운행 전 사전에 어떤 도로 및 경로로 최종 안내될지 별도로 확인하기 어려운 구조이며, 실제 운행 중 실시간 교통 상황 변화에 따라 고속화도로 또는 우회 경로가 포함될 수 있는 점 참고 부탁드립니다.\n\n아울러 앱 내 표시되는 예상 요금은 거리 기준으로 단순 계산된 최저 예상치로, 실제 운행 시 교통 상황·경로 변경 등으로 차이가 발생할 수 있습니다.\n\n본 운행 건은 유료도로 이용 및 실제 이동 거리 증가로 인해 최초 안내 금액 대비 추가 요금이 발생한 것으로 확인되며, 운행 내역에 따른 이용 요금으로 판단되어 플랫폼 차원에서 임의 조정 또는 환불을 진행하기 어려운 점 너른 양해 부탁드립니다.\n\n아울러 고객님께서 말씀하시는 상황과 불편함을 이해하지 못하는 것은 아니나, 타다는 이용자와 드라이버를 연결하는 플랫폼 서비스로 운영되고 있어 역할 및 권한에 일정 부분 한계가 있는 점 양해 부탁드립니다.\n\n결제된 이용 요금 및 수수료에 대한 정산 권한은 실제 운행을 수행한 드라이버에게 귀속되며, 플랫폼 운영 센터에서는 드라이버의 동의 없이 임의로 환불 또는 요금 정정을 진행하기 어려운 구조로 운영되고 있습니다.\n\n시간을 내어 문의해 주셨음에도 만족스러운 답변을 드리지 못한 점 저희 또한 무겁게 생각하고 있으며, 고객님의 입장에서 더욱 만족스러운 이용 경험을 제공해드릴 수 있도록 지속적으로 노력하겠습니다.'},
+{id:'가결제설명', label:'이중결제·가결제 안내', key:['가결제','가승인','이중결제','중복결제'], trig:['두번결제','두번','환불안'], text:'결제 관련하여 혼란을 드린 점 먼저 사과드립니다.\n\n타다는 호출·예약 시 결제수단의 유효성 확인을 위해 예상 요금을 먼저 가결제(가승인) 처리하며, 하차가 완료되면 해당 가결제는 자동으로 취소되고 실제 운행 요금이 다시 결제됩니다. 따라서 운행 1건당 실제 결제는 1회만 이루어집니다.\n\n다만 가결제 취소 내역이 카드사 사정에 따라 영업일 기준 2~3일 이후에 반영되는 경우가 있어, 일시적으로 두 건이 결제된 것처럼 보일 수 있는 점 참고 부탁드립니다.\n\n혹시 기간이 지난 후에도 가결제 금액이 환불되지 않는다면, 결제 카드사·승인 일시·금액을 함께 전달해 주시면 신속히 확인 후 안내드리겠습니다.'},
+{id:'클레임케어', label:'드라이버 클레임 케어(차단X)', key:[], trig:['불친절','응대','난폭','태도','클레임','제보','피드백','불쾌','기사','드라이버'], text:'타다를 이용하시는 과정에서 불편을 겪으신 점, 드라이버를 대신하여 깊이 사과드립니다.\n\n타다는 내부적으로 드라이버 모니터링을 실시하고 있으며, 고객님들의 제보와 신고가 누적될 경우 해당 드라이버에게 배차 제한 및 서비스 이용 제한 등 제재 조치를 취하고 있습니다.\n\n말씀해 주신 내용은 해당 드라이버에게 제재 조치가 이루어질 수 있도록 담당 부서로 전달하였으며, 모니터링 강화 및 내부 규정에 따라 조치할 예정입니다.\n\n불편하셨던 부분을 직접 말씀해 주신 덕분에 서비스 개선에 큰 도움이 되었으며, 같은 불편을 다시 겪지 않으시도록 최선을 다하겠습니다.'},
+{id:'빠따차단', label:'드라이버 빠따+영구차단', key:['차단','영구','블랙리스트'], trig:['폭언','폭행','협박'], text:'타다를 이용하여 보다 편안하고 신속한 이동을 기대하셨을 텐데, 이용에 불편을 드린 점 드라이버를 대신하여 깊이 사과드립니다.\n\n[고객님께 본의 아니게 불편을 드린 점에 대한 죄송한 마음을 담아, 해당 드라이버가 다시는 배차되지 않도록 영구 배차 차단 조치하였습니다.]\n\n타다는 내부적으로 드라이버 모니터링을 실시하고 있으며, 고객님들의 제보와 신고가 누적될 경우 해당 드라이버에게 배차 제한 및 서비스 이용 제한 등 제재 조치를 취하고 있습니다.\n가능한 범위 내에서 문제 드라이버에 대한 이용 제한 조치를 적극적으로 시행하고 있음을 안내드립니다.\n\n드라이버의 의도가 없었다 할지라도, 해당일 고객님께서 드라이버의 미흡한 대처로 인해 불편을 겪으신 내용에 대해서는 제재 조치를 취할 수 있도록 담당 부서로 전달하였으며, 해당 드라이버 모니터링 강화 및 내부 규정에 따라 조치를 취할 예정입니다.\n\n고객님께서 타다 이용에 불편하셨던 부분을 직접적으로 말씀해주셔서 드라이버 운행 실태 확인 및 타다 서비스 개선에 큰 기여를 해주신 점에 진심으로 감사드리며, 이번과 같은 불편한 상황을 경험하시지 않도록 최선을 다해 서비스를 개선해 나가도록 하겠습니다.\n\n다시 한번 큰 실망과 불편을 드린 고객님께 진심으로 고개 숙여 깊은 사과 말씀을 드립니다. 죄송합니다.'},
+{id:'운행의무외', label:'운행 의무 외 강제 불가', key:['적재','짐'], trig:['전화','통화','연락','강제','협조'], text:'타다는 이용자와 드라이버를 연결하는 플랫폼 서비스로 운영되고 있어 역할 및 권한에 일정 부분 한계가 있는 점 양해 부탁드립니다.\n\n또한 드라이버는 이용자의 이동을 위한 운행 서비스를 제공하는 주체로, 전화 연락이나 짐 적재 등 운행 외적인 사항에 대해서는 협조를 요청드릴 수는 있으나 이를 강제하기는 어려운 점 양해 부탁드립니다.'},
+{id:'일반크레딧후적용', label:'일반 크레딧 후적용 불가', key:['후적용','소급'], trig:['크레딧','쿠폰','적립금'], text:'타다의 일반 크레딧은 하차와 동시에 결제와 크레딧 사용·적립이 함께 처리되며, 이 과정이 완료된 이후에는 시스템상 이전 상태로 되돌려 크레딧을 적용하는 것이 어렵습니다.\n\n고객님께서 말씀 주신 취지에는 충분히 공감하나, 이미 결제가 완료된 이후에는 정책상 추가 적용이나 소급 적용을 도와드리기 어려운 점 양해 부탁드립니다.\n\n번거로우시겠지만, 크레딧 혜택을 놓치지 않으시도록 반드시 하차 전 고객님께서 크레딧 적용 여부를 확인해 주시길 부탁드립니다.'},
+{id:'현금미수금', label:'현금 결제·미수금', key:['미수금','미결제','현금요구'], trig:['현금','납부'], text:'타다는 앱 내 등록된 결제수단으로 자동 결제되는 구조로, 드라이버가 현장에서 현금을 요구할 수 없습니다.\n\n카드 결제가 일시적으로 실패하더라도 결제수단이 정상화되면 자동으로 재결제가 이루어지므로, 현금으로 결제하실 필요가 없으며 현금 결제 시 이중결제가 발생할 수 있습니다.\n\n미결제 요금이 등록된 경우 안내드린 납부 절차를 통해 정산해 주시면 서비스 이용이 즉시 정상화됩니다.'},
+{id:'영수증발급', label:'영수증 발급 방법', key:['영수증','세금계산서'], trig:['발급'], text:'영수증은 아래 경로로 발급하실 수 있습니다.\n\n타다 앱 > 이용내역 > 이용완료 > 해당 내역 선택 > [이메일로 전송] > 받으실 이메일 주소 입력 > [영수증 전송하기]'},
+{id:'환불소요', label:'환불 처리 소요', key:['환불반영','환불소요','환불처리','환불언제'], trig:['며칠','입금','얼마나'], text:'환불은 결제하신 카드 승인 내역에 대한 취소 방식으로만 진행되며, 현금 환불은 불가한 점 양해 부탁드립니다.\n\n취소 처리 후 실제 환불 반영까지는 카드사 사정에 따라 영업일 기준 며칠 정도 소요될 수 있습니다.'},
+{id:'분리청구', label:'이용료·부가 분리청구', key:['분리청구','부가서비스결제'], trig:['따로결제','별도청구','두건'], text:'이용 요금과 카시트 등 부가서비스 요금은 각각 별도로 청구되어 결제 내역에 두 건으로 표시될 수 있으나, 이는 정상적인 청구 방식인 점 안내드립니다.'},
+{id:'카시트환불', label:'카시트 환불관련', key:['카시트','이너시트'], trig:['환불','오염','미비치','옵션','부가서비스'], text:'카시트 부가서비스 환불 관련 안내 (경우를 선택하세요)', variants:[
+{label:'이너시트 미제공 환불', text:'먼저 영아와 함께하는 중요한 이동 과정에서 불편과 심려를 끼쳐드린 점 진심으로 사과드립니다.\n\n특히 고객님께서는 영아 카시트 이용을 위해 타다를 선택해 주셨음에도, 사전에 요청하신 영아용 이너시트가 실제 차량에 준비되어 있지 않아 아기의 안전과 편안함에 대해 큰 불안과 불편을 겪으신 것으로 확인되었습니다.\n\n고객님께서 전달해 주신 내용과 드라이버 확인 결과를 종합해 본 결과, 해당 차량에는 영아용 이너시트가 비치되어 있지 않았던 것으로 확인되었습니다.\n\n고객님 말씀처럼 영아의 경우 이너시트 유무가 탑승 편의와 안전에 중요한 요소가 될 수 있음에도, 운행 전 해당 사항이 정확히 안내되지 못한 점에 대해서는 아쉬움이 있었다고 판단하고 있습니다.\n\n이에 해당 내용은 드라이버 관리 부서에 전달하여 카시트 구성품 관리 및 고객 응대 과정에 대한 재교육이 진행될 수 있도록 조치하겠습니다.\n\n또한 고객님께서 이용하신 카시트 부가서비스에 대해서는 정상적인 서비스 제공이 이루어지지 못한 것으로 판단되어 카시트 옵션 이용요금은 전액 환불 처리해 드릴 예정입니다.\n\n다만 본 이용 건은 실제 목적지까지 정상적으로 운행이 완료된 점과, 운행 자체가 제공된 점을 고려할 때 이용요금 전체 환불은 어려운 점 양해 부탁드립니다.\n\n타다는 차량 운행 서비스를 중개하는 플랫폼으로서, 운행이 완료된 건에 대한 전체 운행요금을 드라이버에게 일괄적으로 환불하도록 강제하기 어려운 구조인 점 또한 함께 양해 부탁드립니다.\n\n그럼에도 고객님께서 기대하셨던 수준의 서비스를 제공해 드리지 못한 점에 대해서는 무겁게 받아들이고 있으며, 특히 영아 동반 이용 고객이 보다 안심하고 서비스를 이용하실 수 있도록 카시트 관리 기준 및 안내 절차 개선에 참고하겠습니다.\n\n소중한 의견 남겨주셔서 감사드리며, 다시 한번 이용 과정에서 불편을 드린 점 진심으로 사과드립니다.'},
+{label:'카시트 미숙지(장착·조작) 환불', text:'먼저 영아와 함께하는 중요한 이동 과정에서 불편과 심려를 끼쳐드린 점 진심으로 사과드립니다.\n\n특히 고객님께서는 영아 카시트 이용을 위해 타다를 선택해 주셨음에도, 드라이버의 카시트 장착 및 조작 미흡으로 인해 카시트를 정상적으로 이용하지 못하시어 아기의 안전과 편안함에 대해 큰 불안과 불편을 겪으신 것으로 확인되었습니다.\n\n고객님께서 전달해 주신 내용과 드라이버 확인 결과를 종합해 본 결과, 해당 운행 건에서 카시트가 정상적으로 장착·제공되지 못한 것으로 확인되었습니다.\n\n고객님 말씀처럼 영아의 경우 카시트의 올바른 장착 여부가 탑승 편의와 안전에 직결되는 중요한 요소임에도, 운행 과정에서 이를 제대로 제공해 드리지 못한 점에 대해서는 아쉬움이 있었다고 판단하고 있습니다.\n\n이에 해당 내용은 드라이버 관리 부서에 전달하여 카시트 장착·조작 및 고객 응대 과정에 대한 재교육이 진행될 수 있도록 조치하겠습니다.\n\n또한 고객님께서 이용하신 카시트 부가서비스에 대해서는 정상적인 서비스 제공이 이루어지지 못한 것으로 판단되어 카시트 옵션 이용요금은 전액 환불 처리해 드릴 예정입니다.\n\n다만 본 이용 건은 실제 목적지까지 정상적으로 운행이 완료된 점과, 운행 자체가 제공된 점을 고려할 때 이용요금 전체 환불은 어려운 점 양해 부탁드립니다.\n\n타다는 차량 운행 서비스를 중개하는 플랫폼으로서, 운행이 완료된 건에 대한 전체 운행요금을 드라이버에게 일괄적으로 환불하도록 강제하기 어려운 구조인 점 또한 함께 양해 부탁드립니다.\n\n그럼에도 고객님께서 기대하셨던 수준의 서비스를 제공해 드리지 못한 점에 대해서는 무겁게 받아들이고 있으며, 특히 영아 동반 이용 고객이 보다 안심하고 서비스를 이용하실 수 있도록 카시트 장착·관리 기준 및 안내 절차 개선에 참고하겠습니다.\n\n소중한 의견 남겨주셔서 감사드리며, 다시 한번 이용 과정에서 불편을 드린 점 진심으로 사과드립니다.'},
+{label:'카시트 오염 환불', text:'먼저 영아와 함께하는 중요한 이동 과정에서 불편과 심려를 끼쳐드린 점 진심으로 사과드립니다.\n\n특히 고객님께서는 영아 카시트 이용을 위해 타다를 선택해 주셨음에도, 카시트가 오염된 상태로 비치되어 있어 아기를 위생적으로 안심하고 탑승시키기 어려운 불편을 겪으신 것으로 확인되었습니다.\n\n고객님께서 전달해 주신 내용과 드라이버 확인 결과를 종합해 본 결과, 해당 차량의 카시트가 청결하지 못한 상태였던 것으로 확인되었습니다.\n\n고객님 말씀처럼 영아의 경우 카시트의 청결 상태가 탑승 위생과 안전에 중요한 요소가 될 수 있음에도, 운행 전 카시트 상태가 제대로 관리되지 못한 점에 대해서는 아쉬움이 있었다고 판단하고 있습니다.\n\n이에 해당 내용은 드라이버 관리 부서에 전달하여 카시트 청결·소독 관리 및 고객 응대 과정에 대한 재교육이 진행될 수 있도록 조치하겠습니다.\n\n또한 고객님께서 이용하신 카시트 부가서비스에 대해서는 정상적인 서비스 제공이 이루어지지 못한 것으로 판단되어 카시트 옵션 이용요금은 전액 환불 처리해 드릴 예정입니다.\n\n다만 본 이용 건은 실제 목적지까지 정상적으로 운행이 완료된 점과, 운행 자체가 제공된 점을 고려할 때 이용요금 전체 환불은 어려운 점 양해 부탁드립니다.\n\n타다는 차량 운행 서비스를 중개하는 플랫폼으로서, 운행이 완료된 건에 대한 전체 운행요금을 드라이버에게 일괄적으로 환불하도록 강제하기 어려운 구조인 점 또한 함께 양해 부탁드립니다.\n\n그럼에도 고객님께서 기대하셨던 수준의 서비스를 제공해 드리지 못한 점에 대해서는 무겁게 받아들이고 있으며, 특히 영아 동반 이용 고객이 보다 안심하고 서비스를 이용하실 수 있도록 카시트 위생 관리 기준 및 안내 절차 개선에 참고하겠습니다.\n\n소중한 의견 남겨주셔서 감사드리며, 다시 한번 이용 과정에서 불편을 드린 점 진심으로 사과드립니다.'},
+{label:'환불 불가', text:'문의주신 카시트 부가서비스의 경우, 카시트 오염, 카시트 미비치, 또는 드라이버의 카시트 장착·조작 미흡 등으로 정상적인 서비스가 제공되지 않은 경우에는 환불이 가능합니다.\n\n다만 본 건은 부가서비스가 제공되지 않았거나 정상적으로 제공되지 않은 경우에 해당하지 않아, 카시트 부가서비스 요금 환불은 어려운 점 너른 양해 부탁드립니다.'}
+]},
+{id:'안드로이드기종', label:'안드로이드 기종 정보 요청', key:['안드로이드','갤럭시','android'], trig:['앱오류','버그','튕김','먹통'], text:'현재 서버 측에서는 별도의 오류가 확인되지 않고 있습니다.\n번거로우시겠지만, 해당 현상을 확인할 수 있는 화면 녹화본과 함께 아래 정보를 전달해 주시면 면밀히 확인 후 안내드리겠습니다.\n\n* ONE UI 버전 : 설정 → 휴대전화 정보 → 소프트웨어 정보\n* 사용 중인 기기명 :\n* 오류 화면 녹화본 : (파일 첨부 필요)\n\n시간을 내어 문의해 주셨음에도 즉시 도움을 드리지 못한 점 진심으로 사과드리며, 자료를 전달해 주시면 신속히 확인 후 안내드리겠습니다.'},
+{id:'아이폰기종', label:'아이폰 기종 정보 요청', key:['아이폰','iphone','ios'], trig:['앱오류','버그','튕김','먹통'], text:'현재 서버 측에서는 별도의 오류가 확인되지 않고 있습니다.\n번거로우시겠지만, 해당 현상을 확인할 수 있는 화면 녹화본과 함께 아래 정보를 전달해 주시면 면밀히 확인 후 안내드리겠습니다.\n\n* iOS 버전 : 설정 → 일반 → 정보 → iOS 버전\n* 사용 중인 기기명 : (예: iPhone 15, iPhone 14 Pro 등)\n* 오류 화면 녹화본 : (파일 첨부 필요)\n\n아울러 타다 앱 내 로그 전송 방법은 아래와 같습니다.\n타다 앱 실행 → 우측 상단 프로필 또는 메뉴(≡) → 설정 → 로그 전송\n위 경로를 통해 로그를 전송해 주시면 전달해 주신 자료와 함께 확인하여 보다 정확한 안내를 드리겠습니다.\n\n시간을 내어 문의해 주셨음에도 즉시 도움을 드리지 못한 점 진심으로 사과드리며, 번거로우시겠지만 관련 자료를 전달해 주시면 신속히 확인 후 안내드리겠습니다.'},
+{id:'자료요청', label:'자료 요청', key:[], trig:['캡처','스크린샷','증빙','자료'], text:'정확한 확인을 위해 해당 운행 일시·출발>도착지 및 결제 내역 캡처를 공유해 주시면 신속히 검토하겠습니다.'},
+{id:'유선상담', label:'전화상담→이메일', key:['유선','콜센터','전화상담'], trig:['통화상담','전화로'], text:'타다는 보다 많은 문의를 폭넓게 접수하고 정확히 안내드리기 위해 유선 채널이 아닌 이메일(문의하기)을 통해 상담을 진행하고 있습니다.\n\n번거로우시더라도 문의 내용을 남겨 주시면 신속히 확인하여 안내드리겠습니다.'},
+{id:'셔틀불만파트너', label:'셔틀 불만(파트너)', key:['셔틀','b2b'], trig:['스케줄','구간','매출','파트너'], text:'B2B 셔틀 운행 건의 경우, 수락 이후에도 고객사 운영 스케줄에 따라 일정이 변동될 수 있는 점 안내드립니다.\n\n또한 요금은 운행 거리 구간에 따라 산정되며, 해당 셔틀 운행 건의 요금은 정상적으로 적용된 것으로 확인됩니다.\n\n아래 도움말을 참고하시어 운행 부탁드리며, 앞으로도 파트너님들의 매출 향상에 실질적으로 기여할 수 있는 운영 환경을 만들기 위해 지속적으로 고민하고 최선을 다하겠습니다.\n\n도움말 - [B2B 셔틀운행](https://help.tadatada.com/hc/ko/articles/50835140923417--25-09-%ED%83%80%EB%8B%A4-B2B-%EC%85%94%ED%8B%80-%EC%84%9C%EB%B9%84%EC%8A%A4-%EC%95%88%EB%82%B4)'},
+{id:'파트너불만족', label:'파트너 불만족 사유', key:['불만족','만족도'], trig:['평가','별점','사유'], text:'문의해 주신 운행 건을 확인한 결과, 별도의 특이사항이나 기재된 사유 없이 이용자 만족도가 \'불만족\'으로만 확인되는 점 안내드립니다.\n\n만족도 평가는 이용자가 직접 남기는 항목으로, 구체적인 사유가 함께 기재되지 않은 경우 불만의 상세 내용까지 확인하기는 어려운 점 양해 부탁드립니다.\n\n다만 말씀해 주신 내용은 운행 환경 개선을 위한 참고 자료로 활용하며, 파트너님께서 안정적으로 운행하실 수 있도록 지속적으로 살펴보겠습니다.'},
+{id:'배차불만파트너', label:'배차 관련 불만(파트너)', key:['배차'], trig:['콜','추천','라인업','지정'], text:'타다의 배차는 호출 발생 시 센터에서 개별적으로 배차를 지정하는 방식이 아니라, 다양한 조건을 종합하여 시스템이 자동으로 배차를 추천하는 구조입니다.\n\n일반적으로는 승차지와 가장 가까운 파트너님께 우선적으로 호출이 추천되지만, 배차 과정에서는 기예약 호출 여부, 라인업 상태, 목적지 방향 콜 여부, 퇴근 콜 여부, 이용자와의 차단 설정 여부 등 실제 운행 수행이 가능한 상태인지를 포함한 여러 요소가 종합적으로 반영되는 점 참고 부탁드립니다.'},
+{id:'사과마무리', label:'사과(마무리)', key:[], trig:[], text:'다시 한번 불편을 드린 점 진심으로 사과드립니다.'},
+{id:'감사마무리', label:'감사(마무리)', key:[], trig:[], text:'시간 내어 문의 주셔서 감사드립니다.'}
+];
 
-  // ── UI ──
-  const overlay=document.createElement('div');
-  overlay.id='zd_overlay_'+ticketNum;
-  overlay.style.cssText='position:fixed;top:16px;right:16px;width:380px;max-height:92vh;overflow-y:auto;z-index:999999;background:#fff;border:1px solid #d9e0de;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.22);font-family:-apple-system,sans-serif;';
-  overlay.innerHTML=`
-    <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff;border-radius:12px 12px 0 0;">
-      <strong style="font-size:14px;">🎫 티켓 뷰</strong>
-      <span style="font-size:12px;color:#0a7d72;font-weight:bold;">#${ticketNum}</span>
-      <button id="zd_close" style="margin-left:auto;border:none;background:#f1f3f5;border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:14px;">×</button>
-    </div>
-    <div style="padding:14px 16px;">
-      <!-- 슬랙 적재 (상단: 티켓 단순 복사 우선) -->
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        <strong style="font-size:13px;color:#0052cc;">📋 슬랙 적재</strong>
-        <div style="margin-left:auto;display:flex;gap:6px;">
-          <button id="zd_user" style="padding:4px 10px;border:1px solid #0052cc;border-radius:6px;background:#0052cc;color:#fff;font-size:11px;font-weight:bold;cursor:pointer;">이용자</button>
-          <button id="zd_partner" style="padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#333;font-size:11px;font-weight:bold;cursor:pointer;">파트너</button>
-        </div>
-      </div>
-      <div id="zd_pick_wrap" style="display:none;margin-bottom:8px;">
-        <div style="font-size:11px;color:#555;font-weight:bold;margin-bottom:5px;">인입 선택 (복수 가능)</div>
-        <div id="zd_pick_chips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-      </div>
-      <textarea id="zd_content" rows="9" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #ccc;border-radius:6px;font-size:12.5px;line-height:1.6;resize:vertical;margin-bottom:8px;min-height:150px;"></textarea>
-      <button id="zd_slack_copy" style="width:100%;padding:9px;background:#0052cc;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;">티켓 적재 복사</button>
+// ── UI ──
+const overlay=document.createElement('div');
+overlay.id='zd_overlay_'+ticketNum;
+overlay.style.cssText='position:fixed;top:16px;right:16px;width:380px;max-height:92vh;overflow-y:auto;z-index:999999;background:#fff;border:1px solid #d9e0de;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.22);font-family:-apple-system,sans-serif;';
+overlay.innerHTML=`
+   <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff;border-radius:12px 12px 0 0;">
+     <strong style="font-size:14px;">🎫 티켓 뷰</strong>
+     <span style="font-size:12px;color:#0a7d72;font-weight:bold;">#${ticketNum}</span>
+     <button id="zd_close" style="margin-left:auto;border:none;background:#f1f3f5;border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:14px;">×</button>
+   </div>
+   <div style="padding:14px 16px;">
+     <!-- 슬랙 적재 (상단: 티켓 단순 복사 우선) -->
+     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+       <strong style="font-size:13px;color:#0052cc;">📋 슬랙 적재</strong>
+       <div style="margin-left:auto;display:flex;gap:6px;">
+         <button id="zd_user" style="padding:4px 10px;border:1px solid #0052cc;border-radius:6px;background:#0052cc;color:#fff;font-size:11px;font-weight:bold;cursor:pointer;">이용자</button>
+         <button id="zd_partner" style="padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#333;font-size:11px;font-weight:bold;cursor:pointer;">파트너</button>
+       </div>
+     </div>
+     <div id="zd_pick_wrap" style="display:none;margin-bottom:8px;">
+       <div style="font-size:11px;color:#555;font-weight:bold;margin-bottom:5px;">인입 선택 (복수 가능)</div>
+       <div id="zd_pick_chips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+     </div>
+     <textarea id="zd_content" rows="9" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #ccc;border-radius:6px;font-size:12.5px;line-height:1.6;resize:vertical;margin-bottom:8px;min-height:150px;"></textarea>
+     <button id="zd_slack_copy" style="width:100%;padding:9px;background:#0052cc;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;">티켓 적재 복사</button>
 
-      <div style="border-top:1px solid #eee;margin:14px 0;"></div>
+     <div style="border-top:1px solid #eee;margin:14px 0;"></div>
 
-      <!-- 추천 멘트 (하단: 답변 작성 보조) -->
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
-        <strong style="font-size:12px;color:#0a7d72;">💬 추천 멘트</strong>
-        <span style="font-size:10px;color:#aaa;">칩 클릭 → 아래에 누적 → 복사</span>
-        <button id="zd_refresh" style="margin-left:auto;padding:3px 8px;border:1px solid #0a7d72;background:#fff;color:#0a7d72;border-radius:6px;cursor:pointer;font-size:10px;font-weight:bold;">🔄 다시 읽기</button>
-      </div>
-      <input id="zd_ment_filter" type="text" placeholder="멘트 검색 (예: 요금, 분실물, 가결제)" style="width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid #cdeae6;border-radius:6px;font-size:11.5px;margin-bottom:6px;">
-      <div id="zd_ment_status" style="font-size:10px;color:#aaa;margin-bottom:6px;"></div>
-      <div id="zd_ment_chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
-      <div id="zd_ment_variant" style="display:none;margin-bottom:8px;"></div>
-      <label id="zd_ment_optwrap" style="display:none;align-items:center;gap:6px;margin-bottom:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;user-select:none;"><input type="checkbox" id="zd_ment_opt" style="accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;"> <span>영구 차단 등 선택 문구 포함 (체크 후 칩 클릭 / 또는 추가 직후 토글)</span></label>
-      <textarea id="zd_ment_preview" rows="6" placeholder="멘트 칩을 누르면 여기에 누적됩니다. 자유롭게 수정 후 복사하세요." style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cdeae6;border-radius:6px;font-size:12.5px;line-height:1.7;resize:vertical;background:#fbfdfc;margin-bottom:6px;min-height:120px;"></textarea>
-      <div style="display:flex;gap:6px;">
-        <button id="zd_ment_copy" style="flex:1;padding:7px;background:#0a7d72;border:1px solid #0a7d72;color:#fff;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">📋 복사하기</button>
-        <button id="zd_ment_clear" style="padding:7px 12px;background:#fff;border:1px solid #cfd6d4;color:#777;border-radius:6px;cursor:pointer;font-size:12px;">비우기</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  document.getElementById('zd_content').value=customerMsg;
+     <!-- 추천 멘트 (하단: 답변 작성 보조) -->
+     <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+       <strong style="font-size:12px;color:#0a7d72;">💬 추천 멘트</strong>
+       <span style="font-size:10px;color:#aaa;">칩 클릭 → 아래에 누적 → 복사</span>
+       <button id="zd_refresh" style="margin-left:auto;padding:3px 8px;border:1px solid #0a7d72;background:#fff;color:#0a7d72;border-radius:6px;cursor:pointer;font-size:10px;font-weight:bold;">🔄 다시 읽기</button>
+     </div>
+     <input id="zd_ment_filter" type="text" placeholder="멘트 검색 (예: 요금, 분실물, 가결제)" style="width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid #cdeae6;border-radius:6px;font-size:11.5px;margin-bottom:6px;">
+     <div id="zd_ment_status" style="font-size:10px;color:#aaa;margin-bottom:6px;"></div>
+     <div id="zd_ment_chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+     <div id="zd_ment_variant" style="display:none;margin-bottom:8px;"></div>
+     <label id="zd_ment_optwrap" style="display:none;align-items:center;gap:6px;margin-bottom:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;user-select:none;"><input type="checkbox" id="zd_ment_opt" style="accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;"> <span>영구 차단 등 선택 문구 포함 (체크 후 칩 클릭 / 또는 추가 직후 토글)</span></label>
+     <textarea id="zd_ment_preview" rows="6" placeholder="멘트 칩을 누르면 여기에 누적됩니다. 자유롭게 수정 후 복사하세요." style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cdeae6;border-radius:6px;font-size:12.5px;line-height:1.7;resize:vertical;background:#fbfdfc;margin-bottom:6px;min-height:120px;"></textarea>
+     <div style="display:flex;gap:6px;">
+       <button id="zd_ment_copy" style="flex:1;padding:7px;background:#0a7d72;border:1px solid #0a7d72;color:#fff;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">📋 복사하기</button>
+       <button id="zd_ment_clear" style="padding:7px 12px;background:#fff;border:1px solid #cfd6d4;color:#777;border-radius:6px;cursor:pointer;font-size:12px;">비우기</button>
+     </div>
+   </div>
+ `;
+document.body.appendChild(overlay);
+document.getElementById('zd_content').value=customerMsg;
 
-  // ── 인입 선택 (복수 가능) ──
-  const pickWrap=document.getElementById('zd_pick_wrap');
-  const pickChips=document.getElementById('zd_pick_chips');
-  const contentBox=document.getElementById('zd_content');
-  const pickBlocks=(customerMsgs&&customerMsgs.length)
-    ?customerMsgs.slice()
-    :((customerMsg&&!/^\(/.test(customerMsg))?[customerMsg]:[]);
-  const pickSel=new Set();
-  if(pickBlocks.length>0) pickSel.add(pickBlocks.length-1); // 기본: 마지막(가장 최근) 발화 선택
-  function rebuildContent(){
-    const arr=[];
-    pickBlocks.forEach((b,idx)=>{ if(pickSel.has(idx)) arr.push(b); });
-    contentBox.value=arr.join('\n\n');
-  }
-  function renderPick(){
-    pickChips.innerHTML='';
-    pickBlocks.forEach((b,idx)=>{
-      const sel=pickSel.has(idx);
-      const c=document.createElement('button');
-      const oneLine=b.replace(/\n/g,' ');
-      const short=oneLine.slice(0,18)+(oneLine.length>18?'…':'');
-      c.textContent=(sel?'✓ ':'')+(idx+1)+'. '+short;
-      c.title=b;
-      c.style.cssText='padding:5px 10px;border-radius:14px;cursor:pointer;font-size:11px;border:1px solid '+(sel?'#0052cc':'#ccc')+';background:'+(sel?'#0052cc':'#f5f5f5')+';color:'+(sel?'#fff':'#333')+';font-weight:'+(sel?'bold':'normal')+';max-width:100%;text-align:left;';
-      c.onclick=()=>{ if(pickSel.has(idx)) pickSel.delete(idx); else pickSel.add(idx); rebuildContent(); renderPick(); };
-      pickChips.appendChild(c);
-    });
-  }
-  if(pickBlocks.length>=1){
-    pickWrap.style.display='block';
-    renderPick();
-    rebuildContent();
-  }
+// ── 인입 선택 (복수 가능) ──
+const pickWrap=document.getElementById('zd_pick_wrap');
+const pickChips=document.getElementById('zd_pick_chips');
+const contentBox=document.getElementById('zd_content');
+const pickBlocks=(customerMsgs&&customerMsgs.length)
+?customerMsgs.slice()
+:((customerMsg&&!/^\(/.test(customerMsg))?[customerMsg]:[]);
+const pickSel=new Set();
+if(pickBlocks.length>0) pickSel.add(pickBlocks.length-1); // 기본: 마지막(가장 최근) 발화 선택
+function rebuildContent(){
+const arr=[];
+pickBlocks.forEach((b,idx)=>{ if(pickSel.has(idx)) arr.push(b); });
+contentBox.value=arr.join('\n\n');
+}
+function renderPick(){
+pickChips.innerHTML='';
+pickBlocks.forEach((b,idx)=>{
+const sel=pickSel.has(idx);
+const c=document.createElement('button');
+const oneLine=b.replace(/\n/g,' ');
+const short=oneLine.slice(0,18)+(oneLine.length>18?'…':'');
+c.textContent=(sel?'✓ ':'')+(idx+1)+'. '+short;
+c.title=b;
+c.style.cssText='padding:5px 10px;border-radius:14px;cursor:pointer;font-size:11px;border:1px solid '+(sel?'#0052cc':'#ccc')+';background:'+(sel?'#0052cc':'#f5f5f5')+';color:'+(sel?'#fff':'#333')+';font-weight:'+(sel?'bold':'normal')+';max-width:100%;text-align:left;';
+c.onclick=()=>{ if(pickSel.has(idx)) pickSel.delete(idx); else pickSel.add(idx); rebuildContent(); renderPick(); };
+pickChips.appendChild(c);
+});
+}
+if(pickBlocks.length>=1){
+pickWrap.style.display='block';
+renderPick();
+rebuildContent();
+}
 
-  // ── 추천 멘트 렌더링 ──
-  const filterEl=document.getElementById('zd_ment_filter');
-  const chipsBox=document.getElementById('zd_ment_chips');
-  const statusEl=document.getElementById('zd_ment_status');
-  const previewEl=document.getElementById('zd_ment_preview');
-  const mentCopyBtn=document.getElementById('zd_ment_copy');
-  const mentClearBtn=document.getElementById('zd_ment_clear');
-  const optBox=document.getElementById('zd_ment_opt');
-  const optwrap=document.getElementById('zd_ment_optwrap');
-  const variantBox=document.getElementById('zd_ment_variant');
+// ── 추천 멘트 렌더링 ──
+const filterEl=document.getElementById('zd_ment_filter');
+const chipsBox=document.getElementById('zd_ment_chips');
+const statusEl=document.getElementById('zd_ment_status');
+const previewEl=document.getElementById('zd_ment_preview');
+const mentCopyBtn=document.getElementById('zd_ment_copy');
+const mentClearBtn=document.getElementById('zd_ment_clear');
+const optBox=document.getElementById('zd_ment_opt');
+const optwrap=document.getElementById('zd_ment_optwrap');
+const variantBox=document.getElementById('zd_ment_variant');
 
-  const norm=(s)=>(s||'').toLowerCase();
-  // 고객 인입 문의 + 작성 중인 답변을 함께 신호로 사용 (작성 전에도 문의 기준 추천)
-  function signalText(){
-    const inq=(customerMsgs&&customerMsgs.length)?customerMsgs.join('\n'):(customerMsg||'');
-    return norm(inq+'\n'+(draftText||''));
-  }
-  // key=결정적 단서(+3), trig=보조 단서(+1). 빈출어는 trig에서 제외해 변별력 확보.
-  function scoreMent(m,txt){
-    let s=0; const hits=[];
-    (m.key||[]).forEach(k=>{ if(txt.includes(norm(k))){ s+=3; hits.push(k); } });
-    (m.trig||[]).forEach(k=>{ if(txt.includes(norm(k))){ s+=1; hits.push(k); } });
-    return {s:s,hits:hits};
-  }
-  // 대괄호 처리: 긴 문장형([..문장..]) = 선택 문단(토글 대상), 짧은([   ],[금액]) = 채워넣기 표시(항상 유지)
-  function processBrackets(text,includeOptional){
-    return text.replace(/\n*\[([\s\S]*?)\]\n*/g,function(whole,inner){
-      const optional=inner.trim().length>15||/[.!?。]/.test(inner);
-      if(!optional) return whole;
-      return includeOptional?('\n\n'+inner.trim()+'\n\n'):'\n\n';
-    }).replace(/\n{3,}/g,'\n\n').trim();
-  }
-  let lastMent=null, lastSeg='';
-  function hasOptionalBracket(t){
-    const re=/\[([\s\S]*?)\]/g; let mm;
-    while((mm=re.exec(t))){ const i=mm[1].trim(); if(i.length>15||/[.!?。]/.test(i)) return true; }
-    return false;
-  }
-  function addMent(m,textOverride){
-    const useText=(textOverride!=null)?textOverride:m.text;
-    const seg=processBrackets(useText,optBox.checked);
-    const cur=previewEl.value;
-    previewEl.value=cur.trim()?(cur.replace(/\s+$/,'')+'\n\n'+seg):seg;
-    lastMent={text:useText}; lastSeg=seg;
-    // 영구 차단 등 선택 문구(문장형 대괄호)가 있는 멘트(드라이버 빠따)에서만 체크박스 노출
-    if(hasOptionalBracket(useText)){ optwrap.style.display='flex'; }
-    else { optwrap.style.display='none'; optBox.checked=false; }
-    previewEl.focus();
-    previewEl.scrollTop=previewEl.scrollHeight;
-  }
-  // 변형(variants) 멘트: 칩 클릭 시 경우 선택 드롭다운 노출
-  function closeVariants(){ variantBox.style.display='none'; variantBox.innerHTML=''; }
-  function showVariants(m){
-    variantBox.innerHTML='';
-    const wrap=document.createElement('div');
-    wrap.style.cssText='display:flex;align-items:center;gap:6px;';
-    const lab=document.createElement('span');
-    lab.textContent=m.label+' →';
-    lab.style.cssText='font-size:11px;color:#0a5d54;font-weight:bold;white-space:nowrap;';
-    const sel=document.createElement('select');
-    sel.style.cssText='flex:1;padding:5px 8px;border:1px solid #cdeae6;border-radius:6px;font-size:11.5px;background:#fff;color:#333;cursor:pointer;';
-    const def=document.createElement('option'); def.value=''; def.textContent='경우 선택…'; sel.appendChild(def);
-    m.variants.forEach((v,i)=>{ const o=document.createElement('option'); o.value=String(i); o.textContent=v.label; sel.appendChild(o); });
-    sel.onchange=()=>{ if(sel.value===''){return;} addMent(m,m.variants[+sel.value].text); closeVariants(); };
-    wrap.appendChild(lab); wrap.appendChild(sel);
-    variantBox.appendChild(wrap);
-    variantBox.style.display='block';
-    sel.focus();
-  }
-  function renderMents(){
-    const txt=signalText();
-    const q=norm(filterEl.value);
-    const hasSignal=txt.trim().length>0;
-    let scored=MENTS.map((m,idx)=>{ const r=scoreMent(m,txt); return {m:m,idx:idx,score:r.s,hits:r.hits}; });
-    if(q) scored=scored.filter(x=> norm(x.m.label).includes(q)||norm(x.m.id).includes(q) );
-    const matched=scored.filter(x=>x.score>0).sort((a,b)=> (b.score-a.score)||(a.idx-b.idx) );
-    const rest=scored.filter(x=>x.score===0).sort((a,b)=>a.idx-b.idx);
-    const ordered=hasSignal?matched.concat(rest):scored;
-    statusEl.textContent=q
-      ? ('"'+filterEl.value+'" 검색 결과 '+scored.length+'건')
-      : (hasSignal
-          ? (matched.length>0?'문의·작성 글 기준 추천입니다 (★ = 관련도 높음). 칩을 누르면 아래에 누적됩니다.':'추천 단서를 못 찾아 전체 멘트를 표시합니다.')
-          : '문의 내용 기준으로 정렬했습니다. 답변 작성 후 🔄로 갱신하세요.');
-    chipsBox.innerHTML='';
-    if(typeof closeVariants==='function') closeVariants();
-    ordered.forEach(({m,score,hits})=>{
-      const b=document.createElement('button');
-      const hot=score>0;
-      b.style.cssText='padding:4px 9px;border-radius:13px;cursor:pointer;font-size:11px;border:1px solid '+(hot?'#0a7d72':'#cfd6d4')+';background:'+(hot?'#e6f7f4':'#fff')+';color:'+(hot?'#0a5d54':'#555')+';font-weight:'+(hot?'bold':'normal')+';';
-      b.textContent=(hot?'★ ':'')+m.label+(m.variants?' ▾':'');
-      b.title=(hits&&hits.length?('추천 근거: '+hits.join(', ')+'\n\n'):'')+(m.variants?('경우 선택: '+m.variants.map(v=>v.label).join(' / ')):m.text);
-      b.onclick=m.variants?(()=>showVariants(m)):(()=>addMent(m));
-      chipsBox.appendChild(b);
-    });
-  }
-  filterEl.oninput=renderMents;
-  renderMents();
+const norm=(s)=>(s||'').toLowerCase();
+// 고객 인입 문의 + 작성 중인 답변을 함께 신호로 사용 (작성 전에도 문의 기준 추천)
+function signalText(){
+const inq=(customerMsgs&&customerMsgs.length)?customerMsgs.join('\n'):(customerMsg||'');
+return norm(inq+'\n'+(draftText||''));
+}
+// key=결정적 단서(+3), trig=보조 단서(+1). 빈출어는 trig에서 제외해 변별력 확보.
+function scoreMent(m,txt){
+let s=0; const hits=[];
+(m.key||[]).forEach(k=>{ if(txt.includes(norm(k))){ s+=3; hits.push(k); } });
+(m.trig||[]).forEach(k=>{ if(txt.includes(norm(k))){ s+=1; hits.push(k); } });
+return {s:s,hits:hits};
+}
+// 대괄호 처리: 긴 문장형([..문장..]) = 선택 문단(토글 대상), 짧은([   ],[금액]) = 채워넣기 표시(항상 유지)
+function processBrackets(text,includeOptional){
+return text.replace(/\n*\[([\s\S]*?)\]\n*/g,function(whole,inner){
+const optional=inner.trim().length>15||/[.!?。]/.test(inner);
+if(!optional) return whole;
+return includeOptional?('\n\n'+inner.trim()+'\n\n'):'\n\n';
+}).replace(/\n{3,}/g,'\n\n').trim();
+}
+let lastMent=null, lastSeg='';
+function hasOptionalBracket(t){
+const re=/\[([\s\S]*?)\]/g; let mm;
+while((mm=re.exec(t))){ const i=mm[1].trim(); if(i.length>15||/[.!?。]/.test(i)) return true; }
+return false;
+}
+function addMent(m,textOverride){
+const useText=(textOverride!=null)?textOverride:m.text;
+const seg=processBrackets(useText,optBox.checked);
+const cur=previewEl.value;
+previewEl.value=cur.trim()?(cur.replace(/\s+$/,'')+'\n\n'+seg):seg;
+lastMent={text:useText}; lastSeg=seg;
+// 영구 차단 등 선택 문구(문장형 대괄호)가 있는 멘트(드라이버 빠따)에서만 체크박스 노출
+if(hasOptionalBracket(useText)){ optwrap.style.display='flex'; }
+else { optwrap.style.display='none'; optBox.checked=false; }
+previewEl.focus();
+previewEl.scrollTop=previewEl.scrollHeight;
+}
+// 변형(variants) 멘트: 칩 클릭 시 경우 선택 드롭다운 노출
+function closeVariants(){ variantBox.style.display='none'; variantBox.innerHTML=''; }
+function showVariants(m){
+variantBox.innerHTML='';
+const wrap=document.createElement('div');
+wrap.style.cssText='display:flex;align-items:center;gap:6px;';
+const lab=document.createElement('span');
+lab.textContent=m.label+' →';
+lab.style.cssText='font-size:11px;color:#0a5d54;font-weight:bold;white-space:nowrap;';
+const sel=document.createElement('select');
+sel.style.cssText='flex:1;padding:5px 8px;border:1px solid #cdeae6;border-radius:6px;font-size:11.5px;background:#fff;color:#333;cursor:pointer;';
+const def=document.createElement('option'); def.value=''; def.textContent='경우 선택…'; sel.appendChild(def);
+m.variants.forEach((v,i)=>{ const o=document.createElement('option'); o.value=String(i); o.textContent=v.label; sel.appendChild(o); });
+sel.onchange=()=>{ if(sel.value===''){return;} addMent(m,m.variants[+sel.value].text); closeVariants(); };
+wrap.appendChild(lab); wrap.appendChild(sel);
+variantBox.appendChild(wrap);
+variantBox.style.display='block';
+sel.focus();
+}
+function renderMents(){
+const txt=signalText();
+const q=norm(filterEl.value);
+const hasSignal=txt.trim().length>0;
+let scored=MENTS.map((m,idx)=>{ const r=scoreMent(m,txt); return {m:m,idx:idx,score:r.s,hits:r.hits}; });
+if(q) scored=scored.filter(x=> norm(x.m.label).includes(q)||norm(x.m.id).includes(q) );
+const matched=scored.filter(x=>x.score>0).sort((a,b)=> (b.score-a.score)||(a.idx-b.idx) );
+const rest=scored.filter(x=>x.score===0).sort((a,b)=>a.idx-b.idx);
+const ordered=hasSignal?matched.concat(rest):scored;
+statusEl.textContent=q
+? ('"'+filterEl.value+'" 검색 결과 '+scored.length+'건')
+: (hasSignal
+? (matched.length>0?'문의·작성 글 기준 추천입니다 (★ = 관련도 높음). 칩을 누르면 아래에 누적됩니다.':'추천 단서를 못 찾아 전체 멘트를 표시합니다.')
+: '문의 내용 기준으로 정렬했습니다. 답변 작성 후 🔄로 갱신하세요.');
+chipsBox.innerHTML='';
+if(typeof closeVariants==='function') closeVariants();
+ordered.forEach(({m,score,hits})=>{
+const b=document.createElement('button');
+const hot=score>0;
+b.style.cssText='padding:4px 9px;border-radius:13px;cursor:pointer;font-size:11px;border:1px solid '+(hot?'#0a7d72':'#cfd6d4')+';background:'+(hot?'#e6f7f4':'#fff')+';color:'+(hot?'#0a5d54':'#555')+';font-weight:'+(hot?'bold':'normal')+';';
+b.textContent=(hot?'★ ':'')+m.label+(m.variants?' ▾':'');
+b.title=(hits&&hits.length?('추천 근거: '+hits.join(', ')+'\n\n'):'')+(m.variants?('경우 선택: '+m.variants.map(v=>v.label).join(' / ')):m.text);
+b.onclick=m.variants?(()=>showVariants(m)):(()=>addMent(m));
+chipsBox.appendChild(b);
+});
+}
+filterEl.oninput=renderMents;
+renderMents();
 
-  document.getElementById('zd_refresh').onclick=()=>{ draftText=getDraftText(); renderMents(); };
-  mentCopyBtn.onclick=function(){ copyText(previewEl.value,this); };
-  mentClearBtn.onclick=function(){ previewEl.value=''; lastMent=null; lastSeg=''; optwrap.style.display='none'; optBox.checked=false; previewEl.focus(); };
-  // 체크박스 토글 시, 방금 추가한 멘트가 선택 문구(문장형 대괄호)를 가지면 즉시 반영
-  optBox.onchange=function(){
-    if(lastMent&&hasOptionalBracket(lastMent.text)&&previewEl.value.endsWith(lastSeg)){
-      const seg2=processBrackets(lastMent.text,optBox.checked);
-      previewEl.value=previewEl.value.slice(0,previewEl.value.length-lastSeg.length)+seg2;
-      lastSeg=seg2;
-      previewEl.focus(); previewEl.scrollTop=previewEl.scrollHeight;
-    }
-  };
-  function copyText(val,btn){
-    const ta=document.createElement('textarea');ta.value=val;ta.style.cssText='position:fixed;top:-9999px;';
-    document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);
-    if(btn){const t=btn.textContent;btn.textContent='✅ 복사됨';setTimeout(()=>btn.textContent=t,1500);}
-  }
+document.getElementById('zd_refresh').onclick=()=>{ draftText=getDraftText(); renderMents(); };
+mentCopyBtn.onclick=function(){ copyText(previewEl.value,this); };
+mentClearBtn.onclick=function(){ previewEl.value=''; lastMent=null; lastSeg=''; optwrap.style.display='none'; optBox.checked=false; previewEl.focus(); };
+// 체크박스 토글 시, 방금 추가한 멘트가 선택 문구(문장형 대괄호)를 가지면 즉시 반영
+optBox.onchange=function(){
+if(lastMent&&hasOptionalBracket(lastMent.text)&&previewEl.value.endsWith(lastSeg)){
+const seg2=processBrackets(lastMent.text,optBox.checked);
+previewEl.value=previewEl.value.slice(0,previewEl.value.length-lastSeg.length)+seg2;
+lastSeg=seg2;
+previewEl.focus(); previewEl.scrollTop=previewEl.scrollHeight;
+}
+};
+function copyText(val,btn){
+const ta=document.createElement('textarea');ta.value=val;ta.style.cssText='position:fixed;top:-9999px;';
+document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);
+if(btn){const t=btn.textContent;btn.textContent='✅ 복사됨';setTimeout(()=>btn.textContent=t,1500);}
+}
 
-  // ── 슬랙 적재 ──
-  let selectedParty='이용자';
-  const bu=document.getElementById('zd_user'), bp=document.getElementById('zd_partner');
-  const ACT='padding:4px 10px;border:1px solid #0052cc;border-radius:6px;background:#0052cc;color:#fff;font-size:11px;font-weight:bold;cursor:pointer;';
-  const INA='padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#333;font-size:11px;font-weight:bold;cursor:pointer;';
-  bu.onclick=()=>{selectedParty='이용자';bu.style.cssText=ACT;bp.style.cssText=INA;};
-  bp.onclick=()=>{selectedParty='파트너';bp.style.cssText=ACT;bu.style.cssText=INA;};
+// ── 슬랙 적재 ──
+let selectedParty='이용자';
+const bu=document.getElementById('zd_user'), bp=document.getElementById('zd_partner');
+const ACT='padding:4px 10px;border:1px solid #0052cc;border-radius:6px;background:#0052cc;color:#fff;font-size:11px;font-weight:bold;cursor:pointer;';
+const INA='padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#333;font-size:11px;font-weight:bold;cursor:pointer;';
+bu.onclick=()=>{selectedParty='이용자';bu.style.cssText=ACT;bp.style.cssText=INA;};
+bp.onclick=()=>{selectedParty='파트너';bp.style.cssText=ACT;bu.style.cssText=INA;};
 
-  document.getElementById('zd_slack_copy').onclick=()=>{
-    const content=document.getElementById('zd_content').value.trim();
-    const escaped=content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const htmlData=`<a href="${ticketUrl}">#${ticketNum}</a> ${selectedParty} 인입<br><pre style="background:#f3f4f6;padding:8px;border-radius:4px;font-size:12px;white-space:pre-wrap;">${escaped}</pre>`;
-    const plainData=`<${ticketUrl}|#${ticketNum}> ${selectedParty} 인입\n\`\`\`\n${content}\n\`\`\``;
-    let copied=false;
-    try{
-      function listener(e){e.clipboardData.setData('text/html',htmlData);e.clipboardData.setData('text/plain',plainData);e.preventDefault();}
-      document.addEventListener('copy',listener,{once:true});
-      copied=document.execCommand('copy');
-      if(!copied) document.removeEventListener('copy',listener);
-    }catch(e){copied=false;}
-    if(!copied){ copyText(plainData,null); }
-    blinkTitle('🎫 적재 복사 완료!');
-    const b=document.getElementById('zd_slack_copy');const t=b.textContent;b.textContent='✅ 적재 복사 완료';setTimeout(()=>b.textContent=t,1500);
-  };
+document.getElementById('zd_slack_copy').onclick=()=>{
+const content=document.getElementById('zd_content').value.trim();
+const escaped=content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const htmlData=`<a href="${ticketUrl}">#${ticketNum}</a> ${selectedParty} 인입<br><pre style="background:#f3f4f6;padding:8px;border-radius:4px;font-size:12px;white-space:pre-wrap;">${escaped}</pre>`;
+const plainData=`<${ticketUrl}|#${ticketNum}> ${selectedParty} 인입\n\`\`\`\n${content}\n\`\`\``;
+let copied=false;
+try{
+function listener(e){e.clipboardData.setData('text/html',htmlData);e.clipboardData.setData('text/plain',plainData);e.preventDefault();}
+document.addEventListener('copy',listener,{once:true});
+copied=document.execCommand('copy');
+if(!copied) document.removeEventListener('copy',listener);
+}catch(e){copied=false;}
+if(!copied){ copyText(plainData,null); }
+blinkTitle('🎫 적재 복사 완료!');
+const b=document.getElementById('zd_slack_copy');const t=b.textContent;b.textContent='✅ 적재 복사 완료';setTimeout(()=>b.textContent=t,1500);
+};
 
-  // 닫기
-  function onKey(e){if(e.key==='Escape'){overlay.remove();document.removeEventListener('keydown',onKey);}}
-  document.addEventListener('keydown',onKey);
-  document.getElementById('zd_close').onclick=()=>{overlay.remove();document.removeEventListener('keydown',onKey);};
+// 닫기
+function onKey(e){if(e.key==='Escape'){overlay.remove();document.removeEventListener('keydown',onKey);}}
+document.addEventListener('keydown',onKey);
+document.getElementById('zd_close').onclick=()=>{overlay.remove();document.removeEventListener('keydown',onKey);};
 }
 
 // =========================================================================
@@ -609,16 +611,16 @@ document.querySelector('.bookmark-btn').setAttribute('href', bm);
 document.getElementById('codeBox').textContent = bm;
 
 function copyCode() {
-  const ta = document.createElement('textarea');
-  ta.value = bm;
-  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
-  document.body.appendChild(ta);
-  ta.focus(); ta.select();
-  try { document.execCommand('copy'); } catch(e) {}
-  document.body.removeChild(ta);
-  const btn = document.querySelector('.copy-manual button');
-  btn.textContent = '✅ 복사됨!';
-  setTimeout(function() { btn.textContent = '📋 코드 복사'; }, 2000);
+const ta = document.createElement('textarea');
+ta.value = bm;
+ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
+document.body.appendChild(ta);
+ta.focus(); ta.select();
+try { document.execCommand('copy'); } catch(e) {}
+document.body.removeChild(ta);
+const btn = document.querySelector('.copy-manual button');
+btn.textContent = '✅ 복사됨!';
+setTimeout(function() { btn.textContent = '📋 코드 복사'; }, 2000);
 }
 </script>
 </body>
