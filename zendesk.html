@@ -640,25 +640,28 @@ if(btn){const t=btn.textContent;btn.textContent='✅ 복사됨';setTimeout(()=>b
 }
 
 // ── 슬랙 적재 ──
-// 요청자(requester)가 드라이버/파트너인지 자동 판별
+// 요청자(requester) 외부 ID 접두로 파트너/이용자 판별: D…→파트너(드라이버), U… 등 그 외→이용자
 function detectPartyAuto(){
 try{
-// 1) "외부 ID" 라벨 인근 값에서 드라이버 ID(대문자+숫자, 예: DDD71972) 탐지
-const els=[...document.querySelectorAll('div,span,td,th,dt,dd,label,p,li')];
+// "외부 ID" 라벨 인근에서 외부 ID 값 추출
+let extId='';
+const els=[...document.querySelectorAll('div,span,td,th,dt,dd,label,p,li,a')];
 for(const el of els){
 if(el.children.length>3) continue;
 const t=(el.textContent||'').trim();
 if(t==='외부 ID'||t==='외부 아이디'||/^External ID$/i.test(t)){
 let cand='';
-const sib=el.nextElementSibling;
-if(sib) cand=(sib.value||sib.textContent||'').trim();
-if(!cand && el.parentElement) cand=(el.parentElement.textContent||'').replace(/외부\s*(ID|아이디)/i,'').trim();
-if(/\b(D[A-Z]*\d{3,}|[A-Z]{2,4}\d{3,})\b/.test(cand)) return '파트너';
+let sib=el.nextElementSibling;
+while(sib&&!cand){ cand=(sib.value||sib.textContent||'').trim(); sib=sib.nextElementSibling; }
+if(!cand&&el.parentElement) cand=(el.parentElement.textContent||'').replace(/외부\s*(ID|아이디)/i,'').replace(/^[:：\s]+/,'').trim();
+const m=cand.match(/[A-Z0-9]{6,}/);
+if(m){ extId=m[0]; break; }
 }
 }
-// 2) 드라이버 어드민 링크/경로 (링크 href 또는 메모 텍스트)
-if([...document.querySelectorAll('a[href]')].some(a=>/\/drivers\//i.test(a.getAttribute('href')||''))) return '파트너';
-if(/admin\.tadatada\.com\/drivers\//i.test(document.body.innerText)) return '파트너';
+// 외부 ID를 찾았으면 접두 글자로 확정 (이게 가장 정확 → 즉시 반환)
+if(extId) return /^D/i.test(extId)?'파트너':'이용자';
+// 외부 ID를 못 찾은 경우에만 드라이버 어드민 링크(정확한 href)로 보조 판별
+if([...document.querySelectorAll('a[href]')].some(a=>/admin\.tadatada\.com\/drivers\//i.test(a.getAttribute('href')||''))) return '파트너';
 }catch(e){}
 return '이용자';
 }
@@ -668,7 +671,7 @@ const ACT='padding:4px 10px;border:1px solid #0052cc;border-radius:6px;backgroun
 const INA='padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#333;font-size:11px;font-weight:bold;cursor:pointer;';
 bu.onclick=()=>{selectedParty='이용자';bu.style.cssText=ACT;bp.style.cssText=INA;};
 bp.onclick=()=>{selectedParty='파트너';bp.style.cssText=ACT;bu.style.cssText=INA;};
-// 외부 ID가 드라이버(Dxxx) 형식이거나 드라이버 어드민 링크가 있으면 파트너로 자동 전환
+// 외부 ID가 D로 시작(드라이버)하면 파트너로 자동 전환 (U 등은 이용자 유지)
 if(detectPartyAuto()==='파트너'){selectedParty='파트너';bp.style.cssText=ACT;bu.style.cssText=INA;}
 
 document.getElementById('zd_slack_copy').onclick=()=>{
