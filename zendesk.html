@@ -643,22 +643,12 @@ if(btn){const t=btn.textContent;btn.textContent='✅ 복사됨';setTimeout(()=>b
 // 요청자(requester) 외부 ID 접두로 파트너/이용자 판별: D…→파트너(드라이버), U… 등 그 외→이용자
 function detectPartyAuto(){
 try{
-// "외부 ID" 라벨 인근에서 외부 ID 값 추출
+// "외부 ID" 라벨 바로 뒤에 오는 ID 토큰을 텍스트에서 직접 추출 (DOM 구조에 의존하지 않음)
 let extId='';
-const els=[...document.querySelectorAll('div,span,td,th,dt,dd,label,p,li,a')];
-for(const el of els){
-if(el.children.length>3) continue;
-const t=(el.textContent||'').trim();
-if(t==='외부 ID'||t==='외부 아이디'||/^External ID$/i.test(t)){
-let cand='';
-let sib=el.nextElementSibling;
-while(sib&&!cand){ cand=(sib.value||sib.textContent||'').trim(); sib=sib.nextElementSibling; }
-if(!cand&&el.parentElement) cand=(el.parentElement.textContent||'').replace(/외부\s*(ID|아이디)/i,'').replace(/^[:：\s]+/,'').trim();
-const m=cand.match(/[A-Z0-9]{6,}/);
-if(m){ extId=m[0]; break; }
-}
-}
-// 외부 ID를 찾았으면 접두 글자로 확정 (이게 가장 정확 → 즉시 반환)
+const blob=document.body.innerText||'';
+const m=blob.match(/외부\s*(?:ID|아이디)[\s\S]{0,40}?([A-Za-z0-9]{6,})/);
+if(m) extId=m[1];
+// 외부 ID를 찾았으면 접두 글자로 확정 (D→파트너, U 등 그 외→이용자)
 if(extId) return /^D/i.test(extId)?'파트너':'이용자';
 // 외부 ID를 못 찾은 경우에만 드라이버 어드민 링크(정확한 href)로 보조 판별
 if([...document.querySelectorAll('a[href]')].some(a=>/admin\.tadatada\.com\/drivers\//i.test(a.getAttribute('href')||''))) return '파트너';
