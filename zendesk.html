@@ -87,10 +87,11 @@ let customerMsgs=[]; // 고객이 여러 번 인입한 경우 모두 수집
 // 이메일/일반 티켓: 첫 문의가 제목에 담기는 경우가 있어 티켓 제목을 인입 후보로 확보
 function cleanSubj(t){
 return (t||'')
-.replace(/^\s*(티켓|제목|subject)\s*[:：]\s*/i,'')                                  // 라벨 접두
-.replace(/\s*[–\-|]\s*(VCNC|TADA|타다|Zendesk|젠데스크|Agent\s*Workspace)\s*$/i,'') // 사이트 접미
-.replace(/:\s*[^\s:]+\.(png|jpe?g|gif|pdf|heic|webp)\s*$/i,'')                       // 첨부 파일명 접미
-.replace(/\s*[.…]{1,3}\s*$/,'')                                                       // 말줄임표
+.replace(/^\s*\(\d+\)\s*/,'')                                                          // (3) 안읽음 카운트 접두
+.replace(/^\s*(티켓|제목|subject)\s*[:：]\s*/i,'')                                       // 라벨 접두
+.replace(/\s*[–—\-|·]\s*(VCNC|TADA|타다|Zendesk|젠데스크|Agent\s*Workspace)\b.*$/i,'')   // 사이트 접미(+뒤따르는 잡텍스트까지)
+.replace(/:\s*[^\s:]+\.(png|jpe?g|gif|pdf|heic|webp)\s*$/i,'')                          // 첨부 파일명 접미
+.replace(/\s*[.…]{1,3}\s*$/,'')                                                          // 말줄임표
 .trim();
 }
 function getTicketSubject(){
@@ -315,6 +316,25 @@ if(!dup) customerMsgs.unshift(subj);
 }
 }catch(e){}
 if(customerMsgs.length>0 && !customerMsg) customerMsg=customerMsgs[0];
+}
+
+// ── 인입 최종 중복 제거: 제목/본문 등 사실상 같은 내용은 하나로 합침 (칩 중복 방지) ──
+if(customerMsgs && customerMsgs.length>1){
+const nk=s=>(s||'').replace(/[^0-9a-z가-힣]/gi,'').toLowerCase();
+const out=[];
+for(const b of customerMsgs){
+const bk=nk(b); if(!bk) continue;
+const di=out.findIndex(o=>{const ok=nk(o);
+if(ok===bk) return true;                                              // 완전 동일
+if(ok.length>=6&&bk.length>=6&&(ok.includes(bk)||bk.includes(ok))) return true; // 한쪽이 다른 쪽을 포함
+return false;});
+if(di>=0){ if(b.length>out[di].length) out[di]=b; } // 더 긴(정보 많은) 쪽 유지
+else out.push(b);
+}
+if(out.length>0){
+customerMsgs=out;
+if(!customerMsg||/^\(/.test(customerMsg)||!customerMsgs.includes(customerMsg)) customerMsg=customerMsgs[customerMsgs.length-1];
+}
 }
 
 if(!customerMsg) customerMsg='(내용을 직접 입력해주세요)';
@@ -620,12 +640,36 @@ if(btn){const t=btn.textContent;btn.textContent='✅ 복사됨';setTimeout(()=>b
 }
 
 // ── 슬랙 적재 ──
+// 요청자(requester)가 드라이버/파트너인지 자동 판별
+function detectPartyAuto(){
+try{
+// 1) "외부 ID" 라벨 인근 값에서 드라이버 ID(대문자+숫자, 예: DDD71972) 탐지
+const els=[...document.querySelectorAll('div,span,td,th,dt,dd,label,p,li')];
+for(const el of els){
+if(el.children.length>3) continue;
+const t=(el.textContent||'').trim();
+if(t==='외부 ID'||t==='외부 아이디'||/^External ID$/i.test(t)){
+let cand='';
+const sib=el.nextElementSibling;
+if(sib) cand=(sib.value||sib.textContent||'').trim();
+if(!cand && el.parentElement) cand=(el.parentElement.textContent||'').replace(/외부\s*(ID|아이디)/i,'').trim();
+if(/\b(D[A-Z]*\d{3,}|[A-Z]{2,4}\d{3,})\b/.test(cand)) return '파트너';
+}
+}
+// 2) 드라이버 어드민 링크/경로 (링크 href 또는 메모 텍스트)
+if([...document.querySelectorAll('a[href]')].some(a=>/\/drivers\//i.test(a.getAttribute('href')||''))) return '파트너';
+if(/admin\.tadatada\.com\/drivers\//i.test(document.body.innerText)) return '파트너';
+}catch(e){}
+return '이용자';
+}
 let selectedParty='이용자';
 const bu=document.getElementById('zd_user'), bp=document.getElementById('zd_partner');
 const ACT='padding:4px 10px;border:1px solid #0052cc;border-radius:6px;background:#0052cc;color:#fff;font-size:11px;font-weight:bold;cursor:pointer;';
 const INA='padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#333;font-size:11px;font-weight:bold;cursor:pointer;';
 bu.onclick=()=>{selectedParty='이용자';bu.style.cssText=ACT;bp.style.cssText=INA;};
 bp.onclick=()=>{selectedParty='파트너';bp.style.cssText=ACT;bu.style.cssText=INA;};
+// 외부 ID가 드라이버(Dxxx) 형식이거나 드라이버 어드민 링크가 있으면 파트너로 자동 전환
+if(detectPartyAuto()==='파트너'){selectedParty='파트너';bp.style.cssText=ACT;bu.style.cssText=INA;}
 
 document.getElementById('zd_slack_copy').onclick=()=>{
 const content=document.getElementById('zd_content').value.trim();
