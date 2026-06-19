@@ -474,7 +474,7 @@ overlay.innerHTML=`
      <div id="zd_ment_status" style="font-size:10px;color:#aaa;margin-bottom:6px;"></div>
      <div id="zd_ment_chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
      <div id="zd_ment_variant" style="display:none;margin-bottom:8px;"></div>
-     <label id="zd_ment_optwrap" style="display:none;align-items:center;gap:6px;margin-bottom:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;user-select:none;"><input type="checkbox" id="zd_ment_opt" style="accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;"> <span>선택 문구 포함 — 영구 차단 / 운행요금 전액 환불 불가 등 (체크 후 칩 클릭 / 또는 추가 직후 토글)</span></label>
+     <label id="zd_ment_optwrap" style="display:none;align-items:center;gap:6px;margin-bottom:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;user-select:none;"><input type="checkbox" id="zd_ment_opt" style="accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;"> <span id="zd_ment_optlabel">선택 문구 포함 (체크 후 칩 클릭 / 또는 추가 직후 토글)</span></label>
      <textarea id="zd_ment_preview" rows="6" placeholder="멘트 칩을 누르면 여기에 누적됩니다. 자유롭게 수정 후 복사하세요." style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cdeae6;border-radius:6px;font-size:12.5px;line-height:1.7;resize:vertical;background:#fbfdfc;margin-bottom:6px;min-height:120px;"></textarea>
      <div style="display:flex;gap:6px;">
        <button id="zd_ment_copy" style="flex:1;padding:7px;background:#0a7d72;border:1px solid #0a7d72;color:#fff;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">📋 복사하기</button>
@@ -565,14 +565,25 @@ const re=/\[([\s\S]*?)\]/g; let mm;
 while((mm=re.exec(t))){ const i=mm[1].trim(); if(i.length>15||/[.!?。]/.test(i)) return true; }
 return false;
 }
+// 선택 문구(문장형 대괄호) 내용에 맞춰 체크박스 라벨명 산출
+function optionalBracketName(t){
+const re=/\[([\s\S]*?)\]/g; let mm;
+while((mm=re.exec(t))){ const i=mm[1].trim();
+if(!(i.length>15||/[.!?。]/.test(i))) continue;
+if(/차단/.test(i)) return '영구 차단';
+if(/환불/.test(i)) return '운행요금 전액 환불 불가';
+return '선택 문구';
+}
+return '선택 문구';
+}
 function addMent(m,textOverride){
 const useText=fillTokens((textOverride!=null)?textOverride:m.text);
 const seg=processBrackets(useText,optBox.checked);
 const cur=previewEl.value;
 previewEl.value=cur.trim()?(cur.replace(/\s+$/,'')+'\n\n'+seg):seg;
 lastMent={text:useText}; lastSeg=seg;
-// 영구 차단 등 선택 문구(문장형 대괄호)가 있는 멘트(드라이버 빠따)에서만 체크박스 노출
-if(hasOptionalBracket(useText)){ optwrap.style.display='flex'; }
+// 선택 문구(문장형 대괄호)가 있는 멘트에서만 체크박스 노출 + 라벨명을 내용에 맞게 표시
+if(hasOptionalBracket(useText)){ optwrap.style.display='flex'; const ol=document.getElementById('zd_ment_optlabel'); if(ol) ol.textContent=optionalBracketName(useText)+' 포함 (체크 후 칩 클릭 / 또는 추가 직후 토글)'; }
 else { optwrap.style.display='none'; optBox.checked=false; }
 previewEl.focus();
 previewEl.scrollTop=previewEl.scrollHeight;
