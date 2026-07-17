@@ -495,12 +495,51 @@ overlay.innerHTML=`
 document.body.appendChild(overlay);
 document.getElementById('zd_content').value=customerMsg;
 
+// ── 꿀통 마커 파싱 → localStorage 기록 (admin↔zendesk 오리진 우회) ──
+function _applyHoneyMarker(htmlStr){
+const m=htmlStr && htmlStr.match(/<!--TADACTX:([A-Za-z0-9+\/=]+)-->/);
+if(!m) return false;
+let obj; try{ obj=JSON.parse(decodeURIComponent(escape(atob(m[1])))); }catch(e){ return false; }
+if(!obj||typeof obj!=='object') return false;
+Object.keys(obj).forEach(k=>{ if(/^tada_/.test(k)){ try{ localStorage.setItem(k,obj[k]); }catch(e){} } });
+return true;
+}
+async function loadHoneyCtx(){
+let ok=false;
+try{
+if(navigator.clipboard && navigator.clipboard.read){
+const items=await navigator.clipboard.read();
+for(const it of items){
+if(it.types && it.types.includes('text/html')){
+const blob=await it.getType('text/html'); const txt=await blob.text();
+if(_applyHoneyMarker(txt)){ ok=true; break; }
+}
+}
+}
+}catch(e){}
+if(ok){ runBookmarklet(); return; }
+// 폴백: 붙여넣기 칸 (권한/브라우저 이슈 대비)
+const pb=document.createElement('textarea');
+pb.placeholder='여기에 Ctrl+V — admin에서 꿀통 복사한 내용 붙여넣기';
+pb.style.cssText='position:fixed;left:50%;top:38%;transform:translateX(-50%);width:340px;height:64px;z-index:1000000;border:2px solid #0a7d72;border-radius:8px;padding:8px;font-size:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);';
+document.body.appendChild(pb); pb.focus();
+pb.addEventListener('blur',()=>setTimeout(()=>{ if(document.body.contains(pb)) pb.remove(); },200));
+pb.addEventListener('paste',e=>{
+const h=e.clipboardData.getData('text/html')||e.clipboardData.getData('text/plain')||'';
+const done=_applyHoneyMarker(h); pb.remove();
+if(done){ runBookmarklet(); }
+else{ alert('꿀통 데이터를 찾지 못했어요.\n admin에서 꿀통 복사를 먼저 해주세요.'); }
+});
+}
+
 // 꿀통 연동 배너
 (function(){
 const el=document.getElementById('zd_ctx'); if(!el) return;
 const s=ctxSummary();
-if(s){ el.className='zp-ctx ok'; el.innerHTML='🍯 꿀통 연동: '+s+' <span style="color:#0a7d72;">— {토큰} 자동 채움</span>'; }
-else { el.className='zp-ctx none'; el.innerHTML='🍯 꿀통 데이터 없음 — {토큰} 자리는 [ ]로 표시됩니다 (수동 입력)'; }
+const loadBtn=' <button id="zd_ctx_load" class="zp-ghost sm" style="margin-left:4px;padding:2px 8px;">🍯 불러오기</button>';
+if(s){ el.className='zp-ctx ok'; el.innerHTML='🍯 꿀통 연동: '+s+' <span style="color:#0a7d72;">— {토큰} 자동 채움</span>'+loadBtn; }
+else { el.className='zp-ctx none'; el.innerHTML='🍯 꿀통 데이터 없음 — {토큰} 자리는 [ ]로 표시됩니다 (수동 입력)'+loadBtn; }
+const lb=document.getElementById('zd_ctx_load'); if(lb) lb.onclick=loadHoneyCtx;
 })();
 
 // ── 인입 선택 (복수 가능) ──
