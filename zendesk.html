@@ -445,49 +445,51 @@ return parts.join(' · ');
 // ── UI ──
 const overlay=document.createElement('div');
 overlay.id='zd_overlay_'+ticketNum;
-overlay.style.cssText='position:fixed;top:16px;right:16px;width:380px;max-height:92vh;overflow-y:auto;z-index:999999;background:#fff;border:1px solid #d9e0de;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.22);font-family:-apple-system,sans-serif;';
+overlay.className='zdp';
 overlay.innerHTML=`
-   <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff;border-radius:12px 12px 0 0;">
-     <strong style="font-size:14px;">🎫 티켓 뷰</strong>
-     <span style="font-size:12px;color:#0a7d72;font-weight:bold;">#${ticketNum}</span>
-     <button id="zd_close" style="margin-left:auto;border:none;background:#f1f3f5;border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:14px;">×</button>
+   <style>.zdp{position:fixed;top:16px;right:16px;width:380px;max-height:92vh;overflow-y:auto;z-index:999999;background:#fff;border:1px solid #e6eae8;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.18);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#243027;}.zdp *{box-sizing:border-box;}.zdp button{font-family:inherit;cursor:pointer;transition:background .12s,border-color .12s,color .12s,transform .12s;}.zdp .zp-head{display:flex;align-items:center;gap:8px;padding:13px 15px;border-bottom:1px solid #e6eae8;position:sticky;top:0;background:#fff;border-radius:12px 12px 0 0;z-index:2;}.zdp .zp-tnum{font-size:11px;font-weight:bold;color:#0a5d54;background:#e6f7f4;border:1px solid #bfe6de;padding:1px 7px;border-radius:20px;}.zdp .zp-x{margin-left:auto;border:none;background:#f1f3f5;border-radius:6px;width:24px;height:24px;font-size:12px;color:#7b857f;}.zdp .zp-x:hover{background:#e6eae8;color:#243027;}.zdp .zp-body{padding:13px 15px;}.zdp .zp-shdr{display:flex;align-items:center;gap:7px;margin-bottom:9px;}.zdp .zp-stitle{font-size:12px;font-weight:bold;color:#0a5d54;}.zdp .zp-tag{font-size:10px;color:#7b857f;background:#fbfdfc;border:1px solid #e6eae8;padding:1px 6px;border-radius:5px;}.zdp .zp-count{font-size:10px;font-weight:bold;color:#0a5d54;background:#e6f7f4;padding:1px 7px;border-radius:20px;}.zdp .zp-seg{margin-left:auto;display:flex;background:#fbfdfc;border:1px solid #e6eae8;border-radius:8px;padding:2px;gap:2px;}.zdp .zp-seg button{border:none;background:transparent;font-size:11px;font-weight:bold;color:#7b857f;padding:3px 11px;border-radius:6px;}.zdp .zp-seg button.on{background:#0a7d72;color:#fff;}.zdp .zp-lbl{font-size:11px;color:#7b857f;margin-bottom:6px;}.zdp .zp-pick{font-size:11px;padding:5px 11px;border-radius:20px;border:1px solid #e6eae8;background:#fff;color:#243027;max-width:100%;text-align:left;}.zdp .zp-pick:hover{border-color:#0a7d72;color:#0a5d54;}.zdp .zp-pick.on{background:#0a7d72;border-color:#0a7d72;color:#fff;font-weight:bold;}.zdp textarea,.zdp .zp-in{width:100%;border:1px solid #e6eae8;border-radius:8px;font-family:inherit;color:#243027;background:#fff;}.zdp textarea{padding:9px;font-size:12.5px;line-height:1.6;resize:vertical;}.zdp .zp-in{padding:7px 9px 7px 28px;font-size:11.5px;}.zdp textarea:focus,.zdp .zp-in:focus{outline:none;border-color:#0a7d72;box-shadow:0 0 0 3px #e6f7f4;}.zdp .zp-prev{background:#fbfdfc;}.zdp .zp-btn{background:#0a7d72;color:#fff;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:bold;}.zdp .zp-btn:hover{background:#0a5d54;}.zdp .zp-btn:active{transform:scale(.985);}.zdp .zp-ghost{background:#fff;border:1px solid #e6eae8;color:#7b857f;border-radius:8px;padding:8px 13px;font-size:12px;font-weight:bold;}.zdp .zp-ghost:hover{border-color:#0a7d72;color:#0a5d54;}.zdp .zp-ghost.sm{padding:3px 9px;font-size:10.5px;color:#0a5d54;border-color:#bfe6de;}.zdp .zp-ctx{font-size:10.5px;line-height:1.5;padding:6px 9px;border-radius:8px;margin-bottom:8px;}.zdp .zp-ctx.ok{background:#e6f7f4;border:1px solid #bfe6de;color:#0a5d54;}.zdp .zp-ctx.none{background:#f6f7f8;border:1px solid #e3e6e8;color:#8a8f92;}.zdp .zp-search{position:relative;margin-bottom:6px;}.zdp .zp-mag{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:12px;color:#7b857f;pointer-events:none;}.zdp .zp-status{font-size:10px;color:#8a8f92;margin-bottom:6px;}.zdp .zp-chip{padding:4px 10px;border-radius:20px;font-size:11px;border:1px solid #cfd6d4;background:#fff;color:#555;}.zdp .zp-chip:hover{border-color:#0a7d72;background:#e6f7f4;color:#0a5d54;transform:translateY(-1px);}.zdp .zp-chip.rec{border-color:#bfe6de;background:#e6f7f4;color:#0a5d54;font-weight:bold;}.zdp .zp-chip.rec:hover{border-color:#0a7d72;}.zdp .zp-chip.flash{animation:zpf .5s ease;}@keyframes zpf{0%{background:#0a7d72;color:#fff;border-color:#0a7d72;}}.zdp .zp-vlab{font-size:11px;color:#0a5d54;font-weight:bold;white-space:nowrap;}.zdp .zp-sel{flex:1;padding:5px 8px;border:1px solid #bfe6de;border-radius:6px;font-size:11.5px;background:#fff;color:#243027;cursor:pointer;}.zdp .zp-alabel{font-size:11px;color:#0a5d54;font-weight:bold;align-self:center;}.zdp .zp-addon{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:#0a5d54;border:1px solid #bfe6de;border-radius:20px;padding:3px 9px;cursor:pointer;user-select:none;}.zdp .zp-addon input{accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;}.zdp .zp-optwrap{align-items:center;gap:6px;margin-bottom:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;user-select:none;}.zdp .zp-optwrap input{accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;}.zdp .zp-div{height:1px;background:#e6eae8;margin:12px 0;}.zdp .zp-actionbar{position:sticky;bottom:0;display:flex;gap:7px;padding:10px 15px;background:#fff;border-top:1px solid #e6eae8;}</style>
+   <div class="zp-head">
+     <span style="font-size:15px;">🎫</span>
+     <strong style="font-size:14px;font-weight:bold;">티켓 뷰</strong>
+     <span class="zp-tnum">#${ticketNum}</span>
+     <button id="zd_close" class="zp-x" aria-label="닫기">✕</button>
    </div>
-   <div style="padding:14px 16px;">
-     <!-- 슬랙 적재 (상단: 티켓 단순 복사 우선) -->
-     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-       <strong style="font-size:13px;color:#0052cc;">📋 슬랙 적재</strong>
-       <div style="margin-left:auto;display:flex;gap:6px;">
-         <button id="zd_user" style="padding:4px 10px;border:1px solid #0052cc;border-radius:6px;background:#0052cc;color:#fff;font-size:11px;font-weight:bold;cursor:pointer;">이용자</button>
-         <button id="zd_partner" style="padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#333;font-size:11px;font-weight:bold;cursor:pointer;">파트너</button>
+   <div class="zp-body">
+     <div class="zp-shdr">
+       <strong class="zp-stitle">📋 슬랙 적재</strong>
+       <span class="zp-tag">티켓</span>
+       <div class="zp-seg">
+         <button id="zd_user" class="on">이용자</button>
+         <button id="zd_partner">파트너</button>
        </div>
      </div>
-     <div id="zd_pick_wrap" style="display:none;margin-bottom:8px;">
-       <div style="font-size:11px;color:#555;font-weight:bold;margin-bottom:5px;">인입 선택 (복수 가능)</div>
+     <div id="zd_pick_wrap" style="display:none;margin-bottom:9px;">
+       <div class="zp-lbl">인입 선택 · 복수 가능</div>
        <div id="zd_pick_chips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
      </div>
-     <textarea id="zd_content" rows="9" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #ccc;border-radius:6px;font-size:12.5px;line-height:1.6;resize:vertical;margin-bottom:8px;min-height:150px;"></textarea>
-     <button id="zd_slack_copy" style="width:100%;padding:9px;background:#0052cc;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;">티켓 적재 복사</button>
-
-     <div style="border-top:1px solid #eee;margin:14px 0;"></div>
-
-     <!-- 추천 멘트 (하단: 답변 작성 보조) -->
-     <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
-       <strong style="font-size:12px;color:#0a7d72;">💬 추천 멘트</strong>
-       <span style="font-size:10px;color:#aaa;">칩 클릭 → 아래에 누적 → 복사</span>
-       <button id="zd_refresh" style="margin-left:auto;padding:3px 8px;border:1px solid #0a7d72;background:#fff;color:#0a7d72;border-radius:6px;cursor:pointer;font-size:10px;font-weight:bold;">🔄 다시 읽기</button>
+     <textarea id="zd_content" rows="9" style="margin-bottom:9px;min-height:150px;"></textarea>
+     <button id="zd_slack_copy" class="zp-btn" style="width:100%;">티켓 적재 복사</button>
+     <div class="zp-div"></div>
+     <div class="zp-shdr" style="margin-bottom:8px;">
+       <strong class="zp-stitle">💬 추천 멘트</strong>
+       <span id="zd_ment_count" class="zp-count"></span>
+       <button id="zd_refresh" class="zp-ghost sm" style="margin-left:auto;">🔄 다시 읽기</button>
      </div>
-     <div id="zd_ctx" style="font-size:10.5px;line-height:1.5;padding:5px 8px;border-radius:6px;margin-bottom:6px;"></div>
-     <input id="zd_ment_filter" type="text" placeholder="멘트 검색 (예: 요금, 분실물, 가결제)" style="width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid #cdeae6;border-radius:6px;font-size:11.5px;margin-bottom:6px;">
-     <div id="zd_ment_status" style="font-size:10px;color:#aaa;margin-bottom:6px;"></div>
+     <div id="zd_ctx" class="zp-ctx"></div>
+     <div class="zp-search">
+       <span class="zp-mag">🔍</span>
+       <input id="zd_ment_filter" type="text" class="zp-in" placeholder="멘트 검색 (예: 요금, 바우처, 배차)">
+     </div>
+     <div id="zd_ment_status" class="zp-status"></div>
      <div id="zd_ment_chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
      <div id="zd_ment_variant" style="display:none;margin-bottom:8px;"></div>
-     <label id="zd_ment_optwrap" style="display:none;align-items:center;gap:6px;margin-bottom:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;user-select:none;"><input type="checkbox" id="zd_ment_opt" style="accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;"> <span id="zd_ment_optlabel">선택 문구 포함 (체크 후 칩 클릭 / 또는 추가 직후 토글)</span></label>
+     <label id="zd_ment_optwrap" class="zp-optwrap" style="display:none;"><input type="checkbox" id="zd_ment_opt"> <span id="zd_ment_optlabel">선택 문구 포함 (체크 후 칩 클릭 / 또는 추가 직후 토글)</span></label>
      <div id="zd_ment_addon" style="display:none;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;"></div>
-     <textarea id="zd_ment_preview" rows="6" placeholder="멘트 칩을 누르면 여기에 누적됩니다. 자유롭게 수정 후 복사하세요." style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #cdeae6;border-radius:6px;font-size:12.5px;line-height:1.7;resize:vertical;background:#fbfdfc;margin-bottom:6px;min-height:120px;"></textarea>
-     <div style="display:flex;gap:6px;">
-       <button id="zd_ment_copy" style="flex:1;padding:7px;background:#0a7d72;border:1px solid #0a7d72;color:#fff;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">📋 복사하기</button>
-       <button id="zd_ment_clear" style="padding:7px 12px;background:#fff;border:1px solid #cfd6d4;color:#777;border-radius:6px;cursor:pointer;font-size:12px;">비우기</button>
-     </div>
+     <textarea id="zd_ment_preview" class="zp-prev" rows="6" placeholder="멘트 칩을 누르면 여기에 누적됩니다. 자유롭게 수정 후 복사하세요." style="margin-bottom:6px;min-height:120px;"></textarea>
+   </div>
+   <div class="zp-actionbar">
+     <button id="zd_ment_copy" class="zp-btn" style="flex:1;">📋 복사하기</button>
+     <button id="zd_ment_clear" class="zp-ghost">비우기</button>
    </div>
  `;
 document.body.appendChild(overlay);
@@ -497,8 +499,8 @@ document.getElementById('zd_content').value=customerMsg;
 (function(){
 const el=document.getElementById('zd_ctx'); if(!el) return;
 const s=ctxSummary();
-if(s){ el.style.cssText+=';background:#e6f7f4;border:1px solid #b6e3db;color:#0a5d54;'; el.innerHTML='🍯 꿀통 연동: '+s+' <span style="color:#0a7d72;">— {토큰} 자동 채움</span>'; }
-else { el.style.cssText+=';background:#f6f7f8;border:1px solid #e3e6e8;color:#999;'; el.innerHTML='🍯 꿀통 데이터 없음 — {토큰} 자리는 [ ]로 표시됩니다 (수동 입력)'; }
+if(s){ el.className='zp-ctx ok'; el.innerHTML='🍯 꿀통 연동: '+s+' <span style="color:#0a7d72;">— {토큰} 자동 채움</span>'; }
+else { el.className='zp-ctx none'; el.innerHTML='🍯 꿀통 데이터 없음 — {토큰} 자리는 [ ]로 표시됩니다 (수동 입력)'; }
 })();
 
 // ── 인입 선택 (복수 가능) ──
@@ -524,7 +526,7 @@ const oneLine=b.replace(/\n/g,' ');
 const short=oneLine.slice(0,18)+(oneLine.length>18?'…':'');
 c.textContent=(sel?'✓ ':'')+(idx+1)+'. '+short;
 c.title=b;
-c.style.cssText='padding:5px 10px;border-radius:14px;cursor:pointer;font-size:11px;border:1px solid '+(sel?'#0052cc':'#ccc')+';background:'+(sel?'#0052cc':'#f5f5f5')+';color:'+(sel?'#fff':'#333')+';font-weight:'+(sel?'bold':'normal')+';max-width:100%;text-align:left;';
+c.className='zp-pick'+(sel?' on':'');
 c.onclick=()=>{ if(pickSel.has(idx)) pickSel.delete(idx); else pickSel.add(idx); rebuildContent(); renderPick(); };
 pickChips.appendChild(c);
 });
@@ -597,10 +599,10 @@ else { optwrap.style.display='none'; optBox.checked=false; }
 // 날씨 인사말 애드온(여름/겨울/레인) — addons 가 있는 멘트에만 노출
 if(m&&m.addons&&m.addons.length){
 addonBox.innerHTML='';
-const lb=document.createElement('span'); lb.textContent='날씨 인사말:'; lb.style.cssText='font-size:11px;color:#0a5d54;font-weight:bold;align-self:center;'; addonBox.appendChild(lb);
+const lb=document.createElement('span'); lb.textContent='날씨 인사말:'; lb.className='zp-alabel'; addonBox.appendChild(lb);
 m.addons.forEach(ad=>{
-const l=document.createElement('label'); l.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:#0a5d54;cursor:pointer;border:1px solid #cdeae6;border-radius:13px;padding:3px 9px;user-select:none;';
-const cb=document.createElement('input'); cb.type='checkbox'; cb.style.cssText='accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;';
+const l=document.createElement('label'); l.className='zp-addon';
+const cb=document.createElement('input'); cb.type='checkbox';
 const sp=document.createElement('span'); sp.textContent=ad.label;
 l.appendChild(cb); l.appendChild(sp);
 cb.onchange=()=>{ const line=fillTokens(ad.text).trim(); let v=previewEl.value; const idx=v.indexOf(line); if(idx>=0){ v=v.slice(0,idx)+v.slice(idx+line.length); } if(cb.checked){ v=v.replace(/\s+$/,'')+'\n\n'+line; } previewEl.value=v.replace(/\n{3,}/g,'\n\n').replace(/^\s+/,'').replace(/\s+$/,''); previewEl.focus(); previewEl.scrollTop=previewEl.scrollHeight; };
@@ -619,9 +621,9 @@ const wrap=document.createElement('div');
 wrap.style.cssText='display:flex;align-items:center;gap:6px;';
 const lab=document.createElement('span');
 lab.textContent=m.label+' →';
-lab.style.cssText='font-size:11px;color:#0a5d54;font-weight:bold;white-space:nowrap;';
+lab.className='zp-vlab';
 const sel=document.createElement('select');
-sel.style.cssText='flex:1;padding:5px 8px;border:1px solid #cdeae6;border-radius:6px;font-size:11.5px;background:#fff;color:#333;cursor:pointer;';
+sel.className='zp-sel';
 const def=document.createElement('option'); def.value=''; def.textContent='경우 선택…'; sel.appendChild(def);
 m.variants.forEach((v,i)=>{ const o=document.createElement('option'); o.value=String(i); o.textContent=v.label; sel.appendChild(o); });
 sel.onchange=()=>{ if(sel.value===''){return;} addMent(m,m.variants[+sel.value].text); closeVariants(); };
@@ -649,15 +651,16 @@ if(typeof closeVariants==='function') closeVariants();
 ordered.forEach(({m,score,hits})=>{
 const b=document.createElement('button');
 const hot=score>0;
-b.style.cssText='padding:4px 9px;border-radius:13px;cursor:pointer;font-size:11px;border:1px solid '+(hot?'#0a7d72':'#cfd6d4')+';background:'+(hot?'#e6f7f4':'#fff')+';color:'+(hot?'#0a5d54':'#555')+';font-weight:'+(hot?'bold':'normal')+';';
+b.className='zp-chip'+(hot?' rec':'');
 b.textContent=(hot?'★ ':'')+m.label+(m.variants?' ▾':'');
 b.title=(hits&&hits.length?('추천 근거: '+hits.join(', ')+'\n\n'):'')+(m.variants?('경우 선택: '+m.variants.map(v=>v.label).join(' / ')):fillTokens(m.text));
-b.onclick=m.variants?(()=>showVariants(m)):(()=>addMent(m));
+b.onclick=m.variants?(()=>showVariants(m)):(()=>{addMent(m);b.classList.remove('flash');void b.offsetWidth;b.classList.add('flash');});
 chipsBox.appendChild(b);
 });
 }
 filterEl.oninput=renderMents;
 renderMents();
+var _cEl=document.getElementById('zd_ment_count'); if(_cEl)_cEl.textContent=MENTS.length;
 
 document.getElementById('zd_refresh').onclick=()=>{ draftText=getDraftText(); renderMents(); };
 mentCopyBtn.onclick=function(){ copyText(previewEl.value,this); };
@@ -695,12 +698,10 @@ return '이용자';
 }
 let selectedParty='이용자';
 const bu=document.getElementById('zd_user'), bp=document.getElementById('zd_partner');
-const ACT='padding:4px 10px;border:1px solid #0052cc;border-radius:6px;background:#0052cc;color:#fff;font-size:11px;font-weight:bold;cursor:pointer;';
-const INA='padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;color:#333;font-size:11px;font-weight:bold;cursor:pointer;';
-bu.onclick=()=>{selectedParty='이용자';bu.style.cssText=ACT;bp.style.cssText=INA;};
-bp.onclick=()=>{selectedParty='파트너';bp.style.cssText=ACT;bu.style.cssText=INA;};
+bu.onclick=()=>{selectedParty='이용자';bu.classList.add('on');bp.classList.remove('on');};
+bp.onclick=()=>{selectedParty='파트너';bp.classList.add('on');bu.classList.remove('on');};
 // 외부 ID가 D로 시작(드라이버)하면 파트너로 자동 전환 (U 등은 이용자 유지)
-if(detectPartyAuto()==='파트너'){selectedParty='파트너';bp.style.cssText=ACT;bu.style.cssText=INA;}
+if(detectPartyAuto()==='파트너'){selectedParty='파트너';bp.classList.add('on');bu.classList.remove('on');}
 
 document.getElementById('zd_slack_copy').onclick=()=>{
 const content=document.getElementById('zd_content').value.trim();
