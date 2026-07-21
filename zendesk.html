@@ -731,7 +731,7 @@ if(m) extId=m[1];
 // 외부 ID를 찾았으면 접두 글자로 확정 (D→파트너, U 등 그 외→이용자)
 if(extId) return /^D/i.test(extId)?'파트너':'이용자';
 // 외부 ID를 못 찾은 경우에만 드라이버 어드민 링크(정확한 href)로 보조 판별
-if([...document.querySelectorAll('a[href]')].some(a=>/admin\.tadatada\.com\/drivers\//i.test(a.getAttribute('href')||''))) return '파트너';
+if([...document.querySelectorAll('a[href]')].some(a=>/admin\.tadatada\.(?:com|in)\/drivers\//i.test(a.getAttribute('href')||''))) return '파트너';
 }catch(e){}
 return '이용자';
 }
