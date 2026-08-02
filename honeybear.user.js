@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.2.0
+// @version      0.3.0
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -39,7 +39,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 v0.2.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 v0.3.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 2; // 케이스 봉투 스키마 버전
 
@@ -425,28 +425,25 @@
   if (IS_ZD) {
 
     /* 멘트 분리 로드: GM_xmlhttpRequest는 페이지 CSP·CORS의 영향을 받지 않음.
-     * → zendesk.html 안의 MENTS 배열을 레포의 ments.json으로 옮기면
-     *   멘트 수정 = json 커밋만으로 끝. (캐시 10분, 실패 시 캐시 폴백) */
+     * ments.json = { v, updatedAt, ments:[...] }. (캐시 10분, 실패 시 캐시 폴백) */
     const MENTS_URL = 'https://raw.githubusercontent.com/zyersndogpig/honeybear/main/ments.json';
     function loadMents(cb) {
       const cached = GM_getValue('hb_ments_cache', null);
       const at = GM_getValue('hb_ments_at', 0);
-      if (cached && Date.now() - at < 10 * 60 * 1000) { cb(JSON.parse(cached)); return; }
+      const parse = s => { try { const j = JSON.parse(s); return Array.isArray(j) ? j : (j.ments || []); } catch (e) { return []; } };
+      if (cached && Date.now() - at < 10 * 60 * 1000) { cb(parse(cached)); return; }
       GM_xmlhttpRequest({
         method: 'GET', url: MENTS_URL + '?t=' + Date.now(),
         onload: r => {
-          try {
-            const j = JSON.parse(r.responseText);
-            GM_setValue('hb_ments_cache', r.responseText);
-            GM_setValue('hb_ments_at', Date.now());
-            cb(j);
-          } catch (e) { cb(cached ? JSON.parse(cached) : []); }
+          const arr = parse(r.responseText);
+          if (arr.length) { GM_setValue('hb_ments_cache', r.responseText); GM_setValue('hb_ments_at', Date.now()); cb(arr); }
+          else cb(cached ? parse(cached) : []);
         },
-        onerror: () => cb(cached ? JSON.parse(cached) : [])
+        onerror: () => cb(cached ? parse(cached) : [])
       });
     }
 
-    /* 토큰 치환 — 봉투에서 직접. {lossAmount} {toll} 등이 공짜로 생긴다 */
+    /* ── 토큰 치환 — 봉투에서 직접 ── */
     function tokensOf(c) {
       const toll = (c.fare.items || []).find(i => /톨게이트|통행료|톨/.test(i.label));
       const IS_RESV = c.trip.actionWord === '탑승' || c.trip.timeSrc === 'resv' || c.flags.isFromResv;
@@ -462,7 +459,7 @@
         toll: toll ? won(toll.amt) : '', lossAmount: won(c.fare.loss),
         fareFix: c.fare.fix ? (won(c.fare.fix.old) + ' > ' + won(c.fare.fix.new)) : '',
         fixLines: c.fare.fix ? (c.fare.fix.items || []).map(i => i.label + ' : ' + won(i.from) + ' > ' + won(i.to)).join('\n') : '',
-        rideLine: (IS_RESV ? (dt + ' 탑승하시어 ') : (dt + '에 호출하시어 ')) + route
+        rideLine: (IS_RESV ? (dt + ' 탑승하시어') : (dt + '에 호출하시어')) + ' ' + route
       };
     }
     function fillTokens(text, c) {
@@ -470,61 +467,376 @@
       return (text || '').replace(/\{(\w+)\}/g, (w, k) => (T[k] != null && T[k] !== '') ? T[k] : '[ ]');
     }
 
-    /* 라이브 케이스 카드 — 최소 구현.
-     * 기존 티켓뷰의 인입 파싱·멘트 칩·슬랙 적재는 이 패널 안으로 그대로 이식하면 된다.
-     * (customerMsg 파싱, scoreMent, ID 대조 로직은 zendesk.html에서 복붙 수준) */
+    /* ── 대괄호 처리 (원본 processBrackets 동일) ──
+     * 긴 문장형 [..] = 선택 문단(토글), 짧은 [   ]/[금액] = 채움 표시(유지) */
+    function processBrackets(text, includeOptional) {
+      return text.replace(/\n*\[([\s\S]*?)\]\n*/g, (whole, inner) => {
+        const optional = inner.trim().length > 15 || /[.!?。]/.test(inner);
+        if (!optional) return whole;
+        return includeOptional ? ('\n\n' + inner.trim() + '\n\n') : '\n\n';
+      }).replace(/\n{3,}/g, '\n\n').trim();
+    }
+    function hasOptionalBracket(t) {
+      const re = /\[([\s\S]*?)\]/g; let m;
+      while ((m = re.exec(t))) { const i = m[1].trim(); if (i.length > 15 || /[.!?。]/.test(i)) return true; }
+      return false;
+    }
+    function optionalBracketName(t) {
+      const re = /\[([\s\S]*?)\]/g; let m;
+      while ((m = re.exec(t))) { const i = m[1].trim();
+        if (!(i.length > 15 || /[.!?。]/.test(i))) continue;
+        if (/차단/.test(i)) return '영구 차단';
+        if (/환불/.test(i)) return '운행요금 전액 환불 불가';
+        return '선택 문구';
+      }
+      return '선택 문구';
+    }
+
+    /* ── 고객 인입 파싱 (원본 로직 이식: 메시징/이메일/일반 티켓) ── */
+    function isNoiseLine(ml) {
+      return (!ml || ml === '•' || ml === 'A form was sent:' || ml === '내부' ||
+        ml === '드라이버 상담사' || /^TADA /.test(ml) || /^Web User [a-f0-9]/.test(ml) ||
+        ml === '대화' || /님과의 대화$/.test(ml) || /^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(ml) ||
+        /^(오늘|어제|그제|월요일|화요일|수요일|목요일|금요일|토요일|일요일) \d{1,2}:\d{2}$/.test(ml) ||
+        /^\d{1,2}:\d{2}$/.test(ml) || /^메시지 작성기$|^메시징$|^보내기$/.test(ml) ||
+        /^존함을 말씀|^필요시 추가확인|^사진 또는 자료/.test(ml) ||
+        /^상담 중인 날짜|^감사합니다|^오늘도 안전/.test(ml) ||
+        /^\d{4}-\d{2}-\d{2}$|^\d{2}-\d{2}$/.test(ml) ||
+        /^오류 제보|^유선 상담 중 자료|^계약 및 해지|^기타$/.test(ml) ||
+        /^\d{10,11}$/.test(ml) || /^\d{3,4}-\d{3,4}-\d{4}$/.test(ml));
+    }
+    function parseInbound() {
+      const msgs = [];
+      try {
+        const conv = document.querySelector('[data-test-id="ticket-main-conversation"]') ||
+          document.querySelector('[class*="conversation"]') || document.querySelector('main') || document.body;
+        const raw = (conv.innerText || '');
+        const isMessaging = /Web User [a-f0-9]+/.test(raw);
+        if (isMessaging) {
+          const all = raw.split('\n');
+          const cut = all.findIndex(l => l.trim() === '메시지 작성기');
+          const lines = cut >= 0 ? all.slice(0, cut) : all;
+          let i = 0;
+          while (i < lines.length) {
+            if (/^Web User [a-f0-9]/.test(lines[i].trim())) {
+              let j = i + 1; const buf = []; let skipName = false;
+              while (j < lines.length) {
+                const ml = lines[j].trim();
+                if (ml === '드라이버 상담사' || /^TADA /.test(ml) || /^Web User [a-f0-9]/.test(ml) || ml === '메시지 작성기') break;
+                if (/^존함을 말씀/.test(ml)) { skipName = true; j++; continue; }
+                if (skipName && ml && !isNoiseLine(ml)) { if (/^[가-힣]{2,5}$/.test(ml)) { skipName = false; j++; continue; } skipName = false; }
+                if (!isNoiseLine(ml)) buf.push(ml);
+                j++;
+              }
+              if (buf.length) msgs.push(buf.join('\n').trim());
+              i = j;
+            } else i++;
+          }
+        } else {
+          // 이메일/일반: 노이즈 제거 후 한 덩어리
+          const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !isNoiseLine(l) &&
+            !/^https?:\/\//.test(l) && !/\.(png|jpg|jpeg|gif|pdf)$/i.test(l) &&
+            !/^수신자:$|^자세히 보기$|^원본 메일|^-{3,}/.test(l));
+          const msg = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+          if (msg) msgs.push(msg);
+        }
+      } catch (e) {}
+      // 중복 제거
+      const nk = s => (s || '').replace(/[^0-9a-z가-힣]/gi, '').toLowerCase();
+      const out = [];
+      for (const b of msgs) { const bk = nk(b); if (!bk) continue;
+        const di = out.findIndex(o => { const ok = nk(o); return ok === bk || (ok.length >= 6 && bk.length >= 6 && (ok.includes(bk) || bk.includes(ok))); });
+        if (di >= 0) { if (b.length > out[di].length) out[di] = b; } else out.push(b);
+      }
+      return out;
+    }
+    function getDraftText() {
+      const sels = ['[data-test-id="omni-log-editor"]', '.ProseMirror', '.zendesk-editor--rich-text-comment', '[contenteditable="true"]', 'textarea'];
+      let best = '';
+      sels.forEach(s => document.querySelectorAll(s).forEach(e => {
+        if (e.closest('#hb_zd_panel')) return;
+        const r = e.getBoundingClientRect(); if (r.width <= 0 || r.height <= 0) return;
+        const t = (e.innerText || e.value || '').trim(); if (t.length > best.length) best = t;
+      }));
+      return best;
+    }
+
+    /* ── 멘트 스코어링 (원본 scoreMent 동일: key +3, trig +1) ── */
+    const norm = s => (s || '').toLowerCase();
+    function scoreMent(m, txt) {
+      let s = 0;
+      (m.key || []).forEach(k => { if (txt.includes(norm(k))) s += 3; });
+      (m.trig || []).forEach(k => { if (txt.includes(norm(k))) s += 1; });
+      return s;
+    }
+
+    /* ── ID 대조 (젠데스크 페이지 ↔ 봉투) ── */
+    function collectZdIds(snap) {
+      const t = snap || ''; const u = [], d = []; let m;
+      const reD = /admin\.tadatada\.(?:com|in)\/drivers\/([A-Za-z0-9]+)/g;
+      while ((m = reD.exec(t))) d.push(m[1]);
+      const reU = /admin\.tadatada\.(?:com|in)\/users\/([A-Za-z0-9]+)/g;
+      while ((m = reU.exec(t))) u.push(m[1]);
+      const reE = /외부\s*ID[\s:：]*([A-Za-z0-9_-]{5,40})/g;
+      while ((m = reE.exec(t))) { const id = m[1]; if (/^U[A-Za-z0-9]{8,}$/.test(id)) u.push(id); else if (/^[A-Za-z]{2,4}[0-9]{4,}$/.test(id)) d.push(id); }
+      const uniq = a => a.filter((v, i) => v && a.indexOf(v) === i);
+      return { user: uniq(u), driver: uniq(d) };
+    }
+    function idStatus(mine, zd) {
+      if (!mine && !zd.length) return 'none';
+      if (!mine) return 'nomine';
+      if (!zd.length) return 'nozd';
+      return zd.indexOf(mine) >= 0 ? 'ok' : 'bad';
+    }
+
     function fresh(ts) {
       if (!ts) return '';
       const m = Math.round((Date.now() - ts) / 60000);
       return m < 1 ? '방금' : m + '분 전';
     }
-    function renderCard(box, c) {
-      const has = !!(c && c.ts);
-      const stale = has && (Date.now() - c.ts > 30 * 60 * 1000);
-      const rows = !has ? '' : [
-        ['일시', c.trip.dateTime], ['출발', c.trip.departure], ['도착', c.trip.destination],
-        ['이름', c.trip.name], ['총요금', won(c.fare.total)], ['예상요금', won(c.fare.est)],
-        ['탄력', c.fare.surge ? c.fare.surge + '%' : ''], ['취소료', won(c.fare.cancel)],
-        ['영손비', won(c.fare.loss)],
-        ['정정', c.fare.fix ? (won(c.fare.fix.old) + ' → ' + won(c.fare.fix.new)) : ''],
-        ['라이드', c.ids.ride], ['예약', c.ids.resv], ['유저', c.ids.user], ['파트너', c.ids.driver]
-      ].map(r => `<div style="color:#7b857f;">${r[0]}</div><div style="word-break:break-all;color:${r[1] ? '#243027' : '#c0c7c4'};">${r[1] || '—'}</div>`).join('');
-      box.innerHTML =
-        `<div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:bold;color:#0a5d54;">🍯 케이스
-          <span style="font-size:9.5px;padding:1px 6px;border-radius:20px;color:#fff;background:${!has ? '#c3c9c6' : stale ? '#d97706' : '#0a7d72'};">
-            ${!has ? '데이터 없음' : fresh(c.ts) + (stale ? ' · 오래됨' : '')}
-          </span>
-          <button id="hb_clear" style="margin-left:auto;border:none;background:transparent;color:#7b857f;font-size:10px;cursor:pointer;">비우기</button>
-        </div>
-        ${has ? `<div style="display:grid;grid-template-columns:44px 1fr;gap:1px 8px;margin-top:6px;font-size:10.5px;line-height:1.5;">${rows}</div>` : ''}`;
-      const cb = $('#hb_clear', box);
-      if (cb) cb.onclick = () => { HBStore.clearCase(); renderCard(box, HBStore.emptyCase()); };
-    }
 
+    /* ═══ 패널 빌드 ═══ */
     onReady(() => {
+      const TN = (location.href.match(/tickets\/(\d+)/) || [])[1] || '';
+      const ticketUrl = 'https://tadatadahelp.zendesk.com/agent/tickets/' + TN;
+      const pageSnap = (() => { try { return document.body.innerText || ''; } catch (e) { return ''; } })();
+
       const panel = el('div',
-        'position:fixed;top:16px;right:16px;width:300px;z-index:999999;background:#fff;border:1px solid #e6eae8;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.18);padding:12px 14px;font-family:-apple-system,sans-serif;display:none;');
-      const card = el('div');
-      panel.appendChild(card);
+        'position:fixed;top:16px;right:16px;width:360px;max-height:92vh;overflow-y:auto;z-index:999999;background:#fff;border:1px solid #e6eae8;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.18);font-family:-apple-system,sans-serif;color:#243027;display:none;');
+      panel.id = 'hb_zd_panel';
+      panel.innerHTML = `
+        <style>
+          #hb_zd_panel *{box-sizing:border-box;}
+          #hb_zd_panel .h{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #e6eae8;position:sticky;top:0;background:#fff;border-radius:12px 12px 0 0;z-index:2;}
+          #hb_zd_panel .h b{font-size:14px;} #hb_zd_panel .tn{font-size:11px;font-weight:bold;color:#0a5d54;background:#e6f7f4;border:1px solid #bfe6de;padding:1px 7px;border-radius:20px;}
+          #hb_zd_panel .x{margin-left:auto;border:none;background:#f1f3f5;border-radius:6px;width:24px;height:24px;cursor:pointer;color:#7b857f;}
+          #hb_zd_panel .body{padding:12px 14px;}
+          #hb_zd_panel .card{border:1px solid #bfe6de;background:#f4fbfa;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;}
+          #hb_zd_panel .card.none{border-color:#e3e6e8;background:#f6f7f8;}
+          #hb_zd_panel .card.warn{border-color:#e8b4ad;background:#fdf5f4;}
+          #hb_zd_panel .chead{display:flex;align-items:center;gap:6px;font-weight:bold;color:#0a5d54;}
+          #hb_zd_panel .badge{font-size:9.5px;padding:1px 6px;border-radius:20px;color:#fff;}
+          #hb_zd_panel .grid{display:grid;grid-template-columns:52px 1fr;gap:1px 8px;margin-top:6px;line-height:1.5;color:#243027;}
+          #hb_zd_panel .grid .k{color:#7b857f;} #hb_zd_panel .grid .miss{color:#c0c7c4;} #hb_zd_panel .grid .bad{color:#c0392b;font-weight:bold;} #hb_zd_panel .grid .good{color:#0a7d72;}
+          #hb_zd_panel textarea,#hb_zd_panel input.s{width:100%;border:1px solid #e6eae8;border-radius:8px;font-family:inherit;color:#243027;padding:8px;font-size:12.5px;line-height:1.6;}
+          #hb_zd_panel textarea:focus,#hb_zd_panel input.s:focus{outline:none;border-color:#0a7d72;box-shadow:0 0 0 3px #e6f7f4;}
+          #hb_zd_panel .lbl{font-size:11px;color:#7b857f;margin:8px 0 5px;}
+          #hb_zd_panel .btn{background:#0a7d72;color:#fff;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:bold;cursor:pointer;width:100%;}
+          #hb_zd_panel .btn:hover{background:#0a5d54;}
+          #hb_zd_panel .ghost{background:#fff;border:1px solid #e6eae8;color:#7b857f;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:bold;cursor:pointer;}
+          #hb_zd_panel .seg{display:flex;background:#fbfdfc;border:1px solid #e6eae8;border-radius:8px;padding:2px;gap:2px;}
+          #hb_zd_panel .seg button{border:none;background:transparent;font-size:11px;font-weight:bold;color:#7b857f;padding:3px 11px;border-radius:6px;cursor:pointer;}
+          #hb_zd_panel .seg button.on{background:#0a7d72;color:#fff;}
+          #hb_zd_panel .pick{font-size:11px;padding:5px 10px;border-radius:20px;border:1px solid #e6eae8;background:#fff;color:#243027;cursor:pointer;text-align:left;max-width:100%;}
+          #hb_zd_panel .pick.on{background:#0a7d72;border-color:#0a7d72;color:#fff;font-weight:bold;}
+          #hb_zd_panel .chip{padding:4px 10px;border-radius:20px;font-size:11px;border:1px solid #cfd6d4;background:#fff;color:#555;cursor:pointer;}
+          #hb_zd_panel .chip.rec{border-color:#bfe6de;background:#e6f7f4;color:#0a5d54;font-weight:bold;}
+          #hb_zd_panel .div{height:1px;background:#e6eae8;margin:12px 0;}
+          #hb_zd_panel .row{display:flex;align-items:center;gap:6px;}
+          #hb_zd_panel .sel{flex:1;padding:5px 8px;border:1px solid #bfe6de;border-radius:6px;font-size:11.5px;background:#fff;cursor:pointer;}
+          #hb_zd_panel .opt{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;margin:6px 0;}
+        </style>
+        <div class="h"><span>🎫</span><b>티켓 뷰</b><span class="tn">#${TN}</span><button class="x" id="hb_x">✕</button></div>
+        <div class="body">
+          <div id="hb_card"></div>
+          <div class="row" style="justify-content:space-between;">
+            <strong style="font-size:12px;color:#0a5d54;">📋 슬랙 적재</strong>
+            <div class="seg"><button id="hb_user" class="on">이용자</button><button id="hb_partner">파트너</button></div>
+          </div>
+          <div id="hb_pick_wrap" style="display:none;margin-top:8px;"><div class="lbl">인입 선택 · 복수 가능</div><div id="hb_pick" style="display:flex;flex-wrap:wrap;gap:6px;"></div></div>
+          <textarea id="hb_content" rows="6" style="margin-top:8px;"></textarea>
+          <button id="hb_slack" class="btn" style="margin-top:8px;">티켓 적재 복사</button>
+          <div class="div"></div>
+          <div class="row"><strong style="font-size:12px;color:#0a5d54;">💬 추천 멘트</strong><span id="hb_mc" class="badge" style="background:#0a7d72;"></span><button id="hb_refresh" class="ghost" style="margin-left:auto;padding:3px 9px;font-size:10.5px;">🔄 다시 읽기</button></div>
+          <input id="hb_filter" class="s" type="text" placeholder="멘트 검색 (예: 요금, 바우처, 배차)" style="margin:8px 0;">
+          <div id="hb_status" style="font-size:10px;color:#8a8f92;margin-bottom:6px;"></div>
+          <div id="hb_chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+          <div id="hb_variant" style="display:none;margin-bottom:8px;"></div>
+          <label id="hb_optwrap" class="opt" style="display:none;"><input type="checkbox" id="hb_opt"> <span id="hb_optlabel">선택 문구 포함</span></label>
+          <div id="hb_addon" style="display:none;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;"></div>
+          <textarea id="hb_preview" rows="6" placeholder="멘트 칩을 누르면 여기에 누적됩니다. 자유롭게 수정 후 복사하세요." style="margin-bottom:8px;"></textarea>
+          <div class="row"><button id="hb_copy" class="btn" style="flex:1;">📋 복사하기</button><button id="hb_clear2" class="ghost">비우기</button></div>
+        </div>`;
       document.body.appendChild(panel);
 
       const btn = el('button', 'position:fixed;right:18px;bottom:18px;z-index:999999;width:44px;height:44px;border-radius:50%;border:none;background:#0a7d72;color:#fff;font-size:19px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;', '🎫');
-      btn.title = '허니베어 패널';
-      btn.onclick = () => {
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        renderCard(card, HBStore.loadCase());
-      };
+      btn.title = '허니베어 패널 (Alt+H)';
       document.body.appendChild(btn);
 
-      // ★ 실시간 동기화: admin 탭에서 캡처하면 열려있는 패널이 즉시 갱신
-      HBStore.onChange(c => {
-        renderCard(card, c || HBStore.emptyCase());
-        if (panel.style.display === 'none') toast('🍯 새 케이스 수신');
-      });
+      const g = id => panel.querySelector('#' + id);
+      const ZDIDS = collectZdIds(pageSnap);
 
-      // 멘트 로드 확인용 (이식 시 칩 렌더링으로 교체)
-      loadMents(m => console.log('[HB] ments loaded:', m.length ?? 0, '— fillTokens 예시:', fillTokens('{rideLine} / 영손비 {lossAmount}', HBStore.loadCase())));
+      /* 케이스 카드 렌더 + ID 대조 */
+      function renderCard() {
+        const c = HBStore.loadCase();
+        const has = !!(c && c.ts);
+        const stale = has && (Date.now() - c.ts > 30 * 60 * 1000);
+        const uSt = idStatus(c.ids.user, ZDIDS.user), dSt = idStatus(c.ids.driver, ZDIDS.driver);
+        const mism = uSt === 'bad' || dSt === 'bad';
+        const idCell = (mine, st, zd) => {
+          if (!mine) return { v: zd.length ? ('— (젠데스크 ' + zd.join(', ') + ')') : '—', cls: zd.length ? 'bad' : 'miss' };
+          if (st === 'ok') return { v: mine + ' ✅', cls: 'good' };
+          if (st === 'bad') return { v: mine + ' ⚠️젠데스크 ' + zd.join(', '), cls: 'bad' };
+          return { v: mine, cls: '' };
+        };
+        const ur = idCell(c.ids.user, uSt, ZDIDS.user), dr = idCell(c.ids.driver, dSt, ZDIDS.driver);
+        const flags = [];
+        if (c.flags.isCash) flags.push('현장결제');
+        if (c.flags.isPlus) flags.push('플러스');
+        if (c.flags.thirdParty) flags.push(c.flags.thirdParty);
+        const rows = !has ? '' : [
+          ['구분', c.trip.timeSrc === 'resv' || c.flags.isFromResv ? '예약' : '실시간', ''],
+          ['일시', c.trip.dateTime, ''], ['출발', c.trip.departure, ''], ['도착', c.trip.destination, ''],
+          ['이름', c.trip.name, ''], ['총요금', won(c.fare.total), ''], ['예상요금', won(c.fare.est), ''],
+          ['탄력', c.fare.surge ? c.fare.surge + '%' : '', ''], ['취소료', won(c.fare.cancel), ''],
+          ['영손비', won(c.fare.loss), ''],
+          ['라이드', c.ids.ride, ''], ['예약', c.ids.resv, ''],
+          ['유저', ur.v, ur.cls], ['파트너', dr.v, dr.cls]
+        ].concat(flags.length ? [['기타', flags.join(' · '), '']] : [])
+          .map(r => `<div class="k">${r[0]}</div><div class="${r[2] || (r[1] ? '' : 'miss')}">${r[1] || '—'}</div>`).join('');
+        const badgeBg = !has ? '#c3c9c6' : mism ? '#c0392b' : stale ? '#d97706' : '#0a7d72';
+        const badgeTx = !has ? '데이터 없음' : mism ? 'ID 불일치' : (fresh(c.ts) + (stale ? '·오래됨' : ''));
+        const cardEl = g('hb_card');
+        cardEl.className = 'card' + (!has ? ' none' : mism ? ' warn' : '');
+        cardEl.innerHTML = `<div class="chead">🍯 케이스 <span class="badge" style="background:${badgeBg};">${badgeTx}</span>
+          <button id="hb_clear" class="ghost" style="margin-left:auto;padding:1px 8px;font-size:10px;">비우기</button></div>
+          ${has ? `<div class="grid">${rows}</div>` : ''}`;
+        const cb = g('hb_clear'); if (cb) cb.onclick = () => { HBStore.clearCase(); renderCard(); renderMents(); };
+      }
+
+      /* 인입 선택 칩 */
+      const contentBox = g('hb_content');
+      let blocks = parseInbound();
+      const sel = new Set();
+      if (blocks.length) sel.add(blocks.length - 1);
+      function rebuild() { contentBox.value = blocks.filter((b, i) => sel.has(i)).join('\n\n'); }
+      function renderPick() {
+        const pw = g('hb_pick'); pw.innerHTML = '';
+        blocks.forEach((b, i) => {
+          const one = b.replace(/\n/g, ' '); const short = one.slice(0, 18) + (one.length > 18 ? '…' : '');
+          const c = el('button', null, (sel.has(i) ? '✓ ' : '') + (i + 1) + '. ' + short);
+          c.className = 'pick' + (sel.has(i) ? ' on' : ''); c.title = b;
+          c.onclick = () => { sel.has(i) ? sel.delete(i) : sel.add(i); rebuild(); renderPick(); };
+          pw.appendChild(c);
+        });
+      }
+      if (blocks.length) { g('hb_pick_wrap').style.display = 'block'; renderPick(); rebuild(); }
+
+      /* 슬랙 적재 */
+      let party = '이용자';
+      const bu = g('hb_user'), bp = g('hb_partner');
+      bu.onclick = () => { party = '이용자'; bu.classList.add('on'); bp.classList.remove('on'); };
+      bp.onclick = () => { party = '파트너'; bp.classList.add('on'); bu.classList.remove('on'); };
+      // 파트너 자동판별: 젠데스크에 드라이버 링크가 있거나 봉투 파트너ID만 있으면
+      if (ZDIDS.driver.length && !ZDIDS.user.length) { party = '파트너'; bp.classList.add('on'); bu.classList.remove('on'); }
+      g('hb_slack').onclick = function () {
+        const content = contentBox.value.trim();
+        const esc = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const html = `<a href="${ticketUrl}">#${TN}</a> ${party} 인입<br><pre style="background:#f3f4f6;padding:8px;border-radius:4px;font-size:12px;white-space:pre-wrap;">${esc}</pre>`;
+        const plain = `<${ticketUrl}|#${TN}> ${party} 인입\n\`\`\`\n${content}\n\`\`\``;
+        copyRich(html, plain);
+        toast('🎫 적재 복사 완료');
+        const t = this.textContent; this.textContent = '✅ 적재 복사 완료'; setTimeout(() => this.textContent = t, 1500);
+      };
+
+      /* 추천 멘트 */
+      const previewEl = g('hb_preview'), chipsBox = g('hb_chips'), statusEl = g('hb_status'),
+        filterEl = g('hb_filter'), optBox = g('hb_opt'), optwrap = g('hb_optwrap'),
+        variantBox = g('hb_variant'), addonBox = g('hb_addon');
+      let MENTS = [], draftText = getDraftText(), lastMent = null, lastSeg = '';
+
+      function signalText() {
+        const inq = blocks.length ? blocks.join('\n') : '';
+        return norm(inq + '\n' + (draftText || ''));
+      }
+      function addMent(m, textOverride) {
+        const raw = textOverride != null ? textOverride : m.text;
+        const seg = fillTokens(processBrackets(raw, optBox.checked), HBStore.loadCase());
+        const cur = previewEl.value;
+        previewEl.value = cur.trim() ? (cur.replace(/\s+$/, '') + '\n\n' + seg) : seg;
+        lastMent = { text: raw }; lastSeg = seg;
+        if (hasOptionalBracket(raw)) { optwrap.style.display = 'flex'; g('hb_optlabel').textContent = optionalBracketName(raw) + ' 포함'; }
+        else { optwrap.style.display = 'none'; optBox.checked = false; }
+        if (m && m.addons && m.addons.length) {
+          addonBox.innerHTML = ''; const lb = el('span', 'font-size:11px;color:#0a5d54;font-weight:bold;', '날씨 인사말:'); addonBox.appendChild(lb);
+          m.addons.forEach(ad => {
+            const l = el('label', 'display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:#0a5d54;border:1px solid #bfe6de;border-radius:20px;padding:3px 9px;cursor:pointer;');
+            const cb = el('input'); cb.type = 'checkbox'; const sp = el('span', null, ad.label); l.append(cb, sp);
+            cb.onchange = () => { const line = fillTokens(ad.text, HBStore.loadCase()).trim(); let v = previewEl.value; const idx = v.indexOf(line); if (idx >= 0) v = v.slice(0, idx) + v.slice(idx + line.length); if (cb.checked) v = v.replace(/\s+$/, '') + '\n\n' + line; previewEl.value = v.replace(/\n{3,}/g, '\n\n').trim(); };
+            addonBox.appendChild(l);
+          });
+          addonBox.style.display = 'flex';
+        } else { addonBox.style.display = 'none'; addonBox.innerHTML = ''; }
+        previewEl.focus(); previewEl.scrollTop = previewEl.scrollHeight;
+      }
+      function showVariants(m) {
+        variantBox.innerHTML = '';
+        const wrap = el('div', 'display:flex;align-items:center;gap:6px;');
+        wrap.appendChild(el('span', 'font-size:11px;color:#0a5d54;font-weight:bold;white-space:nowrap;', m.label + ' →'));
+        const s = el('select'); s.className = 'sel';
+        s.appendChild(new Option('경우 선택…', ''));
+        m.variants.forEach((v, i) => s.appendChild(new Option(v.label, String(i))));
+        s.onchange = () => { if (s.value === '') return; addMent(m, m.variants[+s.value].text); variantBox.style.display = 'none'; };
+        wrap.appendChild(s); variantBox.appendChild(wrap); variantBox.style.display = 'block'; s.focus();
+      }
+      function renderMents() {
+        const txt = signalText(); const q = norm(filterEl.value); const hasSig = txt.trim().length > 0;
+        let scored = MENTS.map((m, idx) => ({ m, idx, score: scoreMent(m, txt) }));
+        if (q) scored = scored.filter(x => norm(x.m.label).includes(q) || norm(x.m.id).includes(q));
+        const matched = scored.filter(x => x.score > 0).sort((a, b) => (b.score - a.score) || (a.idx - b.idx));
+        const rest = scored.filter(x => x.score === 0).sort((a, b) => a.idx - b.idx);
+        const ordered = hasSig ? matched.concat(rest) : scored;
+        statusEl.textContent = q ? ('"' + filterEl.value + '" 검색 ' + scored.length + '건')
+          : (hasSig ? (matched.length ? '문의·작성 글 기준 추천 (★=관련도 높음)' : '단서 없음 — 전체 표시') : '문의 기준 정렬. 작성 후 🔄로 갱신');
+        chipsBox.innerHTML = ''; variantBox.style.display = 'none';
+        ordered.forEach(({ m, score }) => {
+          const hot = score > 0;
+          const b = el('button', null, (hot ? '★ ' : '') + m.label + (m.variants ? ' ▾' : ''));
+          b.className = 'chip' + (hot ? ' rec' : '');
+          b.title = m.variants ? ('경우: ' + m.variants.map(v => v.label).join(' / ')) : fillTokens(m.text, HBStore.loadCase());
+          b.onclick = m.variants ? (() => showVariants(m)) : (() => addMent(m));
+          chipsBox.appendChild(b);
+        });
+      }
+      filterEl.oninput = renderMents;
+      g('hb_refresh').onclick = () => { draftText = getDraftText(); blocks = parseInbound(); renderMents(); };
+      optBox.onchange = () => {
+        if (lastMent && hasOptionalBracket(lastMent.text) && previewEl.value.endsWith(lastSeg)) {
+          const seg2 = fillTokens(processBrackets(lastMent.text, optBox.checked), HBStore.loadCase());
+          previewEl.value = previewEl.value.slice(0, previewEl.value.length - lastSeg.length) + seg2; lastSeg = seg2;
+        }
+      };
+      g('hb_copy').onclick = function () { copyText(previewEl.value); toast('📋 복사 완료'); const t = this.textContent; this.textContent = '✅ 복사됨'; setTimeout(() => this.textContent = t, 1200); };
+      g('hb_clear2').onclick = () => { previewEl.value = ''; lastMent = null; lastSeg = ''; optwrap.style.display = 'none'; optBox.checked = false; addonBox.style.display = 'none'; };
+
+      loadMents(arr => { MENTS = arr; g('hb_mc').textContent = arr.length; renderMents(); });
+
+      /* 열고 닫기 + 실시간 동기화 */
+      function toggle() { const open = panel.style.display === 'none'; panel.style.display = open ? 'block' : 'none'; if (open) { renderCard(); draftText = getDraftText(); renderMents(); } }
+      btn.onclick = toggle;
+      g('hb_x').onclick = () => panel.style.display = 'none';
+      document.addEventListener('keydown', e => { if (e.altKey && e.code === 'KeyH') toggle(); if (e.key === 'Escape' && panel.style.display !== 'none') panel.style.display = 'none'; });
+      HBStore.onChange(c => { renderCard(); renderMents(); if (panel.style.display === 'none') toast('🍯 새 케이스 수신'); });
+      renderCard();
     });
+  }
+
+  /* 리치 클립보드 (text/html + text/plain) */
+  function copyRich(html, plain) {
+    let ok = false;
+    try {
+      const fn = e => { e.clipboardData.setData('text/html', html); e.clipboardData.setData('text/plain', plain); e.preventDefault(); };
+      document.addEventListener('copy', fn, { once: true });
+      ok = document.execCommand('copy');
+      if (!ok) document.removeEventListener('copy', fn);
+    } catch (e) { ok = false; }
+    if (!ok) copyText(plain);
+  }
+  function copyText(val) {
+    const ta = el('textarea', 'position:fixed;top:-9999px;'); ta.value = val;
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
