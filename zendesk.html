@@ -35,6 +35,7 @@ h2{font-size:15px;margin:0 0 12px;}
 <h2>💬 추천 멘트 — 이렇게 씁니다</h2>
 <div class="feat">상담사가 매크로로 답변을 작성하면, 도구가 <strong>고객 인입 문의와 작성 중인 답변</strong>을 함께 읽어 어울리는 보조 멘트(중개 플랫폼 한계, 능동 제재 등)를 추천합니다. 답변을 아직 안 썼어도 <strong>문의 내용만으로</strong> 관련 멘트가 위로 정렬됩니다.</div>
 <ul class="fix-list">
+<li><span class="tag-r">수정</span> 꿀통 → 티켓 뷰로 넘어오는 스냅샷에 <strong>유저 ID·파트너 ID가 빠져 있어</strong> 대조가 항상 "—"로 나오던 문제를 고쳤습니다. 꿀통 복사물의 admin 링크에서 직접 뽑는 <strong>폴백</strong>도 함께 넣어, 꿀통 최신본이 반영되기 전에도 동작합니다</li>
 <li><span class="tag-r">추가</span> <strong>ID 대조 검증</strong> — 실행 시 젠데스크 <strong>외부 ID</strong>(이용자 U…/파트너 DNX… + 메모의 admin 드라이버 링크)를 읽어 꿀통에 저장된 유저·파트너 ID와 대조합니다. 다르면 <strong>불일치 경고 팝업</strong>이 떠서 다른 건 데이터로 답변하는 사고를 막습니다</li>
 <li><span class="tag-r">개선</span> 꿀통 배너를 <strong>데이터 카드</strong>로 교체 — 구분(실시간/예약)·일시·출발·도착·이름·총요금·예상요금·취소료·라이드ID·예약ID·유저ID·파트너ID를 한눈에 보여주고, 없는 값은 <strong>—</strong>로 표시합니다. 접기/펼치기 상태는 기억됩니다</li>
 <li><span class="tag-r">추가</span> <strong>{rideLine}</strong> 토큰 — 꿀빠는 곰 문자와 같은 어투로 <strong>예약이면 "…에 탑승하시어", 실시간이면 "…에 호출하시어" + [출발 &gt; 도착]</strong>을 자동 생성합니다</li>
@@ -536,7 +537,16 @@ const m=htmlStr && htmlStr.match(/<!--TADACTX:([A-Za-z0-9+\/=]+)-->/);
 if(!m) return false;
 let obj; try{ obj=JSON.parse(decodeURIComponent(escape(atob(m[1])))); }catch(e){ return false; }
 if(!obj||typeof obj!=='object') return false;
+// 새 스냅샷이 오면 이전 건의 ID가 남지 않도록 먼저 비움 (묵은 ID로 오탐 방지)
+try{ localStorage.removeItem('tada_last_user_id'); localStorage.removeItem('tada_last_driver_id'); }catch(e){}
 Object.keys(obj).forEach(k=>{ if(/^tada_/.test(k)){ try{ localStorage.setItem(k,obj[k]); }catch(e){} } });
+// 폴백: 구버전 꿀통은 스냅샷에 ID를 안 담으므로, 복사물 본문의 admin 링크에서 직접 추출
+try{
+const mu=htmlStr.match(/\/users\/([A-Za-z0-9]+)/);
+if(mu&&!obj['tada_last_user_id']) localStorage.setItem('tada_last_user_id',mu[1]);
+const md=htmlStr.match(/\/drivers\/([A-Za-z0-9]+)/);
+if(md&&!obj['tada_last_driver_id']) localStorage.setItem('tada_last_driver_id',md[1]);
+}catch(e){}
 return true;
 }
 async function loadHoneyCtx(){
