@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.6.1
+// @version      0.7.0
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -39,7 +39,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 v0.6.1 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 v0.7.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 2; // 케이스 봉투 스키마 버전
 
@@ -427,41 +427,63 @@
       toast('🍯 캡처 완료 (' + src + ') → 젠데스크 패널 실시간 갱신');
     }
 
-    /* 플로팅 버튼 — 허니베어 하나로 통합 (누르면 도구 선택창) */
+    /* 플로팅 버튼 — 누르면 자동 캡처 후 도구 선택창 (드래그 이동 가능) */
     onReady(() => {
       const isRideResvPage = () => /\/(rides|rideReservations)\/[A-Za-z0-9]+/.test(location.pathname);
 
       function openPicker() {
         const old = document.getElementById('hb_picker'); if (old) { old.remove(); return; }
-        const wrap = el('div', 'position:fixed;right:18px;bottom:72px;z-index:1000000;display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:190px;background:#fff;border:1px solid #e6eae8;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.2);padding:10px;font-family:-apple-system,sans-serif;');
+        // 누르는 즉시 캡처 → 젠데스크 패널로 자동 전송
+        try { capture(); } catch (e) { console.warn('[HB] 캡처 오류:', e.message); }
+
+        const ok = isRideResvPage();
+        if (!ok) return; // 유저·파트너 페이지: 캡처만 하고 선택창 없음
+
+        const r = fab.getBoundingClientRect();
+        const wrap = el('div', `position:fixed;left:${Math.max(8, r.left - 150)}px;top:${Math.max(8, r.top - 108)}px;z-index:1000000;display:flex;flex-direction:column;gap:6px;min-width:186px;background:#fff;border:1px solid #e6eae8;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.2);padding:10px;font-family:-apple-system,sans-serif;`);
         wrap.id = 'hb_picker';
         const c = HBStore.loadCase();
-        const ok = isRideResvPage();
-        const head = el('div', 'font-size:11px;font-weight:bold;color:#0a5d54;margin-bottom:2px;', '🍯 허니베어');
-        wrap.appendChild(head);
         if (c && c.ts) {
-          wrap.appendChild(el('div', 'font-size:10px;color:#7b857f;margin-bottom:4px;line-height:1.4;',
-            (c.trip.name ? c.trip.name + ' · ' : '') + (c.trip.dateTime || '') + '<br>' + (c.ids.ride || c.ids.resv || '')));
+          wrap.appendChild(el('div', 'font-size:10px;color:#7b857f;margin-bottom:2px;line-height:1.4;',
+            '✅ 캡처됨 · 젠데스크 전송<br>' + (c.trip.name ? c.trip.name + ' · ' : '') + (c.trip.dateTime || '')));
         }
-        const mk = (label, fn, disabled) => {
-          const b = el('button', `padding:9px;border-radius:8px;border:1px solid #e6eae8;background:${disabled ? '#f6f7f8' : '#fff'};color:${disabled ? '#b6bcb9' : '#243027'};font-size:12.5px;font-weight:bold;cursor:${disabled ? 'default' : 'pointer'};text-align:left;`, label);
-          if (!disabled) b.onclick = () => { wrap.remove(); fn(); };
+        const mk = (label, fn) => {
+          const b = el('button', 'padding:9px;border-radius:8px;border:1px solid #e6eae8;background:#fff;color:#243027;font-size:12.5px;font-weight:bold;cursor:pointer;text-align:left;', label);
+          b.onclick = () => { wrap.remove(); fn(); };
           return b;
         };
-        wrap.appendChild(mk('📥 캡처 (Alt+H)', capture, false));
-        wrap.appendChild(mk('🍯 꿀통양식', () => { try { hbRunHoneyForm(); } catch (e) { console.warn('[HB] 꿀통 오류:', e.message); toast('🍯 실행 오류 — 콘솔 확인'); } }, !ok));
-        wrap.appendChild(mk('🐻 꿀빠는 문자', () => { try { hbRunBeeForm(); } catch (e) { console.warn('[HB] 꿀빠는곰 오류:', e.message); toast('🐻 실행 오류 — 콘솔 확인'); } }, !ok));
-        if (!ok) wrap.appendChild(el('div', 'font-size:10px;color:#b45309;margin-top:2px;', '라이드/예약 페이지에서 사용 가능'));
+        wrap.appendChild(mk('🍯 꿀통양식', () => { try { hbRunHoneyForm(); } catch (e) { console.warn('[HB] 꿀통 오류:', e.message); toast('🍯 실행 오류 — 콘솔 확인'); } }));
+        wrap.appendChild(mk('🐻 꿀빠는 문자', () => { try { hbRunBeeForm(); } catch (e) { console.warn('[HB] 꿀빠는곰 오류:', e.message); toast('🐻 실행 오류 — 콘솔 확인'); } }));
         document.body.appendChild(wrap);
-        const off = e => { if (!wrap.contains(e.target) && e.target.id !== 'hb_fab') { wrap.remove(); document.removeEventListener('mousedown', off); } };
+        const off = e => { if (!wrap.contains(e.target) && e.target !== fab) { wrap.remove(); document.removeEventListener('mousedown', off); } };
         setTimeout(() => document.addEventListener('mousedown', off), 0);
       }
 
       const fab = el('button', 'position:fixed;right:18px;bottom:18px;z-index:999999;width:46px;height:46px;border-radius:50%;border:none;background:#0a7d72;color:#fff;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;', '🍯');
       fab.id = 'hb_fab';
-      fab.title = '허니베어 (캡처: Alt+H)';
-      fab.onclick = openPicker;
+      fab.title = '허니베어 — 캡처 + 도구 (드래그로 이동)';
       document.body.appendChild(fab);
+
+      // 드래그 이동 (움직였으면 클릭으로 치지 않음)
+      let dx = 0, dy = 0, sx = 0, sy = 0, moved = false, dragging = false;
+      fab.addEventListener('mousedown', e => {
+        dragging = true; moved = false;
+        const r = fab.getBoundingClientRect();
+        fab.style.right = 'auto'; fab.style.bottom = 'auto';
+        fab.style.left = r.left + 'px'; fab.style.top = r.top + 'px';
+        sx = e.clientX; sy = e.clientY; dx = r.left; dy = r.top;
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        if (Math.abs(e.clientX - sx) > 3 || Math.abs(e.clientY - sy) > 3) moved = true;
+        fab.style.left = Math.max(0, dx + e.clientX - sx) + 'px';
+        fab.style.top = Math.max(0, dy + e.clientY - sy) + 'px';
+      });
+      document.addEventListener('mouseup', () => {
+        if (dragging && !moved) openPicker();
+        dragging = false;
+      });
 
       document.addEventListener('keydown', e => {
         if (!e.altKey) return;
@@ -1010,8 +1032,10 @@
       g('hb_slack').onclick = function () {
         const content = contentBox.value.trim();
         const esc = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const html = `<a href="${ticketUrl}">#${TN}</a> ${party} 인입<br><pre style="background:#f3f4f6;padding:8px;border-radius:4px;font-size:12px;white-space:pre-wrap;">${esc}</pre>`;
-        const plain = `<${ticketUrl}|#${TN}> ${party} 인입\n\`\`\`\n${content}\n\`\`\``;
+        const _tn = (location.href.match(/tickets\/(\d+)/) || [])[1] || TN;   // 현재 티켓 (SPA 전환 대응)
+        const _turl = 'https://tadatadahelp.zendesk.com/agent/tickets/' + _tn;
+        const html = `<a href="${_turl}">#${_tn}</a> ${party} 인입<br><pre style="background:#f3f4f6;padding:8px;border-radius:4px;font-size:12px;white-space:pre-wrap;">${esc}</pre>`;
+        const plain = `<${_turl}|#${_tn}> ${party} 인입\n\`\`\`\n${content}\n\`\`\``;
         copyRich(html, plain);
         toast('🎫 적재 복사 완료');
         const t = this.textContent; this.textContent = '✅ 적재 복사 완료'; setTimeout(() => this.textContent = t, 1500);
@@ -1090,13 +1114,64 @@
       loadMents(arr => { MENTS = arr; g('hb_mc').textContent = arr.length; renderMents(); });
 
 
-      /* 열고 닫기 + 실시간 동기화 */
-      function toggle() { const open = panel.style.display === 'none'; panel.style.display = open ? 'block' : 'none'; if (open) { renderCard(); draftText = getDraftText(); renderMents(); } }
+      /* 열고 닫기 + 실시간 동기화 + 티켓 전환 감지 */
+      let curTN = TN;
+      // 젠데스크는 SPA — 티켓 탭을 바꿔도 새로고침되지 않으므로 인입을 다시 읽어야 한다.
+      function refreshForTicket() {
+        const nowTN = (location.href.match(/tickets\/(\d+)/) || [])[1] || '';
+        if (!nowTN) return;
+        const changed = nowTN !== curTN;
+        if (changed) {
+          curTN = nowTN;
+          const tn = panel.querySelector('.tn'); if (tn) tn.textContent = '#' + nowTN;
+        }
+        // 인입 재파싱 (티켓이 바뀌었거나 패널을 새로 열 때)
+        blocks = parseInboundOriginal();
+        sel.clear(); if (blocks.length) sel.add(blocks.length - 1);
+        if (blocks.length) { g('hb_pick_wrap').style.display = 'block'; renderPick(); rebuild(); }
+        else { g('hb_pick_wrap').style.display = 'none'; contentBox.value = ''; }
+        draftText = getDraftText();
+        renderMents();
+      }
+      function toggle() {
+        const open = panel.style.display === 'none';
+        panel.style.display = open ? 'block' : 'none';
+        if (open) { renderCard(); refreshForTicket(); }
+      }
       btn.onclick = toggle;
       g('hb_x').onclick = () => panel.style.display = 'none';
       document.addEventListener('keydown', e => { if (e.altKey && e.code === 'KeyH') toggle(); if (e.key === 'Escape' && panel.style.display !== 'none') panel.style.display = 'none'; });
+      // 패널이 열려있는 동안 티켓 전환 감시 (SPA 대응)
+      setInterval(() => {
+        if (panel.style.display === 'none') return;
+        const nowTN = (location.href.match(/tickets\/(\d+)/) || [])[1] || '';
+        if (nowTN && nowTN !== curTN) refreshForTicket();
+      }, 1200);
+      g('hb_refresh').onclick = () => refreshForTicket();
       HBStore.onChange(c => { renderCard(); renderMents(); if (panel.style.display === 'none') toast('🍯 새 케이스 수신'); });
       renderCard();
+
+      /* 패널 드래그 이동 (헤더 잡고) */
+      (function () {
+        const head = panel.querySelector('.h');
+        if (!head) return;
+        head.style.cursor = 'move';
+        let sx = 0, sy = 0, ox = 0, oy = 0, dragging = false;
+        head.addEventListener('mousedown', e => {
+          if (e.target.id === 'hb_x') return;
+          dragging = true;
+          const r = panel.getBoundingClientRect();
+          panel.style.right = 'auto'; panel.style.left = r.left + 'px'; panel.style.top = r.top + 'px';
+          sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
+          e.preventDefault();
+        });
+        document.addEventListener('mousemove', e => {
+          if (!dragging) return;
+          panel.style.left = Math.max(0, ox + e.clientX - sx) + 'px';
+          panel.style.top = Math.max(0, oy + e.clientY - sy) + 'px';
+        });
+        document.addEventListener('mouseup', () => { dragging = false; });
+      })();
     });
   }
 
