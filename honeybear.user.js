@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.3.1
+// @version      0.3.2
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -39,7 +39,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 v0.3.1 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 v0.3.2 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 2; // 케이스 봉투 스키마 버전
 
@@ -523,15 +523,32 @@
         /^오류 제보|^유선 상담 중 자료|^계약 및 해지|^기타$/.test(ml) ||
         /^\d{10,11}$/.test(ml) || /^\d{3,4}-\d{3,4}-\d{4}$/.test(ml));
     }
-    function parseInbound() {
+    /* 고객 인입 파싱 — 원본 zendesk.html 로직 그대로 (검증된 코드, 축약 없음) */
+    /* 고객 인입 파싱 — 실제 DOM 구조(.zd-comment) 검증 기반.
+     * B 진단으로 확인: .zd-comment 각각의 작성자에 'TADA'가 있으면 상담사 답변, 없으면 고객 인입.
+     * 메시징 티켓은 'Web User' 블록 분리, 그 외(이메일/웹양식)는 코멘트 순회. */
+    function parseInboundOriginal() {
       const msgs = [];
+      const isNoise = ml => (!ml || ml === '•' || ml === 'A form was sent:' || ml === '내부' ||
+        ml === '드라이버 상담사' || /^TADA /.test(ml) || /^Web User [a-f0-9]/.test(ml) ||
+        ml === '대화' || /님과의 대화$/.test(ml) ||
+        /^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(ml) ||
+        /^(오늘|어제|그제|월요일|화요일|수요일|목요일|금요일|토요일|일요일)\s*\d{1,2}:\d{2}$/.test(ml) ||
+        /^\d{1,2}:\d{2}$/.test(ml) || /^메시지 작성기$|^메시징$|^보내기$/.test(ml) ||
+        /^존함을 말씀|^필요시 추가확인|^사진 또는 자료/.test(ml) ||
+        /^상담 중인 날짜|^감사합니다|^오늘도 안전/.test(ml) ||
+        /^\d{4}[-.]\d{2}[-.]\d{2}/.test(ml) || /^\d{2}-\d{2}$/.test(ml) ||
+        /^\d+분 전$|^\d+시간 전$/.test(ml) ||
+        /^오류 제보|^유선 상담 중 자료|^계약 및 해지|^기타$/.test(ml) ||
+        /^\d{10,11}$/.test(ml) || /^\d{3,4}-\d{3,4}-\d{4}$/.test(ml));
+
       try {
         const conv = document.querySelector('[data-test-id="ticket-main-conversation"]') ||
           document.querySelector('[class*="conversation"]') || document.querySelector('main') || document.body;
-        const raw = (conv.innerText || '');
-        const isMessaging = /Web User [a-f0-9]+/.test(raw);
+        const isMessaging = /Web User [a-f0-9]+/.test((conv.innerText || ''));
+
         if (isMessaging) {
-          const all = raw.split('\n');
+          const all = (conv.innerText || '').split('\n');
           const cut = all.findIndex(l => l.trim() === '메시지 작성기');
           const lines = cut >= 0 ? all.slice(0, cut) : all;
           let i = 0;
@@ -542,8 +559,8 @@
                 const ml = lines[j].trim();
                 if (ml === '드라이버 상담사' || /^TADA /.test(ml) || /^Web User [a-f0-9]/.test(ml) || ml === '메시지 작성기') break;
                 if (/^존함을 말씀/.test(ml)) { skipName = true; j++; continue; }
-                if (skipName && ml && !isNoiseLine(ml)) { if (/^[가-힣]{2,5}$/.test(ml)) { skipName = false; j++; continue; } skipName = false; }
-                if (!isNoiseLine(ml)) buf.push(ml);
+                if (skipName && ml && !isNoise(ml)) { if (/^[가-힣]{2,5}$/.test(ml)) { skipName = false; j++; continue; } skipName = false; }
+                if (!isNoise(ml)) buf.push(ml);
                 j++;
               }
               if (buf.length) msgs.push(buf.join('\n').trim());
@@ -551,44 +568,46 @@
             } else i++;
           }
         } else {
-          // 이메일/일반 티켓: 코멘트 단위로 순회하며 TADA 아웃바운드(상담사 답변) 제외
+          // 이메일/웹양식: .zd-comment 순회 — 작성자에 TADA 있으면 상담사 답변이므로 제외
           const comments = document.querySelectorAll('.zd-comment');
-          if (comments.length) {
-            comments.forEach(cm => {
-              const box = cm.closest('article, li, [data-comment-id], [class*="event"]') || cm.parentElement;
-              const boxTxt = box ? box.innerText : '';
-              const author = (boxTxt.split('\n').map(x => x.trim()).filter(Boolean)[0]) || '';
-              // TADA 발신 or 내부 노트 제외
-              if (/^TADA\b/.test(author) || /(^|\n)\s*내부\s*(\n|$)/.test(boxTxt)) return;
-              const tmp = document.createElement('div'); tmp.innerHTML = cm.innerHTML;
-              let raw = tmp.innerText || tmp.textContent || '';
-              // 전화 상담 코멘트 제외
-              if (/전화구분\s*[:：]|통화시간\s*[:：]|발신내선\s*[:：]/.test(raw)) return;
-              // 원본 메일 인용부 컷
-              const oi = raw.search(/-{2,}\s*원본 메일|원본 메일\s*-{2,}|-{3,}\s*Original/);
-              if (oi >= 0) raw = raw.slice(0, oi);
-              // TADA 아웃바운드 시그니처가 있으면(상담사 답변) 제외
-              if (/타다 팀 드림|타다를 이용해 주셔서|안녕하세요\.\s*[가-힣]+\s*파트너님|드라이버 센터입니다|안심 운행 도우미/.test(raw)) return;
-              const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !isNoiseLine(l) &&
-                !/^https?:\/\//.test(l) && !/\.(png|jpg|jpeg|gif|pdf)$/i.test(l) &&
-                !/^수신자:$|^자세히 보기$|^원본 메일|^-{3,}/.test(l));
-              const msg = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-              if (msg) msgs.push(msg);
-            });
-          }
-          // 코멘트를 못 찾았으면 제목을 인입 후보로 (웹 양식 티켓 대비)
+          comments.forEach(cm => {
+            const box = cm.closest('article, li, [data-comment-id], [class*="event"]') || cm.parentElement;
+            const boxTxt = box ? (box.innerText || '') : '';
+            const author = (boxTxt.split('\n').map(x => x.trim()).filter(Boolean)[0]) || '';
+            // 작성자가 TADA(상담사) 또는 내부 노트면 제외
+            if (/TADA|타다 (팀|CS)/i.test(author) || /(^|\n)\s*내부\s*(\n|$)/.test(boxTxt)) return;
+            const tmp = document.createElement('div'); tmp.innerHTML = cm.innerHTML;
+            let raw = (tmp.innerText || tmp.textContent || '');
+            // 전화 상담 코멘트 제외
+            if (/전화구분\s*[:：]|통화시간\s*[:：]|발신내선\s*[:：]/.test(raw)) return;
+            // 원본 메일 인용부 컷
+            const oi = raw.search(/-{2,}\s*원본 메일|원본 메일\s*-{2,}|-{3,}\s*Original/);
+            if (oi >= 0) raw = raw.slice(0, oi);
+            // 본문에 TADA 아웃바운드 시그니처가 있으면(작성자 판별 실패 대비 이중 안전망) 제외
+            if (/타다 팀 드림|타다를 이용해 주셔서|드라이버 센터입니다|안심 운행 도우미/.test(raw)) return;
+            const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !isNoise(l) &&
+              !/^https?:\/\//.test(l) && !/\.(png|jpe?g|gif|pdf|heic|webp)$/i.test(l) &&
+              !/^수신자:$|^자세히 보기$|^원본 메일|^-{3,}/.test(l));
+            const msg = lines.join('\n').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+            if (msg) msgs.push(msg);
+          });
+
+          // 코멘트를 하나도 못 잡았으면 제목을 인입 후보로 (웹 양식 대비)
           if (!msgs.length) {
-            const subj = (document.querySelector('[data-test-id="ticketHeader-subject"]') || {}).innerText ||
-              (document.querySelector('input[name="subject"]') || {}).value || '';
-            const s = (subj || '').replace(/^\s*\(\d+\)\s*/, '').replace(/\s*[–—\-|·]\s*(VCNC|TADA|타다|Zendesk).*$/i, '').trim();
-            if (s.length > 1) msgs.push(s);
+            const sels = ['[data-test-id="ticketHeader-subject"]', 'input[data-test-id="ticket-subject-field"]', 'input[name="subject"]'];
+            let subj = '';
+            for (const s of sels) { const el = document.querySelector(s); if (el) { subj = (el.value || el.innerText || '').trim(); if (subj) break; } }
+            subj = subj.replace(/^\s*\(\d+\)\s*/, '').replace(/\s*[–—\-|·]\s*(VCNC|TADA|타다|Zendesk|젠데스크).*$/i, '').replace(/\s*[.…]{1,3}\s*$/, '').trim();
+            if (subj.length > 1) msgs.push(subj);
           }
         }
-      } catch (e) {}
-      // 중복 제거
+      } catch (e) { console.warn('[HB] 인입 파싱 오류:', e.message); }
+
+      // 중복 제거 (한쪽이 다른 쪽을 포함하면 긴 쪽 유지)
       const nk = s => (s || '').replace(/[^0-9a-z가-힣]/gi, '').toLowerCase();
       const out = [];
-      for (const b of msgs) { const bk = nk(b); if (!bk) continue;
+      for (const b of msgs) {
+        const bk = nk(b); if (!bk) continue;
         const di = out.findIndex(o => { const ok = nk(o); return ok === bk || (ok.length >= 6 && bk.length >= 6 && (ok.includes(bk) || bk.includes(ok))); });
         if (di >= 0) { if (b.length > out[di].length) out[di] = b; } else out.push(b);
       }
@@ -750,7 +769,7 @@
 
       /* 인입 선택 칩 */
       const contentBox = g('hb_content');
-      let blocks = parseInbound();
+      let blocks = parseInboundOriginal();
       const sel = new Set();
       if (blocks.length) sel.add(blocks.length - 1);
       function rebuild() { contentBox.value = blocks.filter((b, i) => sel.has(i)).join('\n\n'); }
@@ -843,7 +862,7 @@
         });
       }
       filterEl.oninput = renderMents;
-      g('hb_refresh').onclick = () => { draftText = getDraftText(); blocks = parseInbound(); renderMents(); };
+      g('hb_refresh').onclick = () => { draftText = getDraftText(); blocks = parseInboundOriginal(); renderMents(); };
       optBox.onchange = () => {
         if (lastMent && hasOptionalBracket(lastMent.text) && previewEl.value.endsWith(lastSeg)) {
           const seg2 = fillTokens(processBrackets(lastMent.text, optBox.checked), HBStore.loadCase());
