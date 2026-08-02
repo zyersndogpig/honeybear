@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.5.0
+// @version      0.6.0
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -39,7 +39,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 v0.5.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 v0.6.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 2; // 케이스 봉투 스키마 버전
 
@@ -427,13 +427,34 @@
       toast('🍯 캡처 완료 (' + src + ') → 젠데스크 패널 실시간 갱신');
     }
 
-    /* 플로팅 버튼 — 북마클릿 클릭을 대체 (Alt+H 단축키도 동일) */
+    /* 플로팅 버튼 — 캡처 + 원본 도구 (꿀통양식 / 꿀빠는 문자) */
     onReady(() => {
-      const b = el('button', 'position:fixed;right:18px;bottom:18px;z-index:999999;width:44px;height:44px;border-radius:50%;border:none;background:#0a7d72;color:#fff;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;', '🍯');
-      b.title = '허니베어 캡처 (Alt+H)';
-      b.onclick = capture;
-      document.body.appendChild(b);
-      document.addEventListener('keydown', e => { if (e.altKey && e.code === 'KeyH') capture(); });
+      const isRideResvPage = /\/(rides|rideReservations)\/[A-Za-z0-9]+/.test(location.pathname);
+      const stack = el('div', 'position:fixed;right:18px;bottom:18px;z-index:999999;display:flex;flex-direction:column;gap:8px;align-items:flex-end;');
+
+      const mk = (bg, label, title, onclick) => {
+        const x = el('button', `width:44px;height:44px;border-radius:50%;border:none;background:${bg};color:#fff;font-size:19px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;`, label);
+        x.title = title; x.onclick = onclick;
+        return x;
+      };
+      // 원본 도구는 라이드/예약 페이지에서만 노출 (원본이 그 DOM을 전제로 동작)
+      if (isRideResvPage) {
+        stack.appendChild(mk('#b45309', '🐻', '꿀빠는 문자 (Alt+B)', () => {
+          try { hbRunBeeForm(); } catch (e) { console.warn('[HB] 꿀빠는곰 오류:', e.message); toast('🐻 실행 오류 — 콘솔 확인'); }
+        }));
+        stack.appendChild(mk('#ca8a04', '🍯', '꿀통양식 (Alt+K)', () => {
+          try { hbRunHoneyForm(); } catch (e) { console.warn('[HB] 꿀통 오류:', e.message); toast('🍯 실행 오류 — 콘솔 확인'); }
+        }));
+      }
+      stack.appendChild(mk('#0a7d72', '📥', '허니베어 캡처 (Alt+H)', capture));
+      document.body.appendChild(stack);
+
+      document.addEventListener('keydown', e => {
+        if (!e.altKey) return;
+        if (e.code === 'KeyH') capture();
+        else if (e.code === 'KeyK' && isRideResvPage) { try { hbRunHoneyForm(); } catch (err) {} }
+        else if (e.code === 'KeyB' && isRideResvPage) { try { hbRunBeeForm(); } catch (err) {} }
+      });
     });
   }
 
@@ -529,95 +550,269 @@
         /^오류 제보|^유선 상담 중 자료|^계약 및 해지|^기타$/.test(ml) ||
         /^\d{10,11}$/.test(ml) || /^\d{3,4}-\d{3,4}-\d{4}$/.test(ml));
     }
-    /* 고객 인입 파싱 — 원본 zendesk.html 로직 그대로 (검증된 코드, 축약 없음) */
-    /* 고객 인입 파싱 — 실제 DOM 구조(.zd-comment) 검증 기반.
-     * B 진단으로 확인: .zd-comment 각각의 작성자에 'TADA'가 있으면 상담사 답변, 없으면 고객 인입.
-     * 메시징 티켓은 'Web User' 블록 분리, 그 외(이메일/웹양식)는 코멘트 순회. */
+    /* 고객 인입 파싱 — 원본 zendesk.html 103~361줄 그대로 (검증된 티켓뷰 코드) */
     function parseInboundOriginal() {
-      const msgs = [];
-      const isNoise = ml => (!ml || ml === '•' || ml === 'A form was sent:' || ml === '내부' ||
-        ml === '드라이버 상담사' || /^TADA /.test(ml) || /^Web User [a-f0-9]/.test(ml) ||
-        ml === '대화' || /님과의 대화$/.test(ml) ||
-        /^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(ml) ||
-        /^(오늘|어제|그제|월요일|화요일|수요일|목요일|금요일|토요일|일요일)\s*\d{1,2}:\d{2}$/.test(ml) ||
-        /^\d{1,2}:\d{2}$/.test(ml) || /^메시지 작성기$|^메시징$|^보내기$/.test(ml) ||
-        /^존함을 말씀|^필요시 추가확인|^사진 또는 자료/.test(ml) ||
-        /^상담 중인 날짜|^감사합니다|^오늘도 안전/.test(ml) ||
-        /^\d{4}[-.]\d{2}[-.]\d{2}/.test(ml) || /^\d{2}-\d{2}$/.test(ml) ||
-        /^\d+분 전$|^\d+시간 전$/.test(ml) ||
-        /^오류 제보|^유선 상담 중 자료|^계약 및 해지|^기타$/.test(ml) ||
-        /^\d{10,11}$/.test(ml) || /^\d{3,4}-\d{3,4}-\d{4}$/.test(ml));
-
-      try {
-        const conv = document.querySelector('[data-test-id="ticket-main-conversation"]') ||
-          document.querySelector('[class*="conversation"]') || document.querySelector('main') || document.body;
-        const isMessaging = /Web User [a-f0-9]+/.test((conv.innerText || ''));
-
-        if (isMessaging) {
-          const all = (conv.innerText || '').split('\n');
-          const cut = all.findIndex(l => l.trim() === '메시지 작성기');
-          const lines = cut >= 0 ? all.slice(0, cut) : all;
-          let i = 0;
-          while (i < lines.length) {
-            if (/^Web User [a-f0-9]/.test(lines[i].trim())) {
-              let j = i + 1; const buf = []; let skipName = false;
-              while (j < lines.length) {
-                const ml = lines[j].trim();
-                if (ml === '드라이버 상담사' || /^TADA /.test(ml) || /^Web User [a-f0-9]/.test(ml) || ml === '메시지 작성기') break;
-                if (/^존함을 말씀/.test(ml)) { skipName = true; j++; continue; }
-                if (skipName && ml && !isNoise(ml)) { if (/^[가-힣]{2,5}$/.test(ml)) { skipName = false; j++; continue; } skipName = false; }
-                if (!isNoise(ml)) buf.push(ml);
-                j++;
-              }
-              if (buf.length) msgs.push(buf.join('\n').trim());
-              i = j;
-            } else i++;
-          }
-        } else {
-          // 이메일/웹양식: .zd-comment 순회 — 작성자에 TADA 있으면 상담사 답변이므로 제외
-          const comments = document.querySelectorAll('.zd-comment');
-          comments.forEach(cm => {
-            const box = cm.closest('article, li, [data-comment-id], [class*="event"]') || cm.parentElement;
-            const boxTxt = box ? (box.innerText || '') : '';
-            const author = (boxTxt.split('\n').map(x => x.trim()).filter(Boolean)[0]) || '';
-            // 작성자가 TADA(상담사) 또는 내부 노트면 제외
-            if (/TADA|타다 (팀|CS)/i.test(author) || /(^|\n)\s*내부\s*(\n|$)/.test(boxTxt)) return;
-            const tmp = document.createElement('div'); tmp.innerHTML = cm.innerHTML;
-            let raw = (tmp.innerText || tmp.textContent || '');
-            // 전화 상담 코멘트 제외
-            if (/전화구분\s*[:：]|통화시간\s*[:：]|발신내선\s*[:：]/.test(raw)) return;
-            // 원본 메일 인용부 컷
-            const oi = raw.search(/-{2,}\s*원본 메일|원본 메일\s*-{2,}|-{3,}\s*Original/);
-            if (oi >= 0) raw = raw.slice(0, oi);
-            // 본문에 TADA 아웃바운드 시그니처가 있으면(작성자 판별 실패 대비 이중 안전망) 제외
-            if (/타다 팀 드림|타다를 이용해 주셔서|드라이버 센터입니다|안심 운행 도우미/.test(raw)) return;
-            const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !isNoise(l) &&
-              !/^https?:\/\//.test(l) && !/\.(png|jpe?g|gif|pdf|heic|webp)$/i.test(l) &&
-              !/^수신자:$|^자세히 보기$|^원본 메일|^-{3,}/.test(l));
-            const msg = lines.join('\n').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
-            if (msg) msgs.push(msg);
-          });
-
-          // 코멘트를 하나도 못 잡았으면 제목을 인입 후보로 (웹 양식 대비)
-          if (!msgs.length) {
-            const sels = ['[data-test-id="ticketHeader-subject"]', 'input[data-test-id="ticket-subject-field"]', 'input[name="subject"]'];
-            let subj = '';
-            for (const s of sels) { const el = document.querySelector(s); if (el) { subj = (el.value || el.innerText || '').trim(); if (subj) break; } }
-            subj = subj.replace(/^\s*\(\d+\)\s*/, '').replace(/\s*[–—\-|·]\s*(VCNC|TADA|타다|Zendesk|젠데스크).*$/i, '').replace(/\s*[.…]{1,3}\s*$/, '').trim();
-            if (subj.length > 1) msgs.push(subj);
-          }
-        }
-      } catch (e) { console.warn('[HB] 인입 파싱 오류:', e.message); }
-
-      // 중복 제거 (한쪽이 다른 쪽을 포함하면 긴 쪽 유지)
-      const nk = s => (s || '').replace(/[^0-9a-z가-힣]/gi, '').toLowerCase();
-      const out = [];
-      for (const b of msgs) {
-        const bk = nk(b); if (!bk) continue;
-        const di = out.findIndex(o => { const ok = nk(o); return ok === bk || (ok.length >= 6 && bk.length >= 6 && (ok.includes(bk) || bk.includes(ok))); });
-        if (di >= 0) { if (b.length > out[di].length) out[di] = b; } else out.push(b);
+      // ── 고객 메시지 추출 ──
+      let customerMsg='';
+      let customerMsgs=[]; // 고객이 여러 번 인입한 경우 모두 수집
+      
+      // 이메일/일반 티켓: 첫 문의가 제목에 담기는 경우가 있어 티켓 제목을 인입 후보로 확보
+      function cleanSubj(t){
+      return (t||'')
+      .replace(/^\s*\(\d+\)\s*/,'')                                                          // (3) 안읽음 카운트 접두
+      .replace(/^\s*(티켓|제목|subject)\s*[:：]\s*/i,'')                                       // 라벨 접두
+      .replace(/\s*[–—\-|·]\s*(VCNC|TADA|타다|Zendesk|젠데스크|Agent\s*Workspace)\b.*$/i,'')   // 사이트 접미(+뒤따르는 잡텍스트까지)
+      .replace(/:\s*[^\s:]+\.(png|jpe?g|gif|pdf|heic|webp)\s*$/i,'')                          // 첨부 파일명 접미
+      .replace(/\s*[.…]{1,3}\s*$/,'')                                                          // 말줄임표
+      .trim();
       }
-      return out;
+      function getTicketSubject(){
+      try{
+      const sels=['[data-test-id="ticketHeader-subject"]','[data-test-id="ticket-pane-subject"]','input[data-test-id="ticket-subject-field"]','input[name="subject"]','[data-test-id="ticketFieldSubject"] input'];
+      for(const s of sels){
+      const el=document.querySelector(s);
+      if(el){ const t=(el.value||el.innerText||'').trim(); if(t.length>1) return cleanSubj(t); }
+      }
+      let t=(document.title||'').trim().replace(/^\(\d+\)\s*/,'');
+      if(t.length>1 && !/^https?:/i.test(t) && !/응대 도우미|티켓 뷰|적재 복사|적재 완료/.test(t)) return cleanSubj(t);
+      }catch(e){}
+      return '';
+      }
+      
+      try{
+      const bodyText=document.body.innerText;
+      const bodyLimit=bodyText.indexOf('메시지 작성기');
+      
+      let activeConv=null;
+      const allConvs=[...document.querySelectorAll('[data-test-id="ticket-main-conversation"]')];
+      if(allConvs.length===0){
+      allConvs.push(...document.querySelectorAll('[class*="conversation"]'));
+      }
+      for(const c of allConvs){
+      const r=c.getBoundingClientRect();
+      const st=getComputedStyle(c);
+      const isVisible=r.width>0&&r.height>0&&st.visibility!=='hidden'&&st.display!=='none';
+      const hasContent=(c.innerText||'').trim().length>5;
+      if(isVisible&&hasContent){activeConv=c;break;}
+      }
+      const convEl=activeConv
+      ||document.querySelector('[data-test-id="ticket-main-conversation"]')
+      ||document.querySelector('[class*="conversation"]')
+      ||document.querySelector('main')
+      ||document.body;
+      
+      const scopedComments=(convEl&&convEl.querySelectorAll('.zd-comment').length>0)
+      ?convEl.querySelectorAll('.zd-comment')
+      :document.querySelectorAll('.zd-comment');
+      
+      const isMessaging = !!(convEl && /Web User [a-f0-9]+/.test(convEl.innerText));
+      if(isMessaging){
+      const rawLines=convEl.innerText.split('\n');
+      const cutLineIdx=rawLines.findIndex(l=>l.trim()==='메시지 작성기');
+      const allLines=cutLineIdx>=0?rawLines.slice(0,cutLineIdx):rawLines;
+      
+      let lastAgentIdx=-1;
+      for(let k=0;k<allLines.length;k++){
+      if(allLines[k].trim()==='드라이버 상담사') lastAgentIdx=k;
+      }
+      const scanFrom=0; void lastAgentIdx;
+      
+      const isNoise=(ml)=>(
+      !ml||ml==='•'||ml==='A form was sent:'||ml==='내부'||
+      ml==='드라이버 상담사'||/^TADA /.test(ml)||/^Web User [a-f0-9]/.test(ml)||
+      ml==='대화'||/님과의 대화$/.test(ml)||/^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(ml)||
+      /^(오늘|어제|그제|월요일|화요일|수요일|목요일|금요일|토요일|일요일) \d{1,2}:\d{2}$/.test(ml)||
+      /^\d{1,2}:\d{2}$/.test(ml)||
+      /^메시지 작성기$|^메시징$|^보내기$/.test(ml)||
+      /^존함을 말씀|^필요시 추가확인|^사진 또는 자료/.test(ml)||
+      /^상담 중인 날짜|^감사합니다|^오늘도 안전/.test(ml)||
+      /^\d{4}-\d{2}-\d{2}$|^\d{2}-\d{2}$/.test(ml)||
+      /^오류 제보|^유선 상담 중 자료|^계약 및 해지|^기타$/.test(ml)||
+      /^\d{10,11}$/.test(ml)||
+      /^\d{3,4}-\d{3,4}-\d{4}$/.test(ml)
+      );
+      
+      const blocks=[];
+      let i=scanFrom;
+      while(i<allLines.length){
+      const l=allLines[i].trim();
+      if(/^Web User [a-f0-9]/.test(l)){
+      let j=i+1;
+      const msgLines=[];
+      let skipName=false; // '존함을 말씀' 폼 직후 이름 답변 1회 제외
+      while(j<allLines.length){
+      const ml=allLines[j].trim();
+      if(ml==='드라이버 상담사'||/^TADA /.test(ml)||/^Web User [a-f0-9]/.test(ml)) break;
+      if(ml==='메시지 작성기') break;
+      if(/^존함을 말씀/.test(ml)){ skipName=true; j++; continue; }
+      if(skipName && ml && !isNoise(ml)){
+      if(/^[가-힣]{2,5}$/.test(ml)){ skipName=false; j++; continue; }
+      skipName=false;
+      }
+      if(!isNoise(ml)) msgLines.push(ml);
+      j++;
+      }
+      if(msgLines.length>0) blocks.push(msgLines.join('\n'));
+      i=j;
+      }else{
+      i++;
+      }
+      }
+      if(blocks.length>0){
+      customerMsgs=blocks.map(b=>b.trim()).filter(b=>b.length>0);
+      customerMsg=customerMsgs.length>0?customerMsgs[customerMsgs.length-1]:'';
+      }
+      }
+      
+      if(!customerMsg){
+      const bubbleSelectors=[
+      '[data-test-id*="message"][class*="end"]',
+      '[class*="message-bubble"]',
+      '[class*="chat-bubble"]',
+      ];
+      const _scope=convEl||document;
+      for(const sel of bubbleSelectors){
+      const bubbles=_scope.querySelectorAll(sel);
+      if(bubbles.length>0){
+      const texts=[...bubbles].map(b=>b.innerText?.trim()).filter(Boolean);
+      if(texts.length>0){customerMsg=texts[texts.length-1];break;}
+      }
+      }
+      }
+      
+      if(!customerMsg&&convEl){
+      const fullT=convEl.innerText||'';
+      const webUserBlocks=fullT.split(/Web User [a-f0-9]+\n•\n/);
+      if(webUserBlocks.length>1){
+      const lastBlock=webUserBlocks[webUserBlocks.length-1];
+      const msgLines=lastBlock.split('\n');
+      const msgContent=[];
+      for(const line of msgLines){
+      if(/^오늘 \d|^어제 \d|^드라이버|^TADA|^사진 또는|^상담 중인|^감사합니다|^오늘도/.test(line.trim())) break;
+      const l=line.trim();
+      if(!l||/^\d{1,2}:\d{2}$/.test(l)) continue;
+      if(l==='기타'||l==='오류 제보 하기'||l==='대화'||/님과의 대화$/.test(l)) continue;
+      if(/^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(l)) continue;
+      msgContent.push(l);
+      }
+      const _m=msgContent.join('\n').trim();
+      if(_m.length>0) customerMsg=_m;
+      }
+      }
+      
+      if(!customerMsg && !isMessaging){
+      const comments=scopedComments;
+      for(let i=0;i<comments.length;i++){
+      const _box=comments[i].closest('article, li, [data-comment-id], [class*="event"]')||comments[i].parentElement;
+      const _boxTxt=_box?_box.innerText:'';
+      const _author=(_boxTxt.split('\n').map(x=>x.trim()).filter(Boolean)[0])||'';
+      if(/^TADA\b/.test(_author)||/(^|\n)\s*내부\s*(\n|$)/.test(_boxTxt)) continue;
+      const tmp=document.createElement('div');
+      tmp.innerHTML=comments[i].innerHTML;
+      let rawTxt=tmp.innerText||tmp.textContent||'';
+      if(/전화구분\s*[:：]|통화시간\s*[:：]|발신내선\s*[:：]|수신번호\s*[:：]/.test(rawTxt)){continue;}
+      const origMailIdx=rawTxt.search(/-{2,}\s*원본 메일|원본 메일\s*-{2,}|-{3,}\s*Original/);
+      if(origMailIdx>=0) rawTxt=rawTxt.slice(0,origMailIdx);
+      if(bodyLimit>=0){
+      const commentPosInBody=bodyText.indexOf(rawTxt.slice(0,20).trim());
+      if(commentPosInBody>=0&&commentPosInBody>bodyLimit) continue;
+      }
+              if(/타다 팀 드림|타다를 이용해 주셔서|이용 경험 평가하기|안녕하세요\.\s*[가-힣]+님\s*타다/.test(rawTxt)){
+              // 타다 발신(아웃바운드) 자동안내 코멘트는 제외.
+              // 단, 고객이 안내문을 "인용"하고 그 뒤에 실제 문의(예: 발송경위 확인)를 덧붙인 경우는 살린다.
+              const OUT_SIG=[/타다 팀 드림/,/타다를 이용해 주셔서/,/이용 경험 평가하기/,/안녕하세요\.\s*[가-힣]+님\s*타다/];
+              let sigEnd=-1;
+              for(const re of OUT_SIG){ const m=rawTxt.match(re); if(m){ const e=rawTxt.lastIndexOf(m[0])+m[0].length; if(e>sigEnd) sigEnd=e; } }
+              if(sigEnd>=0){
+                const after=rawTxt.slice(sigEnd)
+                  .split('\n').map(s=>s.trim())
+                  .filter(s=>s && !/^[·•\-]$/.test(s) && !/^\d{1,2}:\d{2}$/.test(s)
+                    && !/^타다를 이용해 주셔서|^이용 경험 평가하기|^타다 팀 드림/.test(s))
+                  .join(' ').trim();
+                if(after.length<2){ continue; } // 시그니처 뒤 실질 발화 없음 → 순수 아웃바운드 제외
+                // 인용+문의 코멘트: 노이즈만 제거하고 인용 본문·문단 빈 줄은 보존하여 그대로 적재
+                const quoted=rawTxt.split('\n').filter(l=>{ const t=l.trim();
+                  if(/^https?:\/\//.test(t)) return false;
+                  if(/^\d{1,2}:\d{2}$/.test(t)) return false;
+                  if(/\.(png|jpg|jpeg|gif|pdf)$/i.test(t)) return false;
+                  if(/^수신자:$|^자세히 보기$|^원본 메일|^-{3,}/.test(t)) return false;
+                  if(/^메시지 작성기$|^메시징$|^보내기$|^사진 또는 자료|^상담 중인 날짜/.test(t)) return false;
+                  return true;
+                }).join('\n').replace(/[ \t]+$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
+                if(quoted.length>0) customerMsgs.push(quoted);
+      continue;
+      }
+      }
+      const cutIdx=rawTxt.indexOf('메시지 작성기');
+      const txt=cutIdx>=0?rawTxt.slice(0,cutIdx):rawTxt;
+      const lines=txt.split('\n').map(l=>l.trim()).filter(l=>{
+      if(!l) return false;
+      if(/^https?:\/\//.test(l)) return false;
+      if(/^\d{4}\.\d{2}\.\d{2}( \d{1,2}:\d{2}(:\d{2})?)?$/.test(l)) return false;
+      if(/^(오늘|어제|그제) \d{1,2}:\d{2}$/.test(l)) return false;
+      if(/^\d+분 전$/.test(l)||/^\d+시간 전$/.test(l)) return false;
+      if(/^\d{1,2}:\d{2}$/.test(l)) return false;
+      if(/\.(png|jpg|jpeg|gif|pdf)$/i.test(l)) return false;
+      if(l==='·'||l==='•'||l==='-') return false;
+      if(/^수신자:$|^자세히 보기$|^원본 메일|^-{3,}/.test(l)) return false;
+      if(/^메시지 작성기$|^메시징$|^보내기$|^사진 또는 자료|^상담 중인 날짜/.test(l)) return false;
+      if(l==='대화'||/님과의 대화$/.test(l)||/^메시징을 통해$|^웹 양식을 통해$|^이메일을 통해$|^전화를 통해$|^티켓 요약 보기$|^대화 로그$/.test(l)) return false;
+      if(l==='기타'||l==='오류 제보 하기'||/^타다에 전달 하고 싶은/.test(l)||/^이외 문의를 남겨주시면/.test(l)) return false;
+      return true;
+      });
+      if(lines.length>0){
+      const msg=lines.join('\n').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+      if(msg.length>0) customerMsgs.push(msg);
+      }
+      }
+      if(customerMsgs.length>0) customerMsg=customerMsgs[0];
+      }
+      
+      // 비메시징(이메일/일반) 티켓: 첫 문의가 제목에만 담긴 경우 대비해 제목을 후보로 추가
+      // (단, 제목이 본문 발화와 사실상 같으면 추가하지 않음 → 중복 칩 방지)
+      if(!isMessaging){
+      try{
+      const subj=getTicketSubject(); // cleanSubj가 라벨·사이트접미·말줄임까지 정리
+      if(subj){
+      const key=s=>s.replace(/[^0-9a-z가-힣]/gi,'').toLowerCase(); // 비교용 핵심 키
+      const sk=key(subj);
+      const dup = sk.length<6 || customerMsgs.some(b=>{
+      const bk=key(b);
+      if(bk.length<6) return false;
+      if(bk.includes(sk)||sk.includes(bk)||bk.startsWith(sk)||sk.startsWith(bk)) return true;
+      // 잘린 제목 대응: 공통 앞부분이 12자 이상이면 같은 글로 간주
+      let n=0; while(n<sk.length&&n<bk.length&&sk[n]===bk[n]) n++;
+      return n>=12;
+      });
+      if(!dup) customerMsgs.unshift(subj);
+      }
+      }catch(e){}
+      if(customerMsgs.length>0 && !customerMsg) customerMsg=customerMsgs[0];
+      }
+      
+      // ── 인입 최종 중복 제거: 제목/본문 등 사실상 같은 내용은 하나로 합침 (칩 중복 방지) ──
+      if(customerMsgs && customerMsgs.length>1){
+      const nk=s=>(s||'').replace(/[^0-9a-z가-힣]/gi,'').toLowerCase();
+      const out=[];
+      for(const b of customerMsgs){
+      const bk=nk(b); if(!bk) continue;
+      const di=out.findIndex(o=>{const ok=nk(o);
+      if(ok===bk) return true;                                              // 완전 동일
+      if(ok.length>=6&&bk.length>=6&&(ok.includes(bk)||bk.includes(ok))) return true; // 한쪽이 다른 쪽을 포함
+      return false;});
+      if(di>=0){ if(b.length>out[di].length) out[di]=b; } // 더 긴(정보 많은) 쪽 유지
+      else out.push(b);
+      }
+      if(out.length>0){
+      customerMsgs=out;
+      if(!customerMsg||/^\(/.test(customerMsg)||!customerMsgs.includes(customerMsg)) customerMsg=customerMsgs[customerMsgs.length-1];
+      }
+      }
+      
+      if(!customerMsg) customerMsg='(내용을 직접 입력해주세요)';
+      }catch(e){customerMsg='(내용 파싱 실패 - 직접 입력해주세요)';}
+      return (customerMsgs && customerMsgs.length) ? customerMsgs
+        : ((customerMsg && !/^\(/.test(customerMsg)) ? [customerMsg] : []);
     }
     function getDraftText() {
       const sels = ['[data-test-id="omni-log-editor"]', '.ProseMirror', '.zendesk-editor--rich-text-comment', '[contenteditable="true"]', 'textarea'];
@@ -708,14 +903,6 @@
         <div class="h"><span>🎫</span><b>티켓 뷰</b><span class="tn">#${TN}</span><button class="x" id="hb_x">✕</button></div>
         <div class="body">
           <div id="hb_card"></div>
-          <div id="hb_out" class="card" style="display:none;padding:9px 11px;">
-            <div class="chead" style="margin-bottom:6px;">🍯 원본 도구 <span id="hb_out_hint" style="font-weight:normal;color:#7b857f;font-size:10px;"></span></div>
-            <div class="row" style="gap:6px;">
-              <button id="hb_honey" class="ghost" style="flex:1;">🍯 꿀통양식</button>
-              <button id="hb_bee" class="ghost" style="flex:1;">🐻 꿀빠는 문자</button>
-            </div>
-          </div>
-          <div class="div" id="hb_out_div" style="display:none;"></div>
           <div class="row" style="justify-content:space-between;">
             <strong style="font-size:12px;color:#0a5d54;">📋 슬랙 적재</strong>
             <div class="seg"><button id="hb_user" class="on">이용자</button><button id="hb_partner">파트너</button></div>
@@ -888,32 +1075,13 @@
 
       loadMents(arr => { MENTS = arr; g('hb_mc').textContent = arr.length; renderMents(); });
 
-      /* ── 원본 도구 버튼 (꿀통양식 / 꿀빠는 문자) — ride·resv에서만 활성 ── */
-      const outBox = g('hb_out'), outDiv = g('hb_out_div'), outHint = g('hb_out_hint');
-      function renderOutput() {
-        const c = HBStore.loadCase();
-        const isRideResv = c.ids.type === 'ride' || c.ids.type === 'resv';
-        outBox.style.display = 'block'; outDiv.style.display = 'block';
-        if (!c.ts || !isRideResv) {
-          outBox.style.opacity = '0.5';
-          g('hb_honey').disabled = true; g('hb_bee').disabled = true;
-          outHint.textContent = c.ts ? '(라이드/예약에서 캡처해야 사용 가능)' : '(캡처된 케이스 없음)';
-        } else {
-          outBox.style.opacity = '1';
-          g('hb_honey').disabled = false; g('hb_bee').disabled = false;
-          outHint.textContent = '';
-        }
-      }
-      g('hb_honey').onclick = () => { try { hbRunHoneyForm(); } catch (e) { console.warn('[HB] 꿀통 실행 오류:', e.message); toast('🍯 꿀통 실행 오류'); } };
-      g('hb_bee').onclick = () => { try { hbRunBeeForm(); } catch (e) { console.warn('[HB] 꿀빠는곰 실행 오류:', e.message); toast('🐻 꿀빠는곰 오류'); } };
-      renderOutput();
 
       /* 열고 닫기 + 실시간 동기화 */
-      function toggle() { const open = panel.style.display === 'none'; panel.style.display = open ? 'block' : 'none'; if (open) { renderCard(); draftText = getDraftText(); renderMents(); if (typeof renderOutput==='function') renderOutput(); } }
+      function toggle() { const open = panel.style.display === 'none'; panel.style.display = open ? 'block' : 'none'; if (open) { renderCard(); draftText = getDraftText(); renderMents(); } }
       btn.onclick = toggle;
       g('hb_x').onclick = () => panel.style.display = 'none';
       document.addEventListener('keydown', e => { if (e.altKey && e.code === 'KeyH') toggle(); if (e.key === 'Escape' && panel.style.display !== 'none') panel.style.display = 'none'; });
-      HBStore.onChange(c => { renderCard(); renderMents(); if (typeof renderOutput==='function') renderOutput(); if (panel.style.display === 'none') toast('🍯 새 케이스 수신'); });
+      HBStore.onChange(c => { renderCard(); renderMents(); if (panel.style.display === 'none') toast('🍯 새 케이스 수신'); });
       renderCard();
     });
   }
@@ -1564,11 +1732,1432 @@ function clearIds(keepMsgData){
   };
     }
 
+    /* ══ 꿀빠는 문자 (원본 index.html 그대로) ══
+     * 어드민 라이드/예약 페이지에서 실행 → 원본의 URL·DOM 체크가 정상 통과.
+     * 봉투를 tada_* 로 펼친 뒤 실행하므로 꿀통 미실행 상태에서도 값이 채워짐. */
     async function hbRunBeeForm() {
-      const c = HBStore.loadCase();
-      if (!(c && c.ts && (c.ids.type === 'ride' || c.ids.type === 'resv'))) { toast('🐻 라이드/예약 캡처 후 사용하세요'); return; }
-      hbSpreadCaseToTada(c);
-      toast('🐻 꿀빠는 문자는 다음 단계에서 이식 예정');
+      try { const c = HBStore.loadCase(); if (c && c.ts) hbSpreadCaseToTada(c); } catch (e) {}
+
+  const tollMap={
+    "영종대교":3200,"인천대교":2000,"판교통행료":1000,
+    "신월지하차도":2700,"우면산터널":2500,"금토통행료":1100,
+    "광암IC":2000,"북고양설문통행료":2200,"아천통행료":1700,
+    "의왕통행료":1000
+  };
+
+  const isReservation=location.pathname.includes("/rideReservations/");
+  const isRide=location.pathname.includes("/rides/");
+
+  if(!isReservation&&!isRide){
+    alert("Ride 또는 RideReservation 화면에서 실행해주세요.");
+    return;
+  }
+
+  // ── 예약 파생 라이드 여부 (DOM 직접 감지 — 꿀통/msgData 경유 여부와 무관) ──
+  // 라이드 페이지의 "호출 예약" 행에 예약 ID가 실제로 존재하면 예약 파생 라이드로 인정
+  let isFromResvRide=false;
+  if(isRide){
+    const _rsvRow=[...document.querySelectorAll("tr")]
+      .find(tr=>tr.innerText.replace(/\s+/," ").startsWith("호출 예약"));
+    const _rsvTxt=_rsvRow?_rsvRow.innerText.replace(/^호출\s*예약[\s\t\n]*/,"").trim():"";
+    const _rsvId=_rsvTxt.match(/[A-Z0-9]{10,}/)?.[0]||"";
+    isFromResvRide=_rsvId.length>5&&!/해당\s*없음/.test(_rsvTxt)&&!/^[-\s]+$/.test(_rsvTxt);
+  }
+  // 수수료청구 탭에서 예약 양식을 써야 하는 컨텍스트: 예약 페이지 OR 예약 파생 라이드
+  const isResvCharge=isReservation||isFromResvRide;
+
+  function blinkTitle(msg){
+    const old=document.title;
+    document.title=msg;
+    setTimeout(()=>document.title=old,1500);
+  }
+
+  // ── 유틸: 행 값 추출 (탭 외 공백도 허용) ──────────────────────────────
+  function getRowValue(label){
+    const row=[...document.querySelectorAll("tr")]
+      .find(tr=>tr.innerText.replace(/\s+/," ").startsWith(label));
+    if(!row)return"";
+    return row.innerText.replace(/^[^\t]*\t/,"").trim();
+  }
+
+  // ── 유틸: 주소 단순화 ────────────────────────────────────────────────
+  function simplifyAddress(text){
+    if(!text)return"";
+    let addr=text.trim();
+    addr=addr.split('（').join('(').split('）').join(')'); // 전각 괄호 → 반각 정규화
+    // 괄호 안 추출: 맨 마지막 최상위 괄호 그룹만 사용
+    // (영문 건물명 괄호 + 한글 주소 괄호처럼 괄호가 2개 이상일 때 둘을 한 덩어리로 묶지 않도록.
+    //  중첩 괄호 '명동1(il)가'는 depth 카운트로 안전 처리)
+    let _depth=0,_gStart=-1,_gEnd=-1,_lastInner=null;
+    for(let _i=0;_i<addr.length;_i++){
+      const _ch=addr[_i];
+      if(_ch==='('){if(_depth===0)_gStart=_i;_depth++;}
+      else if(_ch===')'){if(_depth>0){_depth--;if(_depth===0&&_gStart>=0){_lastInner=addr.substring(_gStart+1,_i);_gEnd=_i;}}}
+    }
+    // 괄호 밖 장소명(건물명) — 괄호 안이 번지수뿐이라 주소를 못 뽑을 때 폴백용
+    let _outer="";
+    if(_lastInner!==null&&_gStart>=0){_outer=(addr.slice(0,_gStart)+addr.slice(_gEnd+1)).replace(/\s+/g," ").trim();}
+    if(_lastInner!==null){
+      addr=_lastInner.trim();
+    }else{
+      const dongMatch=addr.match(/.*?([가-힗]+[동읍면리])(\s|$)/);
+      if(dongMatch){
+        const idx=addr.indexOf(dongMatch[1]);
+        addr=addr.substring(0,idx+dongMatch[1].length).trim();
+      }
+    }
+    let parts=addr.split(/\s+/);
+    while(parts.length&&/^[0-9-]+$/.test(parts[parts.length-1])){parts.pop();}
+    let _result=parts.join(" ");
+    // 괄호 안이 전부 숫자(번지 등)라 비워지면 괄호 밖 장소명으로 폴백 (공란 방지)
+    if(!_result&&_outer)_result=_outer;
+    return _result;
+  }
+
+  // ── 유틸: Rich Text 클립보드 복사 ────────────────────────────────────
+  // execCommand는 deprecated지만 HTML clipboardData 설정은 현재 유일한 방법.
+  // text/plain은 navigator.clipboard.writeText 병행으로 fallback 확보.
+  async function copyRichText(text){
+    const escaped=text
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;");
+    const html=escaped.split(/\r?\n/)
+      .map(line=>line?"<div>"+line+"</div>":"<div><br></div>")
+      .join("");
+
+    // 1차: execCommand (rich text 포함)
+    let richOk=false;
+    try{
+      function listener(e){
+        e.clipboardData.setData("text/plain",text);
+        e.clipboardData.setData("text/html",html);
+        e.preventDefault();
+      }
+      document.addEventListener("copy",listener,{once:true});
+      richOk=document.execCommand("copy");
+      if(!richOk)document.removeEventListener("copy",listener);
+    }catch(e){richOk=false;}
+
+    // 2차: Clipboard API fallback (plain text)
+    if(!richOk){
+      try{
+        await navigator.clipboard.writeText(text);
+      }catch(e){
+        alert("클립보드 복사 실패. 수동으로 복사해주세요.");
+      }
+    }
+  }
+
+  // ── 이름 추출 헬퍼 ───────────────────────────────────────────────────
+  const NOISE_FILTERS=[
+    "타다앱사용회원","만족","리뷰","핸드폰 번호","실제 탑승자"
+  ];
+  function extractName(rawText){
+    return rawText.split("\n")
+      .map(v=>v.trim())
+      .find(v=>v&&!NOISE_FILTERS.some(f=>v.includes(f)))||"(이름 미확인)";
+    // 빈값 대신 명시적 fallback → 문자에 "님" 앞이 비는 문제 방지
+  }
+
+  // ── info 초기화 ──────────────────────────────────────────────────────
+  let info={
+    name:"",timePhrase:"",departure:"",destination:"",
+    dateTime:"",actionWord:"",isStoredRes:false,lastTab:"",rideId:""
+  };
+  let estPrice="",realPrice="";
+  let savedTab="";
+
+  // ── 꿀통 연동: tada_msg_data 확인 ────────────────────────────────────
+  // 꿀통에서 라이드/예약 처리하며 저장한 문자정보가 현재 페이지와 일치하면
+  // 라이드↔예약 2단계 과정 없이 바로 사용 (내가 직접 꿀통까지 한 케이스)
+  let msgDataUsed=false;
+  function applyMsgData(md){
+    info.name=md.name;
+    info.timePhrase=md.timePhrase||'';
+    info.dateTime=md.dateTime||'';
+    info.actionWord=md.actionWord||'';
+    info.departure=md.departure;
+    info.destination=md.destination;
+    info.rideId=md.rideId||'';
+    info.isStoredRes=true;
+    info.isFromResv=false;
+    msgDataUsed=true;
+  }
+  try{
+    const msgRaw=localStorage.getItem('tada_msg_data');
+    if(msgRaw){
+      const md=JSON.parse(msgRaw);
+      const curRid=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||'';
+      const curRsv=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||'';
+      const ridMatch=curRid&&md.rideId&&curRid===md.rideId;
+      const rsvMatch=curRsv&&md.resvId&&curRsv===md.resvId;
+      // timePhrase까지 있어야 완전한 데이터 (예약 파생 라이드를 라이드만 실행하면
+      // 탑승시각이 없어 timePhrase 비어있음 → 예약 거치도록 유도)
+      const hasFull=md.name&&md.departure&&md.destination&&md.timePhrase;
+
+      if((ridMatch||rsvMatch)&&hasFull){
+        // 일치 → 바로 사용
+        applyMsgData(md);
+      }else if(hasFull&&(md.rideId||md.resvId)){
+        // ⚠️ 휴먼에러: 꿀통 저장값 있는데 현재 페이지와 불일치 → 경고창
+        const savedLabel=md.resvId?`예약 ${md.resvId}`:`라이드 ${md.rideId}`;
+        const curLabel=curRsv?`예약 ${curRsv}`:`라이드 ${curRid}`;
+        const choice=await new Promise(resolve=>{
+          const ov=document.createElement('div');
+          ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;justify-content:center;align-items:center;z-index:9999999;';
+          const bx=document.createElement('div');
+          bx.style.cssText='background:#fff;padding:24px;border-radius:12px;width:440px;font-family:sans-serif;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+          bx.innerHTML=`
+            <div style="font-size:18px;margin-bottom:12px;">⚠️ <b>휴먼에러 주의!</b></div>
+            <div style="font-size:13px;line-height:1.9;color:#374151;margin-bottom:16px;">
+              꿀통에서 저장한 건과 현재 페이지가 다릅니다.<br><br>
+              📋 저장된 ID: <b>${savedLabel}</b><br>
+              📍 현재 ID: <b>${curLabel}</b>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <button id='hme_saved' style="padding:10px;background:#0052cc;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;">저장된 정보로 진행</button>
+              <button id='hme_cur' style="padding:10px;background:#059669;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;">현재 페이지로 진행 (저장값 리셋)</button>
+              <button id='hme_cancel' style="padding:8px;background:#eee;color:#333;border:none;border-radius:6px;cursor:pointer;font-size:13px;">취소</button>
+            </div>`;
+          ov.appendChild(bx);document.body.appendChild(ov);
+          document.getElementById('hme_saved').onclick=()=>{ov.remove();resolve('saved');};
+          document.getElementById('hme_cur').onclick=()=>{ov.remove();resolve('current');};
+          document.getElementById('hme_cancel').onclick=()=>{ov.remove();resolve('cancel');};
+        });
+        if(choice==='cancel') return;
+        if(choice==='saved'){
+          applyMsgData(md);
+        }else if(choice==='current'){
+          // 저장값 전부 리셋
+          ['tada_msg_data','tada_fix_old','tada_fix_new','tada_fix_items',
+           'tada_fix_ride_id','tada_fix_resv_id','tada_fare_items','tada_last_bee_tab',
+           'tada_loss_subtype','tada_loss_amount',
+           'tada_ride_data','tada_res_data'].forEach(k=>localStorage.removeItem(k));
+        }
+      }
+    }
+  }catch(e){}
+
+  // ── 예약 페이지 ──────────────────────────────────────────────────────
+  if(!msgDataUsed&&isReservation){
+    const userText=getRowValue("탑승자")+"\n"+getRowValue("호출자");
+    info.name=extractName(userText);
+    info.dateTime=getRowValue("요청 탑승 일시")||getRowValue("호출 시각");
+    info.timePhrase=info.dateTime+" 탑승하시어";
+    info.actionWord="탑승";
+
+    // ── 경유지 파싱 (예약 페이지용) ────────────────────────────────────
+    // 예약 페이지는 "경유지" 행에 "- 경유지 N: 주소" 형식으로 분리되어 있음
+    const depAddr=simplifyAddress(getRowValue("출발지"));
+    const destAddr=simplifyAddress(getRowValue("도착지"));
+    const waypointRaw=getRowValue("경유지");
+
+    if(waypointRaw&&waypointRaw.trim()&&waypointRaw.trim()!=="-"){
+      // "총 경유지: N개\n- 경유지 1: 주소\n- 경유지 2: 주소" 형태 파싱
+      const viaLines=waypointRaw.split("\n")
+        .map(l=>l.trim())
+        .filter(l=>l&&l!=="-"&&!/^총\s*경유지/.test(l)); // "총 경유지: N개" 줄 제외
+      const viaParts=viaLines.map(line=>{
+        // "- 경유지 N: 주소" 또는 "경유지 N: 주소" 형식에서 주소만 추출
+        const m=line.match(/^-?\s*경유지\s*\d+\s*:\s*(.+)$/);
+        return m?simplifyAddress(m[1].trim()):simplifyAddress(line);
+      }).filter(Boolean);
+
+      const pathParts=[depAddr,...viaParts,destAddr];
+      info.departure=pathParts.slice(0,-1).join(" > ");
+      info.destination=pathParts[pathParts.length-1];
+    }else{
+      // 경유지 없으면 출발지/도착지만
+      info.departure=depAddr;
+      info.destination=destAddr;
+    }
+
+    info.isStoredRes=false; // 예약 단독 실행 — 라이드 데이터 없음
+    info.rideId=getRowValue("운행 정보");
+
+    // ── 예약 예상 요금 파싱 ─────────────────────────────────────────────
+    // 예약 페이지의 "예상요금" 행: "136200원\n82629 미터\n약 77 분" 형태
+    const resEstRaw=getRowValue("예상요금");
+    if(resEstRaw){
+      const m=resEstRaw.replace(/,/g,"").match(/([0-9]+)\s*원/);
+      if(m)info.resEstPrice=m[1];
+    }
+
+  // ── 라이드 페이지 ────────────────────────────────────────────────────
+  }else if(!msgDataUsed){
+    const saved=localStorage.getItem("tada_res_data");
+    if(saved){
+      const parsed=JSON.parse(saved);
+
+      // rideId 없으면 검증 건너뜀 (취소 예약 등 라이드 없는 케이스)
+      if(!parsed.rideId){
+        info=parsed;
+        savedTab=info.lastTab;
+        localStorage.removeItem("tada_res_data");
+      }else if(!location.pathname.includes(parsed.rideId)){
+        const errOverlay=document.createElement("div");
+        errOverlay.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;justify-content:center;align-items:center;z-index:999999;";
+        const errBox=document.createElement("div");
+        errBox.style.cssText="background:#fff;padding:24px;border-radius:12px;width:420px;font-family:sans-serif;box-shadow:0 4px 20px rgba(0,0,0,0.3);";
+        errBox.innerHTML=`
+          <div style="font-size:18px;margin-bottom:12px;">🛑 <b>휴먼에러 주의!</b></div>
+          <div style="font-size:13px;line-height:1.9;color:#374151;margin-bottom:16px;">
+            저장된 예약의 운행 정보 ID와 현재 라이드가 다릅니다.<br><br>
+            📋 저장된 운행 정보 ID: <b>${parsed.rideId}</b><br>
+            📍 현재 라이드 ID: <b>${location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||''}</b>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button id='err_reset' style="flex:1;padding:8px;background:#dc2626;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;">🗑 초기화</button>
+            <button id='err_ok' style="flex:1;padding:8px;background:#eee;color:#333;border:none;border-radius:6px;cursor:pointer;font-size:13px;">확인</button>
+          </div>`;
+        errOverlay.appendChild(errBox);
+        document.body.appendChild(errOverlay);
+        document.getElementById("err_ok").onclick=()=>errOverlay.remove();
+        document.getElementById("err_reset").onclick=()=>{
+          localStorage.removeItem("tada_res_data");
+          errOverlay.remove();
+        };
+        return;
+      }else{
+        info=parsed;
+        savedTab=info.lastTab;
+        localStorage.removeItem("tada_res_data");
+      }
+
+    }else{
+      const userText=getRowValue("탑승자")+"\n"+getRowValue("호출자");
+      info.name=extractName(userText);
+      info.dateTime=getRowValue("호출 시각")||getRowValue("요청 탑승 일시");
+      info.timePhrase=info.dateTime+"에 호출하시어";
+      info.actionWord="호출";
+
+      const route=getRowValue("경로");
+      if(route){
+        const lines=route.split("\n").map(v=>v.trim()).filter(Boolean);
+        let pathParts=[],depStr="",destStr="";
+        lines.forEach(line=>{
+          if(line.startsWith("출발:")){
+            depStr=simplifyAddress(line.replace("출발:","").trim());
+          }else if(line.startsWith("도착:")){
+            destStr=simplifyAddress(line.replace("도착:","").trim());
+          }else if(line.startsWith("경유")){
+            const cleanVia=line.replace(/^경유\s*\d+:\s*/,"").trim();
+            pathParts.push(simplifyAddress(cleanVia));
+          }
+        });
+        if(depStr)pathParts.unshift(depStr);
+        if(destStr)pathParts.push(destStr);
+        if(pathParts.length>=2){
+          info.departure=pathParts.slice(0,-1).join(" > ");
+          info.destination=pathParts[pathParts.length-1];
+        }else{
+          info.departure=depStr;
+          info.destination=destStr;
+        }
+      }else{
+        info.departure=simplifyAddress(getRowValue("출발지"));
+        info.destination=simplifyAddress(getRowValue("도착지"));
+      }
+      info.isStoredRes=false;
+
+      // ── 호출예약 파생 라이드 감지 ───────────────────────────────────────
+      const resvRow=[...document.querySelectorAll("tr")]
+        .find(tr=>tr.innerText.replace(/\s+/," ").startsWith("호출 예약"));
+      const resvLinkText=resvRow?resvRow.innerText.replace(/^호출\s*예약[\s\t\n]*/,"").trim():"";
+      const resvIdFromRide=resvLinkText.match(/[A-Z0-9]{10,}/)?.[0]||"";
+      // resvIdFromRide 가 실제로 파싱되어야 파생 라이드로 인정
+      info.isFromResv=resvIdFromRide.length>5&&!/해당\s*없음/.test(resvLinkText)&&!/^[-\s]+$/.test(resvLinkText);
+
+      // ── 예약 파생 라이드면 fromResvId만 저장 ───────────────────────
+      // 탑승요청시각은 라이드 페이지에 없고 예약 페이지에만 있음
+      // → 라이드에선 호출시각/호출하시어 유지, 예약 거치면 탑승시각으로 덮어써짐
+      if(info.isFromResv){
+        info.fromResvId=resvIdFromRide;
+      }
+    }
+  }
+
+  // ── 라이드에서 저장된 데이터가 있으면 불러오기 (예약 페이지 실행 시) ───────
+  if(isReservation&&!msgDataUsed){
+    const savedRide=localStorage.getItem("tada_ride_data");
+    if(savedRide){
+      const parsedRide=JSON.parse(savedRide);
+      // 호출 ID 검증
+      const currentResvId=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||"";
+      if(parsedRide.fromResvId&&parsedRide.fromResvId!==currentResvId){
+        const errOverlay=document.createElement("div");
+        errOverlay.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;justify-content:center;align-items:center;z-index:999999;";
+        const errBox=document.createElement("div");
+        errBox.style.cssText="background:#fff;padding:24px;border-radius:12px;width:420px;font-family:sans-serif;box-shadow:0 4px 20px rgba(0,0,0,0.3);";
+        errBox.innerHTML=`
+          <div style="font-size:18px;margin-bottom:12px;">🛑 <b>휴먼에러 주의!</b></div>
+          <div style="font-size:13px;line-height:1.9;color:#374151;margin-bottom:16px;">
+            저장된 라이드의 호출예약 ID와 현재 예약 페이지가 다릅니다.<br><br>
+            📋 저장된 호출예약 ID: <b>${parsedRide.fromResvId}</b><br>
+            📍 현재 예약 ID: <b>${currentResvId}</b>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button id='err_reset' style="flex:1;padding:8px;background:#dc2626;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;">🗑 초기화</button>
+            <button id='err_ok' style="flex:1;padding:8px;background:#eee;color:#333;border:none;border-radius:6px;cursor:pointer;font-size:13px;">확인</button>
+          </div>`;
+        errOverlay.appendChild(errBox);
+        document.body.appendChild(errOverlay);
+        document.getElementById("err_ok").onclick=()=>errOverlay.remove();
+        document.getElementById("err_reset").onclick=()=>{
+          localStorage.removeItem("tada_ride_data");
+          errOverlay.remove();
+        };
+        return;
+      }
+      // 검증 통과 — 라이드 info에 예약 정보(탑승일시) 보완
+      // 예약의 탑승일시가 더 정확하므로 덮어씀
+      const resvDateTime=getRowValue("요청 탑승 일시")||getRowValue("호출 시각");
+      if(resvDateTime){
+        parsedRide.dateTime=resvDateTime;
+        parsedRide.timePhrase=resvDateTime+" 탑승하시어";
+        parsedRide.actionWord="탑승";
+      }
+      // 저장된 라이드 info로 현재 info 대체
+      Object.assign(info, parsedRide);
+      info.isStoredRes=true;
+      savedTab=parsedRide.lastTab||"";
+      if(parsedRide.savedRealPrice) realPrice=parsedRide.savedRealPrice;
+      if(parsedRide.savedEstPrice)  estPrice=parsedRide.savedEstPrice;
+      localStorage.removeItem("tada_ride_data");
+    }
+  }
+
+  // ── 라이드 요금 파싱 ─────────────────────────────────────────────────
+  if(isRide){    const estRow=[...document.querySelectorAll("tr")]
+      .find(tr=>tr.innerText.startsWith("예상요금\t"));
+    if(estRow){
+      const delEl=estRow.querySelector("del")||estRow.querySelector("s")
+        ||estRow.querySelector("[style*='line-through']");
+      if(delEl){
+        const nums=delEl.innerText.replace(/[^0-9]/g,"");
+        if(nums.length>0){
+          const half=Math.floor(nums.length/2);
+          if(half>0&&nums.substring(0,half)===nums.substring(half)){
+            estPrice=nums.substring(0,half);
+          }else{
+            const firstMatch=delEl.innerText.match(/[0-9,]+/);
+            estPrice=firstMatch?firstMatch[0].replace(/[^0-9]/g,""):"";
+          }
+        }
+      }else{
+        const match=estRow.innerText.replace(/,/g,"").match(/([0-9]+)~/);
+        if(match)estPrice=match[1];
+      }
+    }
+
+    // ── 1순위: "영수증" 칸의 "+ 항목"만 합산 (할인·크레딧 미적용 기준, 꿀통 양식과 동일) ──
+    // ✅ Fix: 기존엔 document.body.innerText(페이지 전체)를 긁어, 실제요금 행의 계산식
+    //   "기본 + N(추가 거리요금) = 총합"에 들어있는 거리추가요금까지 같이 잡혀 이중 계상됐다
+    //   (영수증 +N + 실제요금식 +N → 예: 96,800이 98,000으로). 합산 범위를 영수증 칸으로 한정.
+    //   영수증이 없으면 sumPrice=0 → 아래 2순위(실제요금 행)로 자동 폴백된다.
+    //   ※ 실제요금 행은 "추가 거리요금", 영수증은 "거리추가요금"으로 철자가 달라 단순 dedup으론
+    //     못 거르므로, 범위 한정 + 정규화 dedup 둘 다 적용한다.
+    {
+      const _receiptRow=[...document.querySelectorAll("tr")]
+        .find(tr=>tr.innerText.replace(/\s+/," ").startsWith("영수증"));
+      const receiptText=_receiptRow?_receiptRow.innerText:"";
+      const plusMatches=[...receiptText.matchAll(/\+\s*([\d,]+)\s*[\(\（]([^\)\）]+)[\)\）]/g)];
+      const EXCLUDE=/할인|크레딧|계좌\s*이체|포인트/;
+      let sumPrice=0;
+      const sumSeen=new Set();
+      plusMatches.forEach(m=>{
+        const label=m[2].trim();
+        const amt=Number(m[1].replace(/,/g,""));
+        if(amt===0) return;
+        if(EXCLUDE.test(label)) return; // 할인·크레딧·계좌이체·포인트 제외
+        const nlabel=label.replace(/\s+/g,"").replace(/^추가거리요금$/,"거리추가요금").replace(/^추가시간요금$/,"시간추가요금");
+        if(sumSeen.has(nlabel)) return;
+        sumSeen.add(nlabel);
+        sumPrice+=amt;                  // 그 외 +항목은 모두 청구로 합산
+      });
+      if(sumPrice>0) realPrice=String(sumPrice);
+    }
+
+    // ── 2순위: +항목 합산이 0이면 실제요금 행 파싱으로 fallback ──
+    if(!realPrice||realPrice==="0"){
+      const realRow=[...document.querySelectorAll("tr")]
+        .find(tr=>tr.innerText.startsWith("실제요금\t"));
+      if(realRow){
+        const totMatch=realRow.innerText.match(/총\s*([0-9,]+)\s*원/);
+        if(totMatch){
+          realPrice=totMatch[1].replace(/[^0-9]/g,"");
+        }else{
+          const lines=realRow.innerText.replace("실제요금\t","").trim()
+            .split("\n").map(v=>v.trim()).filter(Boolean);
+          let targetText=lines[0];
+          if(lines.length>1&&lines[1].includes("원")) targetText=lines[1];
+          realPrice=targetText.replace(/[^0-9]/g,"");
+        }
+      }
+    }
+
+    // ── 예약 파생 라이드면 요금 파싱 완료 후 저장 & return ─────────────────
+    if(info.isFromResv){
+      info.savedRealPrice=realPrice;
+      info.savedEstPrice=estPrice;
+      localStorage.setItem("tada_ride_data", JSON.stringify(info));
+      blinkTitle('💾 라이드 저장됨 — 예약에서 실행 ㄱㄱ');
+      alert('💾 라이드 저장 완료!\n문자 양식 탑승요청시간 때문에\n연결된 예약에서 다시 눌러줘요!!');
+      return;
+    }
+  }
+
+  // 예약 단독 실행 시 예상요금을 estPrice로 사용
+  if(isReservation&&!estPrice&&info.resEstPrice){
+    estPrice=info.resEstPrice;
+  }
+
+  // ── UI 생성 ──────────────────────────────────────────────────────────
+  const overlay=document.createElement("div");
+  overlay.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;justify-content:center;align-items:center;z-index:999999;";
+
+  const box=document.createElement("div");
+  box.style.cssText="background:#fff;padding:20px;border-radius:12px;min-width:480px;font-family:sans-serif;box-shadow:0 4px 15px rgba(0,0,0,0.2);";
+  box.innerHTML="<h3 style='margin-top:0;margin-bottom:15px;color:#333;text-align:center;'>🐻 꿀빠는 곰</h3>";
+
+  const modeWrap=document.createElement("div");
+  modeWrap.style.cssText="display:flex;flex-direction:column;gap:6px;margin-bottom:15px;";
+  const row1=document.createElement("div");row1.style.cssText="display:flex;gap:6px;";
+  const row2=document.createElement("div");row2.style.cssText="display:flex;gap:6px;";
+
+  const tabLost=document.createElement("button");tabLost.textContent="🎒 분실물";
+  const tabToll=document.createElement("button");tabToll.textContent="🛣️ 통행료";
+  const tabFix=document.createElement("button");tabFix.textContent="💵 요금 정정";
+  const tabLoss=document.createElement("button");tabLoss.textContent="💸 영손비";
+  const tabRefund=document.createElement("button");tabRefund.textContent="💸 수수료환불";
+  const tabCharge=document.createElement("button");tabCharge.textContent="🧾 수수료청구";
+
+  const TAB_BASE="flex:1;padding:10px 2px;border:1px solid #ccc;background:#f5f5f5;color:#333;border-radius:6px;cursor:pointer;font-weight:bold;font-size:12px;text-align:center;";
+  [tabLost,tabToll,tabFix,tabLoss,tabRefund,tabCharge].forEach(b=>{b.style.cssText=TAB_BASE;});
+
+  row1.append(tabLost,tabToll,tabLoss);
+  row2.append(tabFix,tabRefund,tabCharge);
+  modeWrap.append(row1,row2);
+  box.appendChild(modeWrap);
+
+  const contentArea=document.createElement("div");
+  box.appendChild(contentArea);
+
+  const btnWrap=document.createElement("div");
+  btnWrap.style.cssText="margin-top:15px;text-align:right;";
+
+  const copyBtn=document.createElement("button");
+  copyBtn.textContent="복사하기";
+  copyBtn.style.cssText="padding:8px 16px;background:#0052cc;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;";
+
+  const cancelBtn=document.createElement("button");
+  cancelBtn.textContent="취소";
+  cancelBtn.style.cssText="padding:8px 16px;background:#eee;color:#333;border:none;border-radius:4px;margin-left:10px;cursor:pointer;";
+
+  btnWrap.append(copyBtn,cancelBtn);
+  box.appendChild(btnWrap);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  let currentMode="lost";
+  // 꿀통 탭 자동 선택:
+  //  (1) msgData가 현재 페이지와 일치(상단에서 검증 완료)했으면 저장된 탭을 그대로 신뢰
+  //      → 예약에서 꿀통 실행 후 라이드만 열어도 fix_resv_id 불일치로 탭이 안 바뀌던 문제 해결
+  //  (2) 그 외엔 fix_ride_id/fix_resv_id가 현재 페이지와 일치할 때만 적용
+  const _btRid=localStorage.getItem('tada_fix_ride_id')||'';
+  const _btRsv=localStorage.getItem('tada_fix_resv_id')||'';
+  const _btCurRid=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||'';
+  const _btCurRsv=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||'';
+  const _btIdMatch=(_btRid&&_btCurRid&&_btRid===_btCurRid)||(_btRsv&&_btCurRsv&&_btRsv===_btCurRsv);
+  const beeTab=(msgDataUsed||_btIdMatch)?(localStorage.getItem('tada_last_bee_tab')||''):'';
+  let _lossSubtypeOnce=(msgDataUsed||_btIdMatch)?(localStorage.getItem('tada_loss_subtype')||''):'';
+  let _lossAmountOnce=(msgDataUsed||_btIdMatch)?(localStorage.getItem('tada_loss_amount')||''):'';
+  if(beeTab){currentMode=beeTab;}
+  else if(savedTab){currentMode=savedTab;}
+
+  // ── 탭별 폼 렌더링 ──────────────────────────────────────────────────
+  function renderForm(){
+    contentArea.innerHTML="";
+    [tabLost,tabToll,tabFix,tabLoss,tabRefund,tabCharge].forEach(b=>{
+      b.style.background="#f5f5f5";b.style.color="#333";b.style.borderColor="#ccc";
+    });
+
+    const noRide=!info.rideId||info.rideId.trim()==="-"||info.rideId.trim()==="";
+    const needsRideRerun=isReservation
+      && !info.isStoredRes
+      &&(currentMode==="fix"||currentMode==="loss"||currentMode==="toll"||(currentMode==="refund"&&!noRide));
+    // 라이드 단독 실행인데 예약 파생 라이드 + 요금/영손비/수수료 탭
+    // 라이드 파생 건은 라이드 실행 시 이미 저장 후 return됨 → 여기선 항상 false
+    const needsResvFirst=false;
+    copyBtn.textContent=needsRideRerun?"라이드에서 재실행 ㄱㄱ":"복사하기";
+    copyBtn.style.background=needsRideRerun?"#d97706":"#0052cc";
+
+    const ACT="background:#0052cc;color:#fff;border-color:#0052cc;";
+
+    // ── 분실물 탭 ────────────────────────────────────────────────────
+    if(currentMode==="lost"){
+      tabLost.style.cssText=TAB_BASE+ACT;
+      // 꿀통에서 입력한 분실물 물품명 자동 채우기
+      let storedLostItem='';
+      try{storedLostItem=(JSON.parse(localStorage.getItem('tada_msg_data')||'{}').lostItem)||'';}catch(e){}
+      contentArea.innerHTML=`
+        <div style='margin:10px 0;'>
+          <label style='display:block;font-weight:bold;margin-bottom:5px;'>습득한 분실물 입력:</label>
+          <input id='lostItem' placeholder='예: 아이폰13, 검은색 우산' value="${storedLostItem.replace(/"/g,'&quot;')}"
+            style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>
+        </div>
+        <div style='margin:12px 0 4px;'>
+          <label style='display:block;font-weight:bold;margin-bottom:6px;'>영업손실비 결제 방식:</label>
+          <label style='margin-right:14px;cursor:pointer;font-weight:bold;'>
+            <input type='radio' name='lostPayType' value='card' checked> 카드 자동결제
+          </label>
+          <label style='cursor:pointer;font-weight:bold;'>
+            <input type='radio' name='lostPayType' value='field'> 현장결제 <span style='font-weight:normal;color:#6b7280;font-size:12px;'>(비회원·토스·티머니)</span>
+          </label>
+        </div>`;
+      setTimeout(()=>document.getElementById("lostItem")?.focus(),50);
+
+    // ── 통행료 탭 ────────────────────────────────────────────────────
+    }else if(currentMode==="toll"){
+      tabToll.style.cssText=TAB_BASE+ACT;
+      // fareItems에서 기존 통행료 파싱
+      let parsedBaseTotal=0;
+      // 1차: 현재 페이지 직접 파싱 (가장 정확 — 항상 현재 라이드 기준)
+      try{
+        const pageText=document.body.innerText;
+        const pageMatches=[...pageText.matchAll(/\+\s*([\d,]+)\s*[\(\（]([^\)\）]+)[\)\）]/g)];
+        const _tollSeen=new Set();  // 같은 통행료 라벨이 여러 행(영수증·실제요금 계산식 등)에 중복 노출돼도 1회만 합산 (꿀통 fareItems와 동일 기준)
+        pageMatches.forEach(m=>{
+          const lbl=m[2].trim();
+          const amt=Number(m[1].replace(/,/g,''));
+          if(amt>0&&/통행료|톨게이트|터널|대교|지하차도|IC/.test(lbl)){
+            if(_tollSeen.has(lbl)) return;
+            _tollSeen.add(lbl);
+            parsedBaseTotal+=amt;
+          }
+        });
+      }catch(e){}
+      // 2차: 현재 페이지에 없을 때만 tada_fare_items (라이드 ID 일치 검증)
+      if(parsedBaseTotal===0){
+        try{
+          const _fRid=localStorage.getItem('tada_fix_ride_id')||'';
+          const _fRsv=localStorage.getItem('tada_fix_resv_id')||'';
+          const _cRid=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||'';
+          const _cRsv=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||'';
+          const _match=(_fRid&&_cRid&&_fRid===_cRid)||(_fRsv&&_cRsv&&_fRsv===_cRsv);
+          if(_match){
+            const fi=JSON.parse(localStorage.getItem('tada_fare_items')||'[]');
+            fi.forEach(item=>{
+              if(/통행료|톨게이트|터널|대교|지하차도|IC/.test(item.label)) parsedBaseTotal+=Number(item.amt);
+            });
+          }
+        }catch(e){}
+      }
+
+      let tollHtml=`<div>
+        <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'>
+          <span style='font-size:13px;font-weight:bold;color:#374151;'>통행료 구간 선택</span>
+          <label id='addModeLabel' style='display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;font-weight:bold;color:#374151;padding:3px 8px;border:1.5px solid #d1d5db;border-radius:12px;background:#f9fafb;user-select:none;'><input type='checkbox' id='addModeCheck' style='accent-color:#059669;width:12px;height:12px;cursor:pointer;'> 기존+추가</label><span id='tollTotalBadge' style='background:#0052cc;color:#fff;padding:3px 12px;border-radius:20px;font-size:12px;font-weight:bold;'>합계 0원</span>
+        </div>
+        <div style='max-height:160px;overflow-y:auto;border:1px solid #eee;padding:8px;border-radius:6px;background:#fafafa;'>`;
+      Object.entries(tollMap).forEach(([tName,price])=>{
+        tollHtml+=`<label style='display:flex;align-items:center;gap:8px;padding:5px 4px;cursor:pointer;font-size:13px;'>
+          <input type='checkbox' name='tollCheck' value='${tName}' style='accent-color:#0052cc;width:14px;height:14px;cursor:pointer;flex-shrink:0;'>
+          <span>${tName}</span><span style='margin-left:auto;color:#374151;font-weight:bold;'>${price.toLocaleString()}원</span>
+        </label>`;
+      });
+      tollHtml+=`</div></div>
+        <hr style='border:0;border-top:1px solid #eee;margin:10px 0;'>
+        <label style='cursor:pointer;font-weight:bold;font-size:13px;display:flex;align-items:center;gap:6px;'>
+          <input type='checkbox' id='customCheck' style='accent-color:#374151;width:14px;height:14px;cursor:pointer;'> 🔧 기타 직접입력
+        </label>
+        <div id='customInputArea' style='display:none;margin-top:8px;'>
+          <div id='customRows'></div>
+          <button id='addCustomRow' type='button' style='margin-top:6px;width:100%;padding:6px;background:#f0f7ff;border:1px dashed #93c5fd;border-radius:6px;color:#0052cc;font-size:12px;font-weight:bold;cursor:pointer;'>+ 항목 추가</button>
+        </div>
+        <hr style='border:0;border-top:1px solid #eee;margin:10px 0;'>
+        <div style='display:flex;gap:8px;align-items:flex-end;'>
+          <div style='flex:1;'>
+            <div style='font-size:12px;font-weight:bold;margin-bottom:4px;color:#374151;'>기존 통행료<span style='font-weight:normal;color:#9ca3af;font-size:11px;'> (이미 청구된 금액)</span></div>
+            <input id='tollOldPrice' placeholder='예: 2,000'
+              style='width:100%;padding:6px 8px;box-sizing:border-box;border:1px solid #ccc;border-radius:6px;font-size:13px;'>
+          </div>
+          <div style='display:flex;flex-direction:column;align-items:center;padding-bottom:6px;flex-shrink:0;gap:2px;'>
+            <span style='color:#9ca3af;font-size:18px;'>→</span>
+            <span id='tollDiffBadge' style='font-size:10px;font-weight:bold;white-space:nowrap;'></span>
+          </div>
+          <div style='flex:1;'>
+            <div style='display:flex;align-items:center;gap:6px;margin-bottom:4px;'>
+              <span style='font-size:12px;font-weight:bold;color:#374151;'>변경 통행료</span>
+              <label style='display:flex;align-items:center;gap:3px;cursor:pointer;font-size:11px;color:#dc2626;font-weight:bold;margin-left:auto;'>
+                <input type='checkbox' id='refundCheck' style='accent-color:#dc2626;width:12px;height:12px;cursor:pointer;'> 환불
+              </label>
+            </div>
+            <input id='tollNewPrice' placeholder='자동 계산'
+              style='width:100%;padding:6px 8px;box-sizing:border-box;border:1px solid #ccc;border-radius:6px;font-size:13px;background:#f0f7ff;'>
+          </div>
+        </div>`;
+      contentArea.innerHTML=tollHtml;
+
+      document.getElementById('tollOldPrice').value=parsedBaseTotal>0?parsedBaseTotal.toLocaleString():'0';
+
+      function recalcToll(){
+        if(document.getElementById('refundCheck')?.checked) return;
+        const checks=[...contentArea.querySelectorAll('input[name="tollCheck"]:checked')];
+        let sum=checks.reduce((s,v)=>s+(tollMap[v.value]||0),0);
+        if(document.getElementById('customCheck')?.checked){
+          // 여러 기타 직접입력 행 합산
+          contentArea.querySelectorAll('.customPrice').forEach(el=>{
+            const cp=Number((el.value||'0').replace(/[^0-9]/g,''));
+            if(cp>0) sum+=cp;
+          });
+        }
+        // 추가 모드: 변경 통행료 = 기존 통행료 + 선택 항목
+        const isAddMode=document.getElementById('addModeCheck')?.checked;
+        const oldBaseNum=Number((document.getElementById('tollOldPrice')?.value||'0').replace(/[^0-9]/g,''))||0;
+        if(isAddMode&&oldBaseNum>0) sum+=oldBaseNum;
+        const badge=document.getElementById('tollTotalBadge');
+        if(badge){
+          if(isAddMode&&oldBaseNum>0&&sum>oldBaseNum)
+            badge.textContent='합계 '+sum.toLocaleString()+'원 (+추가)';
+          else
+            badge.textContent=sum>0?'합계 '+sum.toLocaleString()+'원':'합계 0원';
+        }
+        const newEl=document.getElementById('tollNewPrice');
+        if(newEl){ newEl.style.background='#f0f7ff'; newEl.value=sum>0?sum.toLocaleString():''; }
+        // 차액 배지 업데이트
+        const oldNum=Number((document.getElementById('tollOldPrice')?.value||'0').replace(/[^0-9]/g,''))||0;
+        const diffBadge=document.getElementById('tollDiffBadge');
+        if(diffBadge){
+          const diff=sum-oldNum;
+          if(oldNum>0&&diff!==0){
+            diffBadge.textContent=diff>0?'+'+diff.toLocaleString()+'원':diff.toLocaleString()+'원';
+            diffBadge.style.color=diff>0?'#0052cc':'#dc2626';
+          }else{ diffBadge.textContent=''; }
+        }
+      }
+      contentArea.querySelectorAll('input[name="tollCheck"]').forEach(cb=>{
+        cb.addEventListener('change',recalcToll);
+      });
+
+      // 추가 모드 토글
+      document.getElementById('addModeCheck').onchange=function(){
+        const lbl=document.getElementById('addModeLabel');
+        if(lbl){
+          lbl.style.borderColor=this.checked?'#059669':'#d1d5db';
+          lbl.style.background=this.checked?'#ecfdf5':'#f9fafb';
+          lbl.style.color=this.checked?'#059669':'#374151';
+        }
+        recalcToll();
+      };
+
+      // ── 기타 직접입력: 동적 행 추가 ──────────────────────────────────
+      let customRowSeq=0;
+      function addCustomRow(){
+        const rows=document.getElementById('customRows');
+        if(!rows) return;
+        const id=customRowSeq++;
+        const row=document.createElement('div');
+        row.style.cssText='display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;';
+        row.innerHTML=`
+          <div style='flex:2;'>
+            <div style='font-size:11px;color:#6b7280;margin-bottom:3px;font-weight:bold;'>명칭</div>
+            <input class='customName' placeholder='예: 성남톨게이트' style='width:100%;padding:6px 8px;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;font-size:13px;'>
+          </div>
+          <div style='flex:1;'>
+            <div style='font-size:11px;color:#6b7280;margin-bottom:3px;font-weight:bold;'>금액 (원)</div>
+            <input class='customPrice' type='number' placeholder='0' min='0' style='width:100%;padding:6px 8px;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;font-size:13px;'>
+          </div>
+          <button type='button' class='delCustomRow' style='flex-shrink:0;padding:6px 10px;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;color:#dc2626;font-size:13px;cursor:pointer;margin-bottom:0;'>✕</button>`;
+        rows.appendChild(row);
+        // 이벤트
+        row.querySelector('.customPrice').addEventListener('input',function(){
+          let v=this.value.replace(/[^0-9]/g,'');this.value=v||'';recalcToll();
+        });
+        row.querySelector('.customName').addEventListener('input',recalcToll);
+        row.querySelector('.delCustomRow').onclick=()=>{row.remove();recalcToll();};
+        return row;
+      }
+
+      document.getElementById('addCustomRow').onclick=()=>{addCustomRow();};
+
+      document.getElementById('customCheck').onchange=function(){
+        const area=document.getElementById('customInputArea');
+        area.style.display=this.checked?'block':'none';
+        if(this.checked){
+          // 첫 행 자동 생성
+          if(document.getElementById('customRows').children.length===0){
+            const row=addCustomRow();
+            setTimeout(()=>row?.querySelector('.customName')?.focus(),50);
+          }
+        }
+        recalcToll();
+      };
+
+      document.getElementById('refundCheck').onchange=function(){
+        const newEl=document.getElementById('tollNewPrice');
+        const badge=document.getElementById('tollTotalBadge');
+        const diffBadgeR=document.getElementById('tollDiffBadge');
+        if(this.checked){
+          newEl.value='0'; newEl.style.background='#fef2f2';
+          if(badge) badge.textContent='환불';
+          if(diffBadgeR){ const oN=Number((document.getElementById('tollOldPrice')?.value||'0').replace(/[^0-9]/g,''))||0; diffBadgeR.textContent=oN>0?'-'+oN.toLocaleString()+'원':''; diffBadgeR.style.color='#dc2626'; }
+        }else{
+          newEl.style.background='#f0f7ff';
+          if(badge) badge.textContent='합계 0원';
+          if(diffBadgeR) diffBadgeR.textContent='';
+          recalcToll();
+        }
+      };
+
+      setTimeout(()=>{
+        document.getElementById('tollOldPrice').oninput=function(){
+          let v=this.value.replace(/[^0-9]/g,''); this.value=v?Number(v).toLocaleString():'';
+          recalcToll();
+        };
+        const newEl=document.getElementById('tollNewPrice');
+        if(newEl) newEl.oninput=()=>{
+          if(document.getElementById('refundCheck')?.checked) return;
+          let v=newEl.value.replace(/[^0-9]/g,''); newEl.value=v?Number(v).toLocaleString():'';
+        };
+      },0);
+
+    // ── 요금 정정 탭 ─────────────────────────────────────────────────
+    }else if(currentMode==="fix"){
+      tabFix.style.cssText=TAB_BASE+ACT;
+      if(isReservation&&!info.isStoredRes){
+        contentArea.innerHTML=`
+          <div style='margin:20px 0;padding:15px;background:#fff7ed;border:1px solid #fed7aa;
+            border-radius:8px;color:#c2410c;font-weight:bold;text-align:center;line-height:1.8;font-size:14px;'>
+            ⚠️ 요금 정정은 라이드 페이지에서만 완성 가능합니다<br>
+            아래 버튼으로 예약 정보를 저장한 뒤<br>
+            해당 라이드 페이지에서 다시 실행해주세요
+          </div>`;
+        return;
+      }
+      if(needsResvFirst){
+        info.lastTab=currentMode;
+        info.fromResvId=info.fromResvId||"";
+        localStorage.setItem("tada_ride_data", JSON.stringify(info));
+        overlay.remove();
+        blinkTitle('💾 라이드 저장됨 — 예약에서 실행 ㄱㄱ');
+        return;
+      }
+      contentArea.innerHTML=`
+        <div style='margin:5px 0;'>
+          <label style='display:block;font-weight:bold;margin-bottom:5px;'>정정 사유 선택:</label>
+          <select id='fixReason' style='width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;'>
+            <option value='' selected>기본 (사유 없음)</option>
+            <option value='GPS 이상으로 인하여'>GPS 이상으로 인하여</option>
+            <option value='경로 우회로 인하여'>경로 우회로 인하여</option>
+            <option value='custom'>기타 직접 입력</option>
+          </select>
+        </div>
+        <div id='customReasonWrap' style='margin-top:8px;display:none;'>
+          <input id='customReason' placeholder='사유를 직접 입력하세요'
+            style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>
+        </div>
+        <div style='margin-top:12px;display:flex;gap:10px;'>
+          <div style='flex:1;'>
+            <label style='display:block;font-weight:bold;margin-bottom:3px;'>기존 금액:</label>
+            <input id='fixOldPrice' value='${(()=>{
+              const fixRideId=localStorage.getItem("tada_fix_ride_id")||"";
+              const fixResvId=localStorage.getItem("tada_fix_resv_id")||"";
+              const curRideId=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||"";
+              const curResvId=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||"";
+              const rideMatch=(fixRideId&&curRideId&&fixRideId===curRideId)||(fixResvId&&curResvId&&fixResvId===curResvId);
+              // 라이드/예약 ID 일치하면 fix 값 우선 사용
+              const v=rideMatch?localStorage.getItem("tada_fix_old"):null;
+              return realPrice?Number(realPrice).toLocaleString():v?Number(v).toLocaleString():"";
+            })()}'
+              style='width:100%;padding:6px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>
+          </div>
+          <div style='flex:1;'>
+            <label style='display:block;font-weight:bold;margin-bottom:3px;'>정정 금액 (예상최저):</label>
+            <input id='fixNewPrice' value='${(()=>{
+              const fixRideId2=localStorage.getItem("tada_fix_ride_id")||"";
+              const fixResvId2=localStorage.getItem("tada_fix_resv_id")||"";
+              const curRideId2=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||"";
+              const curResvId2=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||"";
+              const rideMatch2=(fixRideId2&&curRideId2&&fixRideId2===curRideId2)||(fixResvId2&&curResvId2&&fixResvId2===curResvId2);
+              const v=rideMatch2?localStorage.getItem("tada_fix_new"):null;
+              return v?Number(v).toLocaleString():estPrice?Number(estPrice).toLocaleString():"";
+            })()}'
+              style='width:100%;padding:6px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>
+          </div>
+        </div>`;
+
+      // ── 꿀통 항목별 정정 내역 있으면 추가 칸 렌더링 ─────────────────────
+      const fixRideIdCheck=localStorage.getItem('tada_fix_ride_id')||'';
+      const fixResvIdCheck=localStorage.getItem('tada_fix_resv_id')||'';
+      const curRideIdCheck=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||'';
+      const curResvIdCheck=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||'';
+      const fixRideMatch=(fixRideIdCheck&&curRideIdCheck&&fixRideIdCheck===curRideIdCheck)||
+                         (fixResvIdCheck&&curResvIdCheck&&fixResvIdCheck===curResvIdCheck);
+      const fixItemsRaw=(fixRideMatch?localStorage.getItem('tada_fix_items'):'')||'';
+      let fixItemsList=[];
+      try{if(fixItemsRaw)fixItemsList=JSON.parse(fixItemsRaw);}catch(e){}
+      if(fixItemsList.length>0){
+        const itemsDiv=document.createElement('div');
+        itemsDiv.style.cssText='margin-top:10px;';
+        const itemsTitle=document.createElement('div');
+        itemsTitle.style.cssText='font-size:12px;color:#6b7280;margin-bottom:6px;font-weight:bold;';
+        itemsTitle.textContent='항목별 정정:';
+        itemsDiv.appendChild(itemsTitle);
+        fixItemsList.forEach((fi,i)=>{
+          const row=document.createElement('div');
+          row.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+          const lbl=document.createElement('span');
+          lbl.style.cssText='font-size:12px;color:#374151;min-width:140px;flex-shrink:0;';
+          lbl.textContent=fi.label;
+          const fromIn=document.createElement('input');
+          fromIn.value=Number(fi.from).toLocaleString();
+          fromIn.id='fixItem_from_'+i;
+          fromIn.style.cssText='width:80px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:right;';
+          const arrow=document.createElement('span');
+          arrow.textContent='>';arrow.style.cssText='color:#6b7280;font-size:12px;flex-shrink:0;';
+          const toIn=document.createElement('input');
+          toIn.value=Number(fi.to).toLocaleString();
+          toIn.id='fixItem_to_'+i;
+          toIn.style.cssText='width:80px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:right;';
+          [fromIn,toIn].forEach(el=>{
+            el.oninput=()=>{let v=el.value.replace(/[^0-9]/g,"");el.value=v?Number(v).toLocaleString():"";};
+          });
+          row.append(lbl,fromIn,arrow,toIn);
+          itemsDiv.appendChild(row);
+        });
+        contentArea.appendChild(itemsDiv);
+      }
+
+      const selectEl=document.getElementById("fixReason");
+      const customWrap=document.getElementById("customReasonWrap");
+      selectEl.onchange=()=>{
+        customWrap.style.display=selectEl.value==="custom"?"block":"none";
+        if(selectEl.value==="custom")document.getElementById("customReason").focus();
+      };
+      [["fixOldPrice"],["fixNewPrice"]].forEach(([id])=>{
+        const el=document.getElementById(id);
+        el.oninput=()=>{
+          let v=el.value.replace(/[^0-9]/g,"");
+          el.value=v?Number(v).toLocaleString():"";
+        };
+      });
+
+    // ── 영손비 탭 ────────────────────────────────────────────────────
+    }else if(currentMode==="loss"){
+      tabLoss.style.cssText=TAB_BASE+ACT;
+
+      if(needsResvFirst){
+        info.lastTab=currentMode;
+        info.fromResvId=info.fromResvId||"";
+        localStorage.setItem("tada_ride_data", JSON.stringify(info));
+        overlay.remove();
+        blinkTitle('💾 라이드 저장됨 — 예약에서 실행 ㄱㄱ');
+        return;
+      }
+      // 꿀통에서 넘어온 영업손실비 금액을 기본값으로 사용 (1회성, ID 매칭 가드 적용)
+      const _initLossAmt=_lossAmountOnce?_lossAmountOnce.replace(/[^0-9]/g,''):'';
+      _lossAmountOnce='';
+      const _fmtLoss=(def)=>_initLossAmt?Number(_initLossAmt).toLocaleString():def;
+      contentArea.innerHTML=`
+        <div style='margin:5px 0;'>
+          <label style='display:block;font-weight:bold;margin-bottom:8px;'>종류 선택:</label>
+          <label style='margin-right:12px;cursor:pointer;font-weight:bold;'>
+            <input type='radio' name='contamType' value='차량 내부 오염' checked> 차량 내부 오염
+          </label>
+          <label style='margin-right:12px;cursor:pointer;font-weight:bold;'>
+            <input type='radio' name='contamType' value='카시트 오염'> 카시트 오염
+          </label>
+          <label style='cursor:pointer;font-weight:bold;'>
+            <input type='radio' name='contamType' value='분실물'> 🎒 분실물
+          </label>
+        </div>
+        <div id='lossDynamicArea' style='margin-top:15px;'>
+          <label style='display:block;font-weight:bold;margin-bottom:5px;'>영업손실비 금액 입력:</label>
+          <input id='lossPrice' value='${_fmtLoss("150,000")}'
+            style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>
+        </div>
+        <div style='margin-top:10px;'>
+        </div>`;
+
+      function bindLossPrice(){
+        const lp=document.getElementById("lossPrice");
+        if(lp)lp.oninput=()=>{
+          let v=lp.value.replace(/[^0-9]/g,"");
+          lp.value=v?Number(v).toLocaleString():"";
+        };
+      }
+      bindLossPrice();
+
+      contentArea.querySelectorAll('input[name="contamType"]').forEach(r=>{
+        r.onchange=()=>{
+          const dynArea=document.getElementById("lossDynamicArea");
+          if(r.value==="분실물"){
+            dynArea.innerHTML=`
+              <label style='display:block;font-weight:bold;margin-bottom:5px;'>습득 분실물 명칭 입력:</label>
+              <input id='lossItemName' placeholder='예: 아이폰13, 검은색 우산'
+                style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;margin-bottom:10px;'>
+              <label style='display:block;font-weight:bold;margin-bottom:5px;'>영업손실비 금액 입력:</label>
+              <input id='lossPrice' value='${_fmtLoss("30,000")}'
+                style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>`;
+          }else{
+            dynArea.innerHTML=`
+              <label style='display:block;font-weight:bold;margin-bottom:5px;'>영업손실비 금액 입력:</label>
+              <input id='lossPrice' value='${_fmtLoss("150,000")}'
+                style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>`;
+          }
+          bindLossPrice();
+        };
+      });
+        // ── 분실물 영손비: 꿀통 연동 시 분실물 라디오 자동선택 + 명칭 입력 ──
+        if(_lossSubtypeOnce==='분실물'){
+          _lossSubtypeOnce='';
+          const _lr=contentArea.querySelector('input[name="contamType"][value="분실물"]');
+          if(_lr){
+            _lr.checked=true;
+            _lr.dispatchEvent(new Event('change'));
+            const _ln=document.getElementById('lossItemName');
+            if(_ln){
+              let _li='';try{_li=(JSON.parse(localStorage.getItem('tada_msg_data')||'{}').lostItem)||'';}catch(e){}
+              if(_li)_ln.value=_li;
+            }
+          }
+        }
+
+    // ── 수수료환불 탭 ────────────────────────────────────────────────
+    }else if(currentMode==="refund"){
+      tabRefund.style.cssText=TAB_BASE+ACT;
+      // ── 영수증에서 취소수수료/미탑승수수료 직접 파싱 (라이드·예약 페이지 공통) ──
+      // 호출예약 영수증은 "+ 20000원 (취소수수료)"처럼 숫자 뒤에 '원'이 붙어
+      // realPrice/실제요금에 의존하면 못 잡던 케이스 보강. '원' 접미사 허용.
+      let cancelFee="",noshowFee="";
+      {
+        const _rcptRow=[...document.querySelectorAll("tr")]
+          .find(tr=>tr.innerText.replace(/\s+/,"  ").startsWith("영수증"));
+        const _rcptTxt=_rcptRow?_rcptRow.innerText:"";
+        [..._rcptTxt.matchAll(/\+\s*([\d,]+)\s*원?\s*[(（]([^)）]+)[)）]/g)].forEach(m=>{
+          const lbl=m[2].replace(/\s+/g,"");
+          const amt=m[1].replace(/,/g,"");
+          if(/취소수수료/.test(lbl))cancelFee=amt;
+          else if(/미탑승수수료/.test(lbl))noshowFee=amt;
+        });
+      }
+      if(isReservation&&!info.isStoredRes){
+        // 파생 라이드 있으면 라이드에서 재실행 안내 (버튼은 needsRideRerun이 처리)
+        if(!noRide){
+          contentArea.innerHTML=`
+            <div style='margin:20px 0;padding:15px;background:#fff7ed;border:1px solid #fed7aa;
+              border-radius:8px;color:#c2410c;font-weight:bold;text-align:center;line-height:1.8;font-size:14px;'>
+              ⚠️ 수수료 환불은 라이드 페이지에서만 완성 가능합니다<br>
+              아래 버튼으로 예약 정보를 저장한 뒤<br>
+              해당 라이드 페이지에서 다시 실행해주세요
+            </div>`;
+          return;
+        }
+        // 파생 라이드 없으면 예약 페이지 실제요금 파싱해서 바로 작동
+        const resRealFareText=getRowValue("실제요금");
+        const resRealMatch=resRealFareText.replace(/,/g,"").match(/총\s*([0-9]+)\s*원/)||
+                           resRealFareText.replace(/,/g,"").match(/=\s*([0-9]+)/)||
+                           resRealFareText.replace(/,/g,"").match(/([0-9]+)\s*원/);
+        const resRealPrice=resRealMatch?resRealMatch[1]:"";
+        if(resRealPrice) realPrice=resRealPrice;
+      }
+      if(needsResvFirst){
+        info.lastTab=currentMode;
+        info.fromResvId=info.fromResvId||"";
+        localStorage.setItem("tada_ride_data", JSON.stringify(info));
+        overlay.remove();
+        blinkTitle('💾 라이드 저장됨 — 예약에서 실행 ㄱㄱ');
+        return;
+      }
+      // ✅ Fix: "export " 텍스트 제거
+      // 기본 수수료 종류/금액: 영수증에서 잡힌 취소·미탑승 수수료 우선, 없으면 실제요금
+      const _isNoshowDefault=!!noshowFee&&!cancelFee;
+      const _defaultFee=cancelFee||noshowFee||realPrice||"";
+      contentArea.innerHTML=`
+        <div style='margin:5px 0;'>
+          <label style='display:block;font-weight:bold;margin-bottom:8px;'>수수료 종류 선택:</label>
+          <label style='margin-right:15px;cursor:pointer;font-weight:bold;'>
+            <input type='radio' name='refundType' value='취소 수수료' ${_isNoshowDefault?"":"checked"}> 취소 수수료
+          </label>
+          <label style='cursor:pointer;font-weight:bold;'>
+            <input type='radio' name='refundType' value='미탑승 수수료' ${_isNoshowDefault?"checked":""}> 미탑승 수수료
+          </label>
+        </div>
+        <div style='margin-top:15px;'>
+          <label style='display:block;font-weight:bold;margin-bottom:5px;'>환불 금액 입력:</label>
+          <input id='refundPrice' value='${_defaultFee?Number(_defaultFee).toLocaleString():(_isNoshowDefault?"4,000":"3,000")}'
+            style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>
+        </div>`;
+      const refundPriceEl=document.getElementById("refundPrice");
+      refundPriceEl.oninput=()=>{
+        let v=refundPriceEl.value.replace(/[^0-9]/g,"");
+        refundPriceEl.value=v?Number(v).toLocaleString():"";
+      };
+      // 종류 전환 시: 영수증에서 잡힌 금액 우선, 없으면 종류별 기본값(취소 3,000 / 미탑승 4,000)
+      contentArea.querySelectorAll('input[name="refundType"]').forEach(r=>{
+        r.onchange=()=>{
+          const fee=r.value==="미탑승 수수료"?(noshowFee||"4000"):(cancelFee||"3000");
+          refundPriceEl.value=Number(fee).toLocaleString();
+        };
+      });
+
+    // ── 수수료청구 탭 ────────────────────────────────────────────────
+    }else if(currentMode==="charge"){
+      tabCharge.style.cssText=TAB_BASE+ACT;
+
+      if(isResvCharge){
+        // 약관별 계산 로직
+        // 예약 확정 요금: resEstPrice → DOM 예상요금 → 라이드 예상/실제요금 순으로 견고하게 확보
+        let resBase=Number(info.resEstPrice)||0;
+        if(!resBase){
+          const _estRaw=getRowValue("예상요금");
+          const _m=(_estRaw||"").replace(/,/g,"").match(/([0-9]+)\s*원/);
+          if(_m) resBase=Number(_m[1]);
+        }
+        if(!resBase) resBase=Number(estPrice)||Number(realPrice)||0;
+
+        // 약관 선택 → 취소 요금 자동계산
+        const calcCharge=(policy,base)=>{
+          if(policy==="10pct") return Math.min(Math.round(base*0.1),5000);
+          if(policy==="50pct") return Math.min(Math.round(base*0.5),10000);
+          if(policy==="80pct") return Math.min(Math.round(base*0.8),20000);
+          if(policy==="100pct") return Math.min(base,30000);
+          return 0;
+        };
+
+        const baseDisplay=resBase?Number(resBase).toLocaleString():"";
+        const defaultCharge=resBase?calcCharge("80pct",resBase).toLocaleString():"";
+
+        contentArea.innerHTML=`
+          <div style='margin:5px 0;'>
+            <label style='display:block;font-weight:bold;margin-bottom:8px;'>취소 시점 선택 (약관 기준):</label>
+            <select id='chargePolicy' style='width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;margin-bottom:10px;'>
+              <option value='none' style='color:#c2410c;font-weight:bold;'>⚠️ 드라이버 배정 10분 전 취소 — 수수료 없음</option>
+              <option value='10pct'>출발 12~9시간 이내 취소 — 확정요금 10% (최대 5,000원)</option>
+              <option value='50pct'>출발 9~2시간 이내 취소 — 확정요금 50% (최대 10,000원)</option>
+              <option value='80pct' selected>출발 2시간 이내 취소 — 확정요금 80% (최대 20,000원)</option>
+              <option value='100pct'>미탑승/10분 이후 연락두절 — 확정요금 100% (최대 30,000원)</option>
+            </select>
+            <div id='noFeeWarning' style='display:none;margin-bottom:10px;padding:12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;color:#dc2626;font-weight:bold;text-align:center;font-size:13px;'>
+              🛑 수수료 미발생 케이스입니다<br>수수료 청구 불가 — 탭을 다시 확인해주세요
+            </div>
+            <label style='display:block;font-weight:bold;margin-bottom:5px;'>예약 확정 요금:</label>
+            <input id='chargeBase' value='${baseDisplay}' placeholder='예: 31,100'
+              style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;margin-bottom:10px;'>
+            <label style='display:block;font-weight:bold;margin-bottom:5px;'>취소 수수료 금액 <span style='font-weight:normal;color:#888;font-size:12px;'>(자동계산, 수정 가능)</span>:</label>
+            <input id='chargeAmount' value='${defaultCharge}' placeholder='예: 20,000'
+              style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;background:#f0f7ff;'>
+          </div>`;
+
+        const policyEl=document.getElementById("chargePolicy");
+        const baseEl=document.getElementById("chargeBase");
+        const amtEl=document.getElementById("chargeAmount");
+
+        // 자동계산 함수
+        const autoCalc=()=>{
+          const noFeeWarn=document.getElementById("noFeeWarning");
+          const baseEl2=document.getElementById("chargeBase");
+          const amtEl2=document.getElementById("chargeAmount");
+          if(policyEl.value==="none"){
+            noFeeWarn.style.display="block";
+            baseEl2.style.opacity="0.4";
+            amtEl2.style.opacity="0.4";
+            amtEl2.value="";
+            return;
+          }
+          noFeeWarn.style.display="none";
+          baseEl2.style.opacity="1";
+          amtEl2.style.opacity="1";
+          const base=Number(baseEl2.value.replace(/[^0-9]/g,""));
+          if(base>0){
+            amtEl2.value=calcCharge(policyEl.value,base).toLocaleString();
+          }
+        };
+
+        policyEl.onchange=autoCalc;
+        // none이 기본 selected가 아니므로 초기상태는 정상
+        if(policyEl.value==="none") autoCalc();
+
+        baseEl.oninput=()=>{
+          if(policyEl.value==="none") return;
+          let v=baseEl.value.replace(/[^0-9]/g,"");
+          baseEl.value=v?Number(v).toLocaleString():"";
+          autoCalc();
+        };
+        amtEl.oninput=()=>{
+          let v=amtEl.value.replace(/[^0-9]/g,"");
+          amtEl.value=v?Number(v).toLocaleString():"";
+        };
+
+      }else{
+        // 라이드 페이지: 취소/미탑승 선택 + 금액 자동 입력
+        contentArea.innerHTML=`
+          <div style='margin:5px 0;'>
+            <label style='display:block;font-weight:bold;margin-bottom:8px;'>수수료 종류 선택:</label>
+            <label style='margin-right:15px;cursor:pointer;font-weight:bold;'>
+              <input type='radio' name='chargeType' value='취소' checked> 취소 수수료
+            </label>
+            <label style='cursor:pointer;font-weight:bold;'>
+              <input type='radio' name='chargeType' value='미탑승'> 미탑승 수수료
+            </label>
+          </div>
+          <div style='margin-top:15px;'>
+            <label style='display:block;font-weight:bold;margin-bottom:5px;'>청구 수수료 금액:</label>
+            <input id='chargeAmount' value='3,000'
+              style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>
+          </div>`;
+
+        const chargeAmtEl=document.getElementById("chargeAmount");
+        chargeAmtEl.oninput=()=>{
+          let v=chargeAmtEl.value.replace(/[^0-9]/g,"");
+          chargeAmtEl.value=v?Number(v).toLocaleString():"";
+        };
+
+        // 라디오 전환 시 기본금액 자동 변경
+        contentArea.querySelectorAll('input[name="chargeType"]').forEach(r=>{
+          r.onchange=()=>{
+            chargeAmtEl.value=r.value==="미탑승"?"4,000":"3,000";
+          };
+        });
+      }
+    }
+  } // ── renderForm 끝
+
+  // ── 탭 이벤트 ────────────────────────────────────────────────────────
+  tabLost.onclick=()=>{currentMode="lost";renderForm();};
+  tabToll.onclick=()=>{currentMode="toll";renderForm();};
+  tabFix.onclick=()=>{currentMode="fix";renderForm();};
+  tabLoss.onclick=()=>{currentMode="loss";renderForm();};
+  tabRefund.onclick=()=>{currentMode="refund";renderForm();};
+  tabCharge.onclick=()=>{currentMode="charge";renderForm();};
+  cancelBtn.onclick=()=>{overlay.remove();};
+  renderForm();
+
+  // ── 복사 버튼 ────────────────────────────────────────────────────────
+  copyBtn.onclick=async function(){
+
+    // 예약 페이지: 정보 저장 후 라이드로 이동 안내
+    // 단, isStoredRes=true (라이드→예약 순서)면 이미 라이드 데이터 있으므로 바로 복사
+    if(isReservation&&!info.isStoredRes){
+      info.lastTab=currentMode;
+      localStorage.setItem("tada_res_data",JSON.stringify(info));
+      // 수수료환불 탭이고 파생 라이드 없으면 바로 복사 진행
+      const noRide=!info.rideId||info.rideId.trim()==="-"||info.rideId.trim()==="";
+      const isRefundNoRide=currentMode==="refund"&&noRide;
+      // 통행료(toll)도 라이드 항목 파싱 필요 → 예약 먼저 실행 시 저장 후 라이드 유도
+      if((currentMode==="fix"||currentMode==="loss"||currentMode==="refund"||currentMode==="toll")&&!isRefundNoRide){
+        overlay.remove();
+        blinkTitle('💾 예약 정보 저장됨');
+        return;
+      }
+    }
+
+    // ── 분실물 ─────────────────────────────────────────────────────────
+    if(currentMode==="lost"){
+      const item=document.getElementById("lostItem").value.trim();
+      if(!item){alert("습득한 분실물을 입력해주세요.");return;}
+      const lostPayType=(document.querySelector('input[name="lostPayType"]:checked')||{}).value||'card';
+      const lossPara=lostPayType==='field'
+        ?`단, 직접 전달시 드라이버가 영업을 중단하고 이동하여야 하므로, 이동 시간과 거리에 따른 영업손실비 30,000~50,000원이 발생합니다.\n\n10km/1시간 이내 거리 전달인 경우 : 30,000원\n10km/1시간 이상 거리 전달인 경우 : 50,000원\n\n해당 영업손실비는 현장에서 드라이버에게 직접 결제(현금, 계좌이체, 카드 단말기 결제 중 택일)로 진행되는 점 양해 부탁드립니다.`
+        :`단, 직접 전달시 드라이버가 영업을 중단하고 이동하여야 하므로, 이동 시간과 거리에 따른 영업손실비 30,000~50,000원이 등록하신 카드에서 자동 결제됩니다.\n\n10km/1시간 이내 거리 전달인 경우 : 30,000원\n10km/1시간 이상 거리 전달인 경우 : 50,000원`;
+      const message=`[타다] 분실물 습득 안내\n\n안녕하세요. ${info.name}님\n\n타다를 이용해주셔서 감사합니다.\n\n${info.dateTime}에 ${info.actionWord}하신 [ ${info.departure} > ${info.destination} ] 운행 건의 드라이버 측에서 분실물 [${item}]을 습득하여 안내드립니다.\n\n하차 완료 후 3일 이내 분실물 발생 인지하신 경우, 앱 내 이용내역 > 상세 페이지 > [분실물 찾기] 기능을 통해서 드라이버와 소통하여 확인 하실 수 있습니다.\n\n해당 드라이버 퇴근 또는 운행 중일 경우 통화 연결이 되지 않을 수 있으므로 메세지 발송을 통해 분실물 습득 여부를 문의해주세요.\n\n메세지 발송 후 기다려주시면 드라이버가 기존 운행 종료한 후 통화가 가능할 때 연락을 드릴 예정입니다.\n\n해당 차량에서 분실물이 발견되었을 시, 드라이버 위치에서 가까운 경찰서 또는 차고지(운수사) 등으로의 인계 또는 드라이버가 직접 전달 등의 사항을 조율하여 분실물을 수령하실 수 있습니다.\n\n${lossPara}\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+      await copyRichText(message);
+      overlay.remove();
+      alert("분실물 안내 복사 완료");
+
+    // ── 통행료 ─────────────────────────────────────────────────────────
+    }else if(currentMode==="toll"){
+      const checked=[...contentArea.querySelectorAll('input[name="tollCheck"]:checked')];
+      const customEnabled=document.getElementById("customCheck").checked;
+      const isRefund=document.getElementById("refundCheck").checked;
+      if(!checked.length&&!customEnabled&&!isRefund){alert("통행료를 선택해주세요.");return;}
+
+      const names=checked.map(v=>v.value);
+      let total=names.reduce((sum,tName)=>sum+tollMap[tName],0);
+
+      if(customEnabled){
+        // 여러 기타 직접입력 행 처리
+        const customRows=[...contentArea.querySelectorAll('#customRows > div')];
+        let addedAny=false;
+        for(const row of customRows){
+          const cName=row.querySelector('.customName').value.trim();
+          const cPrice=Number((row.querySelector('.customPrice').value||'0').replace(/[^0-9]/g,''));
+          if(!cName&&!cPrice) continue; // 빈 행은 스킵
+          if(!cName){alert("기타 통행료 명칭을 입력해주세요.");return;}
+          if(!cPrice||cPrice<=0){alert("기타 통행료 금액을 1원 이상 입력해주세요.");return;}
+          names.push(cName);
+          total+=cPrice;
+          addedAny=true;
+        }
+        if(!addedAny&&!checked.length&&!isRefund){alert("기타 통행료를 입력해주세요.");return;}
+      }
+
+      let oldPRaw=document.getElementById("tollOldPrice").value.trim();
+      let newPRaw=document.getElementById("tollNewPrice").value.trim();
+      const oldNum=Number(oldPRaw.replace(/[^0-9]/g,""))||0;
+      const newNum=Number(newPRaw.replace(/[^0-9]/g,""))||0;
+      const oldP=oldNum>0?oldNum.toLocaleString()+"원":"0원";
+      const newP=newNum>0?newNum.toLocaleString()+"원":"0원";
+
+      let message="";
+
+      if(isRefund){
+        if(!oldPRaw){alert("기존 통행료 금액을 입력해주세요.");return;}
+        message=`[타다] 통행료 환불 안내\n\n안녕하세요, ${info.name}님\n타다 고객센터입니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}]까지 이동하신 탑승 내역 관련하여, 운행 과정에서 결제된 통행료가 잘못 청구된 것을 확인하여 환불 처리 예정임을 안내드립니다.\n\n- 기존 결제 통행료 : ${oldP}\n\n이에 당시 결제된 요금을 취소 후, 통행료를 제외한 요금으로 재결제 예정입니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+        await copyRichText(message);
+        overlay.remove();
+        alert("통행료 환불 안내 복사 완료");
+
+      }else if(oldNum>0&&newNum>0&&oldNum!==newNum){
+        message=`[타다] 통행료 정정 안내\n\n안녕하세요, ${info.name}님\n타다 고객센터입니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}]까지 이동하신 탑승 내역 관련하여, 운행 과정에서 발생한 유료도로 통행료가 정상적으로 청구되지 않아, 정정 후 재결제 진행 예정인 점 안내드립니다.\n\n- 통행료 : ${total.toLocaleString()}원 (${names.join(", ")})\n- 기존 통행료 : ${oldP}\n- 변경 통행료 : ${newP}\n\n이에 당시 결제된 요금을 취소 후, 변경된 통행료가 포함된 요금을 재결제 예정입니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+        await copyRichText(message);
+        overlay.remove();
+        alert("통행료 정정 안내 복사 완료");
+
+      }else{
+        if(!total){alert("통행료 금액을 확인해주세요.");return;}
+        message=`[타다] 통행료 정정 안내\n\n안녕하세요, ${info.name}님\n타다 고객센터입니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}]까지 이동하신 탑승 내역 관련하여, 운행 과정에서 발생한 유료도로 통행료가 정상적으로 청구되지 않아, 정정 후 재결제 진행 예정인 점 안내드립니다.\n\n- 통행료 : ${total.toLocaleString()}원 (${names.join(", ")})\n\n이에 당시 결제된 요금을 취소 후, 운행료 결제 시 등록되어 있던 결제 수단으로 통행료를 포함한 요금을 재결제 예정입니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+        await copyRichText(message);
+        overlay.remove();
+        alert("통행료 안내 복사 완료");
+      }
+
+    // ── 요금 정정 ───────────────────────────────────────────────────────
+    }else if(currentMode==="fix"){
+      const selectVal=document.getElementById("fixReason").value;
+      let reason=selectVal==="custom"
+        ?document.getElementById("customReason").value.trim()
+        :selectVal;
+      if(selectVal==="custom"&&!reason){alert("정정 사유를 직접 입력해주세요.");return;}
+      // 기본(빈값)이면 reason을 공백으로 처리해서 문장이 자연스럽게 이어지게
+      const reasonStr=reason?reason+' ':'';
+      let oldP=document.getElementById("fixOldPrice").value.trim();
+      let newP=document.getElementById("fixNewPrice").value.trim();
+      if(!oldP||!newP){alert("기존 금액과 정정 금액을 확인해주세요.");return;}
+      if(!oldP.includes("원"))oldP=oldP+"원";
+      if(!newP.includes("원"))newP=newP+"원";
+      // 항목별 정정 내역 수집
+      // 라이드 ID 일치할 때만 fix_items 로드
+      const _fixRid=localStorage.getItem('tada_fix_ride_id')||'';
+      const _fixRsv=localStorage.getItem('tada_fix_resv_id')||'';
+      const _curRid=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||'';
+      const _curRsv=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||'';
+      const _fixMatch=(_fixRid&&_curRid&&_fixRid===_curRid)||(_fixRsv&&_curRsv&&_fixRsv===_curRsv);
+      let fixItemsRaw='';
+      try{fixItemsRaw=(_fixMatch?localStorage.getItem('tada_fix_items'):'')||'';}catch(e){}
+      let fixItemsList=[];
+      try{if(fixItemsRaw)fixItemsList=JSON.parse(fixItemsRaw);}catch(e){}
+      const itemLines=fixItemsList.map((fi,i)=>{
+        const fromEl=document.getElementById('fixItem_from_'+i);
+        const toEl=document.getElementById('fixItem_to_'+i);
+        const fromV=fromEl?fromEl.value.trim():Number(fi.from).toLocaleString();
+        const toV=toEl?toEl.value.trim():Number(fi.to).toLocaleString();
+        if(!fromV.includes('원')&&fromV){}
+        // 항목명 가독성: '거리추가요금' → '거리추가 요금', '부가서비스요금' → '부가서비스 요금'
+        const labelFmt=fi.label.replace(/(추가|서비스|수수료)(요금)/, '$1 $2')
+          .replace(/톨게이트/g, '통행료');
+        return `${labelFmt} : ${fromV.includes('원')?fromV:fromV+'원'} > ${toV.includes('원')?toV:toV+'원'}`;
+      }).join('\n');
+      const itemSection=itemLines?`\n\n${itemLines}`:'';
+
+      const isMinFareReason=selectVal==="GPS 이상으로 인하여"||selectVal==="경로 우회로 인하여";
+      // 정정 금액이 예상요금과 일치하는지 확인
+      const newPNum=Number(newP.replace(/[^0-9]/g,''));
+      const estPNum=Number(estPrice)||0;
+      const isEstMatch=estPNum>0&&newPNum===estPNum;
+      const introLine=isEstMatch
+        ?`이에 드라이버 요청에 따라 호출 시 확인하시었던 ${newP}으로 결제요금 정정하여 재결제 진행하고자 합니다`
+        :isMinFareReason
+          ?`이에 드라이버 요청에 따라 잠시 후 최초 호출 시 안내되었던 예상 최저 요금인 ${newP}으로 이용요금 정정하여 재결제 진행하고자 합니다`
+          :`이에 드라이버 요청에 따라 잠시 후 ${newP}으로 결제요금 정정하여 재결제 진행하고자 합니다`;
+      // ✅ Fix: "타자가" → "타다가" 오타 수정
+      const message=`[타다] 이용요금 결제정정 안내\n\n안녕하세요. ${info.name}님 \n\n${info.timePhrase} [${info.departure} > ${info.destination}] 운행 건 요금이 당시 ${reasonStr}정상적으로 청구되지 않은 것을 확인하였습니다.\n\n${introLine}\n\n기존 결제 금액 : ${oldP} \n정정 결제 금액 : ${newP}${itemSection}\n\n※ 위 금액은 할인 및 크레딧 미적용 기준으로 안내드린 금액이며, 실제 재결제 시 적용 중인 할인·크레딧이 반영되어 청구됩니다.\n\n위 결제요금은 잠시 후 운행료 결제 시 등록되어 있던 카드로 재결제 예정입니다. \n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n앞으로도 편안하고 안전한 이동을 제공하는 타다가 되도록 노력하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+      await copyRichText(message);
+      overlay.remove();
+      alert("요금 정정 안내 복사 완료");
+
+    // ── 영손비 ─────────────────────────────────────────────────────────
+    }else if(currentMode==="loss"){
+      const typeRadio=document.querySelector('input[name="contamType"]:checked').value;
+      let priceVal=document.getElementById("lossPrice").value.trim();
+      if(!priceVal){alert("금액을 입력해주세요.");return;}
+      if(!priceVal.includes("원"))priceVal=priceVal+"원";
+      let message="";
+      if(typeRadio==="분실물"){
+        const itemName=document.getElementById("lossItemName")?.value.trim();
+        if(!itemName){alert("습득 분실물 명칭을 입력해주세요.");return;}
+        message=`[타다] 분실물 전달 영업손실비 발생 안내\n\n안녕하세요. ${info.name}님\n타다를 이용해주셔서 감사합니다.\n\n${info.timePhrase} 운행건 탑승 중 발생한 분실물[${itemName}]을 드라이버가 직접 전달 완료한 내용 확인되어 안내 드립니다.\n\n등록된 결제 수단으로 영업손실비 ${priceVal}이 결제될 예정이오니, 이용에 참고 부탁드립니다.\n\n타다 고객센터 서비스 주요 안내 <분실물 발생>에서 자세한 내용 확인하실 수 있습니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+      }else{
+        message=`[타다] 특수 세차비용 청구 안내\n\n안녕하세요. ${info.name}님\n타다를 이용해주셔서 감사합니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}]까지 이동 중 ${typeRadio}으로 영업손실비 ${priceVal}이 발생하였습니다.\n\n추가적으로 오염 영업 손실 비용은 실제 호출하신 계정의 등록된 결제 수단으로만 결제가 가능한 점 양해 부탁드립니다.\n\n해당 차량 이용 시 발생한 오염 관련 증빙사진이 확인되어 잠시 후, 운행료 결제 시 등록되어 있던 카드로 결제 예정입니다.\n\n보다 쾌적한 탑승 환경을 위한 차량 세차, 복구를 위한 휴업 영업손실비에 대한 청구액으로 안내 드린 내용은 타다 이용 약관에 의거하며 타다 도움말 <이동 중 문제 발생>에서 자세한 내용을 확인하실 수 있습니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+      }
+      await copyRichText(message);
+      overlay.remove();
+      alert("영업손실비 청구 안내 복사 완료");
+
+    // ── 수수료 환불 ─────────────────────────────────────────────────────
+    }else if(currentMode==="refund"){
+      const refType=document.querySelector('input[name="refundType"]:checked').value;
+      let refPrice=document.getElementById("refundPrice").value.trim();
+      if(!refPrice){alert("환불 금액을 입력해주세요.");return;}
+      if(!refPrice.includes("원"))refPrice=refPrice+"원";
+      const message=`[타다] ${refType} 환불 정정 안내\n\n안녕하세요. ${info.name}님\n타다 고객센터입니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}] 이동 요청하신 호출 건 관련하여 안내드립니다.\n\n발생된 ${refType} [${refPrice}]이 해당 드라이버의 요청으로 결제 취소 진행되어 안내드립니다\n\n(기존 결제 취소 환불은 카드사에 따라 승인까지 최대 5일정도 소요될 수 있습니다)\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n이용에 불편을 드려 대단히 죄송합니다.\n\n앞으로도 편안하고 안전한 이동을 제공하는 타다가 되도록 노력하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+      await copyRichText(message);
+      overlay.remove();
+      alert(`${refType} 환불 정정 안내 복사 완료`);
+
+    // ── 수수료 청구 ─────────────────────────────────────────────────────
+    }else if(currentMode==="charge"){
+
+      if(isResvCharge){
+        const policyEl=document.getElementById("chargePolicy");
+        const policyVal=policyEl.value;
+
+        // 수수료 미발생 케이스 차단
+        if(policyVal==="none"){
+          alert("🛑 드라이버 배정 10분 전 취소는 수수료가 발생하지 않습니다.\n청구 불가 케이스입니다.");
+          return;
+        }
+        let chargeBase=document.getElementById("chargeBase").value.trim();
+        let chargeAmt=document.getElementById("chargeAmount").value.trim();
+
+        if(!chargeBase){alert("예약 확정 요금을 입력해주세요.");return;}
+        if(!chargeAmt){alert("청구 수수료 금액을 입력해주세요.");return;}
+        if(!chargeBase.includes("원"))chargeBase=chargeBase+"원";
+        if(!chargeAmt.includes("원"))chargeAmt=chargeAmt+"원";
+
+        const policyMap={
+          "10pct":"출발 예정 시각으로부터 12시간 ~ 9시간 이내 취소 시, 확정요금의 10%가 부과됩니다. (최대 5,000원)",
+          "50pct":"출발 예정 시각으로부터 9시간 ~ 2시간 이내 취소 시, 확정요금의 50%가 부과됩니다. (최대 10,000원)",
+          "80pct":"출발 예정 시각으로부터 2시간 이내 취소 시, 확정요금의 80%가 부과됩니다. (최대 20,000원)",
+          "100pct":"출발 예정 시각으로부터 10분 이후 연락 두절 또는 미탑승 시, 확정요금의 100%가 부과됩니다. (최대 30,000원)"
+        };
+
+        const message=`[타다] 예약 호출 취소 수수료 결제 안내\n\n안녕하세요, ${info.name}님\n타다 고객센터입니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}] 예약 호출 건에 대하여 안내드립니다.\n\n해당 예약 건은 드라이버 배정 이후 고객님의 요청으로 취소되어, 일반 예약 약관에 따라 취소 수수료가 부과되었습니다.\n\n이에 따라 일반 예약 약관에 의거하여 아래 내역으로 취소 수수료 결제 진행 예정인 점 안내드립니다.\n\n예약 시 확정 요금 : ${chargeBase}\n취소수수료 결제 요금 : ${chargeAmt}\n\n**${policyMap[policyVal]}\n\n예약 호출 건을 수행하기 위해 운행 시간 앞/뒤로 운행을 중단하고 고객님의 예약 호출 건을 준비함에 따라 청구되는 점 양해 부탁드리며,\n드라이버 측 취소와 함께 자동 발송되는 안내문은 타다 고객님의 이용의사 철회 및 미탑승 사유이신 경우 해당되지 않는 점 참고 부탁드립니다.\n\n예약 호출 수수료 관련하여 [일반 예약] 요금&수수료 정책에서 자세한 내용 확인하실 수 있습니다.\n\n잠시 후 결제가 진행될 예정입니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n앞으로도 편안하고 안전한 이동을 제공하는 타다가 되도록 노력하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+        await copyRichText(message);
+        overlay.remove();
+        alert("예약 취소 수수료 청구 안내 복사 완료");
+
+      }else{
+        // 라이드: 취소 vs 미탑승 분기
+        const chargeType=document.querySelector('input[name="chargeType"]:checked').value;
+        let chargeAmt=document.getElementById("chargeAmount").value.trim();
+        if(!chargeAmt){alert("청구 수수료 금액을 입력해주세요.");return;}
+        if(!chargeAmt.includes("원"))chargeAmt=chargeAmt+"원";
+
+        let message="";
+        if(chargeType==="취소"){
+          message=`[타다] 취소 수수료 결제 안내\n\n안녕하세요. ${info.name}님\n타다 고객센터입니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}] 차량 호출 건 관련하여 안내드립니다.\n\n드라이버 배정 후 고객님의 요청으로 운행이 취소되어 취소 수수료 [${chargeAmt}]가 청구되었습니다.\n\n잠시 후 호출 건에 대한 취소 수수료 [${chargeAmt}]이 결제될 예정으로, 취소 수수료의 경우 타다에 등록된 결제 수단으로 결제될 예정인 점 안내드립니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n앞으로도 편안하고 안전한 이동을 제공하는 타다가 되도록 노력하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+        }else{
+          message=`[타다] 미탑승 수수료 결제 안내\n\n안녕하세요. ${info.name}님\n타다 고객센터입니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}] 차량 호출 건 관련하여 안내드립니다.\n\n당시 드라이버가 고객님께서 요청하신 탑승지에 도착하여 대기하였으나, 고객님의 미탑승으로 운행이 종료되어 미탑승 수수료 [${chargeAmt}] 청구되었습니다.\n\n잠시 후 호출 건에 대한 미탑승 수수료 [${chargeAmt}]이 결제될 예정으로, 미탑승 수수료의 경우 타다에 등록된 결제 수단으로 결제될 예정인 점 안내드립니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n앞으로도 편안하고 안전한 이동을 제공하는 타다가 되도록 노력하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+        }
+        await copyRichText(message);
+        overlay.remove();
+        alert(`${chargeType} 수수료 청구 안내 복사 완료`);
+      }
+    }
+  };
     }
 
   /* 리치 클립보드 (text/html + text/plain) */
