@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.7.0
+// @version      0.7.1
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -877,10 +877,41 @@
       while ((m = reD.exec(t))) d.push(m[1]);
       const reU = /admin\.tadatada\.(?:com|in)\/users\/([A-Za-z0-9]+)/g;
       while ((m = reU.exec(t))) u.push(m[1]);
-      const reE = /외부\s*ID[\s:：]*([A-Za-z0-9_-]{5,40})/g;
-      while ((m = reE.exec(t))) { const id = m[1]; if (/^U[A-Za-z0-9]{8,}$/.test(id)) u.push(id); else if (/^[A-Za-z]{2,4}[0-9]{4,}$/.test(id)) d.push(id); }
+      // 외부 ID: 라벨과 값 사이 줄바꿈·잡텍스트 허용([\s\S]{0,40}?) — 기존 [\s:：]* 는 실제 DOM innerText에서 매칭 실패 (티켓뷰 zendesk.html 방식 이식)
+      const reE = /외부\s*(?:ID|아이디)[\s\S]{0,40}?([A-Za-z0-9:_-]{6,40})/g;
+      while ((m = reE.exec(t))) {
+        const id = m[1];
+        const wu = id.match(/^webuser[:_-]?([A-Za-z0-9]*)$/i);            // webuser… → 웹 이용자
+        if (wu) { u.push(/^U[A-Za-z0-9]{5,}$/i.test(wu[1] || '') ? wu[1] : id); continue; } // webuser:U123… 이면 내장 U-ID로, 아니면 토큰 통째로
+        if (/^U[A-Za-z0-9]{6,}$/i.test(id)) u.push(id);
+        else if (/^D/i.test(id) && /\d/.test(id)) d.push(id);              // DNX1234 등 — D 접두 + 숫자 포함
+      }
       const uniq = a => a.filter((v, i) => v && a.indexOf(v) === i);
       return { user: uniq(u), driver: uniq(d) };
+    }
+    /* ── 파트너/이용자 자동 판별 — 티켓뷰(zendesk.html) detectPartyAuto 이식 ──
+     * 요청자 외부 ID 접두로 확정: D…(DNX…)→파트너 / webuser…·U… 등 그 외→이용자.
+     * 외부 ID를 못 찾은 경우에만 드라이버 어드민 링크(정확한 href)로 보조 판별. */
+    function detectParty(snap) {
+      try {
+        const blob = snap || document.body.innerText || '';
+        const m = blob.match(/외부\s*(?:ID|아이디)[\s\S]{0,40}?([A-Za-z0-9:_-]{6,})/);
+        if (m) {
+          const extId = m[1];
+          if (/^webuser/i.test(extId)) return '이용자';        // 웹 이용자 — D 검사보다 먼저
+          return /^D/i.test(extId) ? '파트너' : '이용자';
+        }
+        // Web User <해시> — 메시징 웹 채널 인입(외부 ID 없음): 사이드바 '조회한 페이지'로 어느 센터에서 왔는지 판별
+        // 예) '조회한 페이지 … 타다 드라이버 센터' → 파트너. 메모에 붙은 어드민 링크보다 요청자 자체 신호라 우선.
+        if (/Web\s*User\s+[0-9a-f]{12,}/i.test(blob)) {
+          const i = blob.indexOf('조회한 페이지');
+          const seg = i >= 0 ? blob.slice(i, i + 200) : '';
+          if (/드라이버/.test(seg)) return '파트너';
+          if (seg) return '이용자';
+        }
+        if ([...document.querySelectorAll('a[href]')].some(a => /admin\.tadatada\.(?:com|in)\/drivers\//i.test(a.getAttribute('href') || ''))) return '파트너';
+      } catch (e) {}
+      return '이용자';
     }
     function idStatus(mine, zd) {
       if (!mine && !zd.length) return 'none';
@@ -960,11 +991,11 @@
       document.body.appendChild(panel);
 
       const btn = el('button', 'position:fixed;right:18px;bottom:18px;z-index:999999;width:44px;height:44px;border-radius:50%;border:none;background:#0a7d72;color:#fff;font-size:19px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;', '🎫');
-      btn.title = '허니베어 패널 (Alt+H)';
+      btn.title = '허니베어 패널 (Alt+H · 드래그로 이동)';
       document.body.appendChild(btn);
 
       const g = id => panel.querySelector('#' + id);
-      const ZDIDS = collectZdIds(pageSnap);
+      let ZDIDS = collectZdIds(pageSnap);
 
       /* 케이스 카드 렌더 + ID 대조 */
       function renderCard() {
@@ -1025,10 +1056,15 @@
       /* 슬랙 적재 */
       let party = '이용자';
       const bu = g('hb_user'), bp = g('hb_partner');
-      bu.onclick = () => { party = '이용자'; bu.classList.add('on'); bp.classList.remove('on'); };
-      bp.onclick = () => { party = '파트너'; bp.classList.add('on'); bu.classList.remove('on'); };
-      // 파트너 자동판별: 젠데스크에 드라이버 링크가 있거나 봉투 파트너ID만 있으면
-      if (ZDIDS.driver.length && !ZDIDS.user.length) { party = '파트너'; bp.classList.add('on'); bu.classList.remove('on'); }
+      function setParty(p) {
+        party = p;
+        (p === '파트너' ? bp : bu).classList.add('on');
+        (p === '파트너' ? bu : bp).classList.remove('on');
+      }
+      bu.onclick = () => setParty('이용자');
+      bp.onclick = () => setParty('파트너');
+      // 자동판별: 외부 ID 접두 우선 (D→파트너 / webuser·U 등→이용자), 없으면 드라이버 링크 보조 — 티켓뷰와 동일
+      setParty(detectParty(pageSnap));
       g('hb_slack').onclick = function () {
         const content = contentBox.value.trim();
         const esc = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -1124,6 +1160,10 @@
         if (changed) {
           curTN = nowTN;
           const tn = panel.querySelector('.tn'); if (tn) tn.textContent = '#' + nowTN;
+          // 티켓이 바뀌면 외부 ID·어드민 링크를 다시 읽어 대조/파트너 판별 갱신 (같은 티켓 내 수동 토글은 보존)
+          ZDIDS = collectZdIds(document.body.innerText || '');
+          setParty(detectParty(''));
+          renderCard();
         }
         // 인입 재파싱 (티켓이 바뀌었거나 패널을 새로 열 때)
         blocks = parseInboundOriginal();
@@ -1138,7 +1178,25 @@
         panel.style.display = open ? 'block' : 'none';
         if (open) { renderCard(); refreshForTicket(); }
       }
-      btn.onclick = toggle;
+      /* FAB 드래그 이동 — admin 🍯 버튼과 동일 패턴 (3px 이상 움직였으면 클릭으로 치지 않음) */
+      (function () {
+        let fdx = 0, fdy = 0, fsx = 0, fsy = 0, fMoved = false, fDrag = false;
+        btn.addEventListener('mousedown', e => {
+          fDrag = true; fMoved = false;
+          const r = btn.getBoundingClientRect();
+          btn.style.right = 'auto'; btn.style.bottom = 'auto';
+          btn.style.left = r.left + 'px'; btn.style.top = r.top + 'px';
+          fsx = e.clientX; fsy = e.clientY; fdx = r.left; fdy = r.top;
+          e.preventDefault();
+        });
+        document.addEventListener('mousemove', e => {
+          if (!fDrag) return;
+          if (Math.abs(e.clientX - fsx) > 3 || Math.abs(e.clientY - fsy) > 3) fMoved = true;
+          btn.style.left = Math.max(0, fdx + e.clientX - fsx) + 'px';
+          btn.style.top = Math.max(0, fdy + e.clientY - fsy) + 'px';
+        });
+        document.addEventListener('mouseup', () => { if (fDrag && !fMoved) toggle(); fDrag = false; });
+      })();
       g('hb_x').onclick = () => panel.style.display = 'none';
       document.addEventListener('keydown', e => { if (e.altKey && e.code === 'KeyH') toggle(); if (e.key === 'Escape' && panel.style.display !== 'none') panel.style.display = 'none'; });
       // 패널이 열려있는 동안 티켓 전환 감시 (SPA 대응)
