@@ -1,7 +1,9 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.8.0
+// @version      0.8.1
+// @author       개돼지꿀곰
+// @icon         data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Ctext%20y='52'%20font-size='52'%3E%F0%9F%8D%AF%3C/text%3E%3C/svg%3E
 // @description  허니베어 로더 — 본체(honeybear.core.js)를 GitHub에서 자동으로 최신 유지. 한 번 설치하면 이후 업데이트 불필요.
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
