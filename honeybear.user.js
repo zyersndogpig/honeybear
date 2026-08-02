@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.4.0
+// @version      0.5.0
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -39,7 +39,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 v0.4.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 v0.5.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 2; // 케이스 봉투 스키마 버전
 
@@ -709,14 +709,11 @@
         <div class="body">
           <div id="hb_card"></div>
           <div id="hb_out" class="card" style="display:none;padding:9px 11px;">
-            <div class="chead" style="margin-bottom:6px;">🍯 봉투 출력 <span id="hb_out_hint" style="font-weight:normal;color:#7b857f;font-size:10px;"></span></div>
-            <select id="hb_out_event" class="sel" style="width:100%;margin-bottom:6px;"><option value="">사건 선택…</option></select>
-            <div id="hb_out_variant" style="display:none;margin-bottom:6px;"></div>
-            <div id="hb_out_btns" class="row" style="gap:6px;display:none;">
-              <button id="hb_out_slack" class="ghost" style="flex:1;">📋 슬랙 적재</button>
-              <button id="hb_out_sms" class="ghost" style="flex:1;">✉️ 문자</button>
+            <div class="chead" style="margin-bottom:6px;">🍯 원본 도구 <span id="hb_out_hint" style="font-weight:normal;color:#7b857f;font-size:10px;"></span></div>
+            <div class="row" style="gap:6px;">
+              <button id="hb_honey" class="ghost" style="flex:1;">🍯 꿀통양식</button>
+              <button id="hb_bee" class="ghost" style="flex:1;">🐻 꿀빠는 문자</button>
             </div>
-            <textarea id="hb_out_preview" rows="4" style="margin-top:6px;display:none;" placeholder="사건·형태 선택 시 봉투 데이터로 채워집니다"></textarea>
           </div>
           <div class="div" id="hb_out_div" style="display:none;"></div>
           <div class="row" style="justify-content:space-between;">
@@ -891,82 +888,25 @@
 
       loadMents(arr => { MENTS = arr; g('hb_mc').textContent = arr.length; renderMents(); });
 
-      /* ── 봉투 출력 영역 (사건 → 슬랙적재/문자, ride·resv에서만 활성) ── */
-      const TEMPLATES_URL = 'https://raw.githubusercontent.com/zyersndogpig/honeybear/main/templates.json';
-      let EVENTS = [];
-      function loadTemplates(cb) {
-        const cached = GM_getValue('hb_tpl_cache', null);
-        const at = GM_getValue('hb_tpl_at', 0);
-        const parse = s => { try { return (JSON.parse(s).events) || []; } catch (e) { return []; } };
-        if (cached && Date.now() - at < 10 * 60 * 1000) { cb(parse(cached)); return; }
-        GM_xmlhttpRequest({
-          method: 'GET', url: TEMPLATES_URL + '?t=' + Date.now(),
-          onload: r => { const a = parse(r.responseText); if (a.length) { GM_setValue('hb_tpl_cache', r.responseText); GM_setValue('hb_tpl_at', Date.now()); cb(a); } else cb(cached ? parse(cached) : []); },
-          onerror: () => cb(cached ? parse(cached) : [])
-        });
-      }
-      const outBox = g('hb_out'), outSel = g('hb_out_event'), outVar = g('hb_out_variant'),
-        outBtns = g('hb_out_btns'), outPrev = g('hb_out_preview'), outDiv = g('hb_out_div'), outHint = g('hb_out_hint');
-      let curEvent = null, curVariantIdx = 0;
-
+      /* ── 원본 도구 버튼 (꿀통양식 / 꿀빠는 문자) — ride·resv에서만 활성 ── */
+      const outBox = g('hb_out'), outDiv = g('hb_out_div'), outHint = g('hb_out_hint');
       function renderOutput() {
         const c = HBStore.loadCase();
         const isRideResv = c.ids.type === 'ride' || c.ids.type === 'resv';
-        // ride/resv 아니면 비활성 (이용자·파트너 탭 캡처 시)
-        if (!c.ts || !isRideResv) {
-          outBox.style.display = 'block'; outDiv.style.display = 'block';
-          outBox.style.opacity = '0.5'; outSel.disabled = true;
-          outBtns.style.display = 'none'; outPrev.style.display = 'none'; outVar.style.display = 'none';
-          outHint.textContent = c.ts ? '(라이드/예약에서 캡처해야 사용 가능)' : '(캡처된 케이스 없음)';
-          return;
-        }
         outBox.style.display = 'block'; outDiv.style.display = 'block';
-        outBox.style.opacity = '1'; outSel.disabled = false; outHint.textContent = '';
+        if (!c.ts || !isRideResv) {
+          outBox.style.opacity = '0.5';
+          g('hb_honey').disabled = true; g('hb_bee').disabled = true;
+          outHint.textContent = c.ts ? '(라이드/예약에서 캡처해야 사용 가능)' : '(캡처된 케이스 없음)';
+        } else {
+          outBox.style.opacity = '1';
+          g('hb_honey').disabled = false; g('hb_bee').disabled = false;
+          outHint.textContent = '';
+        }
       }
-      function renderOutButtons() {
-        if (!curEvent) { outBtns.style.display = 'none'; outVar.style.display = 'none'; outPrev.style.display = 'none'; return; }
-        // 문자 variant 있으면 드롭다운
-        const smsObj = curEvent.sms;
-        if (smsObj && smsObj.variants) {
-          outVar.innerHTML = '';
-          const s = el('select'); s.className = 'sel'; s.style.width = '100%';
-          smsObj.variants.forEach((v, i) => s.appendChild(new Option('문자: ' + v.label, String(i))));
-          s.onchange = () => { curVariantIdx = +s.value; };
-          curVariantIdx = 0;
-          outVar.appendChild(s); outVar.style.display = 'block';
-        } else { outVar.style.display = 'none'; }
-        // 형태 버튼: 있는 것만
-        g('hb_out_slack').style.display = curEvent.slack ? '' : 'none';
-        g('hb_out_sms').style.display = curEvent.sms ? '' : 'none';
-        outBtns.style.display = 'flex';
-      }
-      outSel.onchange = () => {
-        curEvent = EVENTS.find(e => e.id === outSel.value) || null;
-        curVariantIdx = 0; outPrev.style.display = 'none'; outPrev.value = '';
-        renderOutButtons();
-      };
-      g('hb_out_slack').onclick = () => {
-        if (!curEvent || !curEvent.slack) return;
-        const c = HBStore.loadCase();
-        const s = curEvent.slack;
-        const idLine = `유저 : ${c.ids.user || '[ ]'} / 드라이버 : ${c.ids.driver || '[ ]'}`;
-        const idLabel = c.ids.type === 'resv' ? '호출 예약 ID' : '라이드 ID';
-        const mainId = c.ids.type === 'resv' ? (c.ids.resv || c.ids.ride) : c.ids.ride;
-        const extra = s.extra ? '\n' + fillTokens(s.extra, c) : '';
-        const plain = `*${fillTokens(s.title, c)}*\n${idLine}\n${idLabel} : ${mainId || '[ ]'}${extra}`;
-        outPrev.value = plain; outPrev.style.display = 'block';
-        copyText(plain); toast('📋 슬랙 적재 복사');
-      };
-      g('hb_out_sms').onclick = () => {
-        if (!curEvent || !curEvent.sms) return;
-        const c = HBStore.loadCase();
-        const smsObj = curEvent.sms;
-        const body = smsObj.variants ? smsObj.variants[curVariantIdx].body : smsObj.body;
-        const filled = fillTokens(body, c);
-        outPrev.value = filled; outPrev.style.display = 'block';
-        copyText(filled); toast('✉️ 문자 복사');
-      };
-      loadTemplates(arr => { EVENTS = arr; outSel.innerHTML = '<option value="">사건 선택…</option>'; arr.forEach(e => outSel.appendChild(new Option(e.label, e.id))); renderOutput(); });
+      g('hb_honey').onclick = () => { try { hbRunHoneyForm(); } catch (e) { console.warn('[HB] 꿀통 실행 오류:', e.message); toast('🍯 꿀통 실행 오류'); } };
+      g('hb_bee').onclick = () => { try { hbRunBeeForm(); } catch (e) { console.warn('[HB] 꿀빠는곰 실행 오류:', e.message); toast('🐻 꿀빠는곰 오류'); } };
+      renderOutput();
 
       /* 열고 닫기 + 실시간 동기화 */
       function toggle() { const open = panel.style.display === 'none'; panel.style.display = open ? 'block' : 'none'; if (open) { renderCard(); draftText = getDraftText(); renderMents(); if (typeof renderOutput==='function') renderOutput(); } }
@@ -977,6 +917,659 @@
       renderCard();
     });
   }
+
+    /* ══ 꿀통 양식 (원본 honey.html 팝업부 그대로 + 봉투 어댑터) ══
+     * 원본의 DOM 수집부(1~424줄)는 버리고, 팝업 출력부만 사용.
+     * 봉투(hb_case)를 원본이 읽던 tada_* 키로 펼친 뒤 원본 팝업 실행. */
+    function hbSpreadCaseToTada(c) {
+      // 봉투 → tada_* localStorage (원본 꿀통/꿀빠는곰이 읽는 형태)
+      const S = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+      const IS_RESV = c.trip.timeSrc === 'resv' || c.flags.isFromResv || c.trip.actionWord === '탑승';
+      // msg_data (원본 핵심 객체)
+      const md = {
+        name: c.trip.name || '', dateTime: c.trip.dateTime || '',
+        departure: c.trip.departure || '', destination: c.trip.destination || '',
+        actionWord: c.trip.actionWord || (IS_RESV ? '탑승' : '호출'),
+        timePhrase: (c.trip.dateTime || '') + (IS_RESV ? ' 탑승하시어' : '에 호출하시어'),
+        rideId: c.ids.ride || '', resvId: c.ids.resv || '',
+        _timeSrc: c.trip.timeSrc || (IS_RESV ? 'resv' : 'ride'),
+        lostItem: c.trip.lostItem || ''
+      };
+      S('tada_msg_data', JSON.stringify(md));
+      S('tada_id_type', c.ids.type === 'resv' ? 'resv' : 'ride');
+      S('tada_main_id', c.ids.type === 'resv' ? (c.ids.resv || c.ids.ride) : c.ids.ride);
+      S('tada_ride_id', c.ids.ride || '');
+      S('tada_resv_id', c.ids.resv || '');
+      S('tada_resv_ride_id', c.ids.type === 'resv' ? (c.ids.ride || '') : '');
+      S('tada_from_resv_id', c.ids.fromResv || '');
+      S('tada_is_from_resv', c.flags.isFromResv ? '1' : '0');
+      S('tada_last_user_id', c.ids.user || '');
+      S('tada_last_driver_id', c.ids.driver || '');
+      S('tada_is_cash', c.flags.isCash ? '1' : '0');
+      S('tada_is_plus', c.flags.isPlus ? '1' : '0');
+      S('tada_third_party_tag', c.flags.thirdParty || '');
+      S('tada_total_fare', c.fare.total ? String(c.fare.total) : '');
+      S('tada_est_fare', c.fare.est ? String(c.fare.est) : '');
+      S('tada_cancel_fee', c.fare.cancel ? String(c.fare.cancel) : '');
+      S('tada_fare_items', (c.fare.items && c.fare.items.length) ? JSON.stringify(c.fare.items) : '');
+      // 영손비는 loss_amount로 (원본 loss 탭 기본값)
+      if (c.fare.loss) S('tada_loss_amount', String(c.fare.loss)); else localStorage.removeItem('tada_loss_amount');
+    }
+
+    async function hbRunHoneyForm() {
+      const c = HBStore.loadCase();
+      if (!(c && c.ts && (c.ids.type === 'ride' || c.ids.type === 'resv'))) {
+        toast('🍯 라이드/예약 캡처 후 사용하세요'); return;
+      }
+      hbSpreadCaseToTada(c);
+function blinkTitle(msg){
+    const old=document.title;
+    document.title=msg;
+    setTimeout(()=>document.title=old,1200);
+  }
+function clearIds(keepMsgData){
+    const keys=['tada_id_type','tada_main_id','tada_resv_id','tada_from_resv_id',
+     'tada_last_user_id','tada_last_driver_id',
+     'tada_is_cash','tada_third_party_tag','tada_is_plus','tada_total_fare',
+     'tada_cancel_fee','tada_is_from_resv','tada_est_fare','tada_ride_id','tada_last_tab',
+     'tada_resv_ride_id'];
+    // 복사 직후엔 msg_data 유지 (꿀빠는 곰 연동용), 초기화 버튼은 전부 삭제
+    // tada_fare_items도 fresh 실행 시 함께 정리 — 이전 라이드의 통행료/요금항목 stale 누수 방지
+    // (복사 시 clearIds(true)에선 유지되어 라이드→예약 통행료 폴백은 정상 동작)
+    if(!keepMsgData){ keys.push('tada_msg_data'); keys.push('tada_fare_items'); }
+    keys.forEach(k=>localStorage.removeItem(k));
+  }
+
+  const type       =localStorage.getItem('tada_id_type')||'ride';
+  const mainId     =localStorage.getItem('tada_main_id')||'';
+  const resvId     =localStorage.getItem('tada_resv_id')||'';
+  const uId        =localStorage.getItem('tada_last_user_id')||'';
+  const dId        =localStorage.getItem('tada_last_driver_id')||'';
+  const isCash     =localStorage.getItem('tada_is_cash')==='1';
+  const thirdTag   =localStorage.getItem('tada_third_party_tag')||'';
+  const isPlus     =localStorage.getItem('tada_is_plus')==='1';
+  const totalFare  =localStorage.getItem('tada_total_fare')||'';
+  const cancelFee  =localStorage.getItem('tada_cancel_fee')||'';
+  const estFare    =localStorage.getItem('tada_est_fare')||'';
+  const isFromResv =localStorage.getItem('tada_is_from_resv')==='1';
+  const rideId     =localStorage.getItem('tada_ride_id')||'';
+  const resvRideId =localStorage.getItem('tada_resv_ride_id')||''; // 예약 페이지 파생 라이드 ID
+
+  // ── 플러스면 템플릿 "/ 넥스트" → "/ 플러스" 치환 ────────────────────
+  function applyLineup(title){
+    return isPlus?title.replace('/ 넥스트','/ 플러스'):title;
+  }
+
+  // ── 요금 포맷 헬퍼 ──────────────────────────────────────────────────
+  function fmtWon(val){
+    return val?Number(val).toLocaleString()+'원':'';
+  }
+
+  const fareDetected=totalFare>0;
+  const fareStr  =fmtWon(totalFare)||'25,000원';
+  const fareItemsRaw=localStorage.getItem('tada_fare_items')||'';
+  let fareItems=[];
+  try{if(fareItemsRaw)fareItems=JSON.parse(fareItemsRaw);}catch(e){}
+  // 통행료(톨게이트) 파싱값 — 통행료 정정 템플릿 기본값용
+  const tollItem=fareItems.find(fi=>/톨게이트|통행료|톨/.test(fi.label));
+  const tollAmt=tollItem?tollItem.amt:0;
+  const tollStr=tollAmt?Number(tollAmt).toLocaleString()+'원':'0원';
+  const cancelStr=fmtWon(cancelFee);
+
+  // ── 3개 모두 수집되어야 팝업 ────────────────────────────────────────
+  if(!mainId||!uId||!dId){
+    const missing=!mainId?`${type==='resv'?'예약':'라이드'}/호출`:!uId?'유저':'파트너';
+    blinkTitle(`❌ ${missing} 필요!`);
+    return;
+  }
+
+  // ── 예약 파생 라이드인데 예약 미수집 → alert만 띄우고 팝업 없이 종료 ──
+  if(false && isFromResv&&!resvId){ // 봉투 환경: 예약 파생이면 resvId가 이미 채워짐
+    blinkTitle('⚠️ 예약 페이지에서 실행 필요!');
+    alert('⚠️ 예약 파생 라이드예요!\n호출 예약 ID 클릭해서 예약 페이지에서도 한번 더 실행해주세요!');
+    return;
+  }
+  localStorage.removeItem('tada_auto_popup');
+
+  // ── 예상요금도 저장해두기 (요금정정 기본값용) ────────────────────────
+  const estDetected=estFare>0;
+  const estStr   =fmtWon(estFare)||'34,000원';
+
+  const templates=[
+    {title:applyLineup('[분실물 습득 공유의 건 / 넥스트]'),         extra:'분실물 : 립스틱', beeTab:'lost'},
+    {title:applyLineup('[분실물 확인 요청의 건 / 넥스트]'),         extra:'분실물 : 립스틱', beeTab:'lost'},
+    {title:applyLineup('[요금 정정 요청의 건 / 넥스트]'),
+     extra:rideId?`결제요금 : ${fareStr} > ${estStr}`:'⚠️ 라이드에서 한번 더 실행 필요',
+     // 라이드 미수집(rideId 없음)이거나 요금/예상 미감지면 라이드에서 ㄱㄱ
+     // rideId가 있으면 이미 라이드 거친 것 → 경고 불필요
+     extraWarning:!rideId||!(fareDetected&&estDetected),
+     hasFareItems:true},
+    {title:applyLineup('[오염 영업손실비 청구 요청의 건 / 넥스트]'), extra:'영업손실비 : 150,000원', beeTab:'loss', carseatOption:true},
+    {title:applyLineup('[분실물 영업손실비 청구 요청의 건 / 넥스트]'), extra:'분실물 : \n영업손실비 : 30,000원', beeTab:'loss', lossSubtype:'분실물'},
+    {title:'[드라이버 경위 확인 요청의 건]',                        extra:''},
+    {title:applyLineup('[이용자 인입 가능성의 건 / 넥스트]'),        extra:''},
+    {title:applyLineup('[취소수수료 환불 요청의 건 / 넥스트]'),
+     beeTab:'refund',
+     extra:cancelStr?`취소수수료 : ${cancelStr} > 0원`:fareStr?`취소수수료 : ${fareStr} > 0원`:'취소수수료 : 원 > 0원',
+     // 예약 페이지인데 파생 라이드 있으면 라이드에서 ㄱㄱ
+     extraWarning:type==='resv'&&!!resvRideId},
+    {title:applyLineup('[취소수수료 청구 요청의 건 / 넥스트]'),
+     beeTab:'charge',
+     extra:cancelStr?`취소수수료 : 0원 > ${cancelStr}`:'취소수수료 : 0원 > 3,000원'},
+    {title:applyLineup('[미탑승 수수료 환불 요청의 건 / 넥스트]'),  extra:'미탑승수수료 : 4,000원 > 0원', beeTab:'refund'},
+    {title:applyLineup('[미탑승 수수료 청구 요청의 건 / 넥스트]'),  extra:'미탑승수수료 : 0원 > 4,000원', beeTab:'charge'},
+    {title:applyLineup('[통행료 정정 요청의 건 / 넥스트]'),          extra:`통행료 : ${tollStr} > 2,500원`, beeTab:'toll'},
+    {title:applyLineup('[밴 배상 이의제기 요청의 건 / 넥스트]'),     extra:''},
+    {title:applyLineup('[지각 배상 이의제기 요청의 건 / 넥스트]'),   extra:''},
+    {title:'[이용자 배상 크레딧 지급 공유]',                         extra:''},
+  ];
+
+  const tags=[];
+  if(thirdTag) tags.push(thirdTag);
+  if(isCash)   tags.push('비회원 현장결제');
+
+  // ── 라이드 ID 표시: 실제 라이드 ID(tada_ride_id) 우선, 없으면 미수집 ──
+  // type이 'resv'(예약 파생)여도 라이드를 거쳤으면 rideId가 있음
+  const rideIdDisplay=(type==='ride'?mainId:rideId)||'미수집';
+  const statusHtml=[
+    `✅ 라이드 ID : <b>${rideIdDisplay}</b>${isPlus?' <span style="background:#dbeafe;padding:1px 5px;border-radius:3px;font-size:11px;color:#1d4ed8;">플러스</span>':''}`,
+    resvId?`✅ 예약 ID : <b>${resvId}</b>`:type==='resv'?`✅ 예약 ID : <b>${mainId}</b>`:'',
+    `✅ 유저 ID : <b>${uId}</b>${thirdTag?` <span style="background:#fef9c3;padding:1px 5px;border-radius:3px;font-size:11px;">${thirdTag}</span>`:''}`,
+    `✅ 파트너 ID : <b>${dId}</b>`,
+    fareDetected?`<span style="color:#059669;">💰 결제요금 감지: ${fareStr}</span>`:`<span style="color:#9ca3af;">💰 결제요금 미감지 (기본값 세팅)</span>`,
+    !rideId&&type==='resv'?`<span style="color:#d97706;font-weight:bold;">⚠️ 요금 정정 필요 시 라이드에서도 실행하세요</span>`:'',
+    cancelStr?`<span style="color:#059669;">💰 취소수수료 감지: ${cancelStr}</span>`:'',
+    isCash?`<span style="color:#dc2626;font-weight:bold;">💴 비회원 현장결제 감지됨</span>`:'',
+    false?'':''  // 봉투 환경: 경고 불필요,
+  ].filter(Boolean).join('<br>');
+
+  // ── 결제수단/회원 경고 배너 (토스·티머니 결제 변경 금지 / 비회원 전산수정 불가) ─────────────
+  const warnHtml=[
+    thirdTag?`🛑 <b>${thirdTag}</b> 결제 건이에요. 결제 변경(요금 정정) 시 전산이 꼬일 수 있으니 결제 변경하지 마세요! (참고)`:'',
+    isCash?`🛑 <b>비회원</b> 건이에요. 비회원은 전산 수정이 안 됩니다! (참고)`:'',
+  ].filter(Boolean).join('<br>');
+
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;justify-content:center;align-items:center;z-index:999999;';
+
+  const box=document.createElement('div');
+  box.style.cssText='background:#fff;padding:20px;border-radius:12px;min-width:500px;font-family:sans-serif;box-shadow:0 4px 15px rgba(0,0,0,0.2);';
+
+  box.innerHTML=`
+    <h3 style='margin-top:0;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #eee;font-size:15px;'>
+      🍯 꿀통
+    </h3>
+    <div style='background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#0369a1;line-height:1.9;'>
+      ${statusHtml}
+    </div>
+    ${warnHtml?`<div style='background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#b91c1c;line-height:1.8;font-weight:bold;'>${warnHtml}</div>`:''}`;
+
+  const form=document.createElement('div');
+  form.style.cssText='max-height:320px;overflow-y:auto;padding-right:5px;';
+
+  templates.forEach((t,idx)=>{
+    const row=document.createElement('div');
+    row.style.cssText='margin:6px 0;padding:7px 8px;border-radius:6px;background:#f9f9f9;border:1px solid transparent;display:flex;flex-direction:column;gap:4px;';
+
+    const label=document.createElement('label');
+    label.style.cssText='display:flex;align-items:center;gap:8px;font-weight:bold;cursor:pointer;font-size:13px;';
+
+    const radio=document.createElement('input');
+    radio.type='radio';radio.name='tada_template';radio.value=idx;
+    if(idx===0)radio.checked=true;
+    label.appendChild(radio);
+    const titleSpan=document.createElement('span');
+    titleSpan.textContent=t.title;
+    label.appendChild(titleSpan);
+    row.appendChild(label);
+
+    // ── 카시트 옵션 체크박스: 체크 시 제목 앞에 "카시트 " 접두 ──
+    if(t.carseatOption){
+      const csWrap=document.createElement('label');
+      csWrap.style.cssText='margin-left:22px;display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;cursor:pointer;';
+      const csCb=document.createElement('input');
+      csCb.type='checkbox';csCb.className='carseat-cb';csCb.id='carseat_cb_'+idx;
+      csCb.style.cssText='cursor:pointer;flex-shrink:0;';
+      const csTxt=document.createElement('span');
+      csTxt.textContent='🚼 카시트 오염 (체크 시 제목 앞에 "카시트" 추가)';
+      csWrap.append(csCb,csTxt);
+      csCb.onchange=()=>{
+        titleSpan.textContent=csCb.checked?t.title.replace('[','[카시트 '):t.title;
+        // 카시트 오염 시 기본 영업손실비 80,000원 / 해제 시 150,000원 원복
+        input.value=csCb.checked?'영업손실비 : 80,000원':t.extra;
+        input.rows=input.value.split('\n').length+1;
+        if(input.style.display==='none'){input.style.display='';toggleBtn.textContent='−';}
+      };
+      row.appendChild(csWrap);
+    }
+
+    const inputWrap=document.createElement('div');
+    inputWrap.style.cssText='margin-left:22px;display:flex;gap:6px;align-items:center;';
+
+    const input=document.createElement('textarea');
+    input.id='extra_'+idx;input.value=t.extra;
+    input.placeholder='추가 내용 (선택)';
+    input.rows=t.extra?(t.extra.split('\n').length+1):2;
+    input.style.cssText='flex:1;padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;resize:vertical;line-height:1.5;';
+    if(!t.extra)input.style.display='none';
+
+    const toggleBtn=document.createElement('button');
+    toggleBtn.textContent=t.extra?'−':'+';
+    toggleBtn.style.cssText='padding:2px 7px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;font-size:12px;color:#555;flex-shrink:0;';
+    toggleBtn.onclick=()=>{
+      const hidden=input.style.display==='none';
+      input.style.display=hidden?'':'none';
+      toggleBtn.textContent=hidden?'−':'+';
+      if(hidden)input.focus();
+    };
+    inputWrap.append(input,toggleBtn);
+    row.appendChild(inputWrap);
+
+    radio.onchange=()=>{
+      document.querySelectorAll('[data-trow]').forEach(r=>{
+        r.style.borderColor='transparent';r.style.background='#f9f9f9';
+      });
+      row.style.borderColor='#0052cc';row.style.background='#eff6ff';
+      // ✅ Fix: 라디오 선택 시 extra 입력창 있으면 자동으로 열고 포커스
+      if(t.extra&&input.style.display==='none'){
+        input.style.display='';
+        toggleBtn.textContent='−';
+      }
+      if(input.style.display!=='none') setTimeout(()=>input.focus(),50);
+      updateCopyBtn();
+    };
+    // ── 요금 정정: 항목별 추가/환불 체크박스 ──────────────────────────
+    if(t.hasFareItems){
+      const itemsWrap=document.createElement('div');
+      itemsWrap.id='fare_items_wrap_'+idx;
+      itemsWrap.style.cssText='margin-left:22px;margin-top:6px;display:none;';
+
+      const itemsLabel=document.createElement('div');
+      itemsLabel.style.cssText='font-size:11px;color:#6b7280;margin-bottom:4px;';
+      itemsLabel.textContent='항목별 정정 (선택 시 extra에 자동 반영)';
+      itemsWrap.appendChild(itemsLabel);
+
+      // ── 공통 updateExtra ──────────────────────────────────────────────────────────────────────────────────────────
+      const updateExtra=()=>{
+        const checkedCbs=[...itemsWrap.querySelectorAll('input.fi-cb:checked')];
+        if(checkedCbs.length===0){
+          input.value=rideId?`결제요금 : ${fareStr} > ${estStr}`:'⚠️ 라이드에서 한번 더 실행 필요';
+          return;
+        }
+        let adjFare=Number(localStorage.getItem('tada_total_fare')||'0');
+        const lines=[];
+        checkedCbs.forEach(c=>{
+          const origAmt=Number(c.dataset.origAmt);
+          const ai=c.parentElement.querySelector('input.fi-amt');
+          const newAmt=ai?Number(ai.value.replace(/[^0-9]/g,'')): 0;
+          adjFare+=(newAmt-origAmt);
+          lines.push(`${c.dataset.label} : ${Number(origAmt).toLocaleString()}원 > ${Number(newAmt).toLocaleString()}원`);
+        });
+        const newFareStr=Number(adjFare>0?adjFare:0).toLocaleString()+'원';
+        const newVal=`결제요금 : ${fareStr} > ${newFareStr}\n`+lines.join('\n');
+        input.value=newVal;
+        input.rows=newVal.split('\n').length+1;
+      };
+
+      // ── 파싱된 항목 ──────────────────────────────────────────────────────────────────────────────────────────────
+      fareItems.forEach(fi=>{
+        const itemRow=document.createElement('div');
+        itemRow.style.cssText='display:flex;align-items:center;gap:6px;margin:3px 0;flex-wrap:wrap;';
+
+        const cb=document.createElement('input');
+        cb.type='checkbox';cb.className='fi-cb';
+        cb.dataset.label=fi.label;cb.dataset.origAmt=fi.amt;
+        cb.style.cssText='cursor:pointer;flex-shrink:0;';
+
+        const cbLabel=document.createElement('span');
+        cbLabel.style.cssText='font-size:12px;color:#374151;min-width:150px;flex-shrink:0;';
+        cbLabel.textContent=`${fi.label} (${Number(fi.amt).toLocaleString()}원)`;
+
+        const amtInput=document.createElement('input');
+        amtInput.type='text';amtInput.className='fi-amt';
+        amtInput.placeholder='변경 금액';
+        amtInput.style.cssText='width:75px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;font-size:11px;';
+
+        const refundCb=document.createElement('input');
+        refundCb.type='checkbox';
+        const refundLbl=document.createElement('label');
+        refundLbl.style.cssText='font-size:11px;color:#6b7280;display:flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;';
+        refundLbl.append(refundCb,'환불');
+
+        refundCb.onchange=()=>{
+          if(refundCb.checked){amtInput.value='0';amtInput.disabled=true;}
+          else{amtInput.value='';amtInput.disabled=false;amtInput.focus();}
+          if(cb.checked)updateExtra();
+        };
+        amtInput.oninput=()=>{
+          let v=amtInput.value.replace(/[^0-9]/g,'');
+          amtInput.value=v?Number(v).toLocaleString():'';
+          if(cb.checked)updateExtra();
+        };
+        cb.onchange=updateExtra;
+
+        itemRow.append(cb,cbLabel,amtInput,refundLbl);
+        itemsWrap.appendChild(itemRow);
+      });
+
+      // ── 기본 제공 항목 (파싱 여부 무관) ──────────────────────────────────────────────────────────────────────────
+      const _sep=document.createElement('div');
+      _sep.style.cssText='border-top:1px dashed #e5e7eb;margin:5px 0 4px;font-size:10px;color:#9ca3af;';
+      _sep.textContent='기본 제공 항목';
+      itemsWrap.appendChild(_sep);
+
+      // 카시트 부가서비스요금 (고정 5,000원)
+      const hasCarseat=fareItems.some(fi=>/카시트/.test(fi.label));
+      if(!hasCarseat){
+        const csRow=document.createElement('div');
+        csRow.style.cssText='display:flex;align-items:center;gap:6px;margin:3px 0;flex-wrap:wrap;background:#fffbeb;border-radius:4px;padding:2px 4px;';
+        const csCb=document.createElement('input');
+        csCb.type='checkbox';csCb.className='fi-cb';
+        csCb.dataset.label='카시트 부가서비스요금';csCb.dataset.origAmt=0;
+        csCb.style.cssText='cursor:pointer;flex-shrink:0;';
+        const csLbl=document.createElement('span');
+        csLbl.style.cssText='font-size:12px;color:#374151;min-width:150px;flex-shrink:0;';
+        csLbl.textContent='카시트 부가서비스요금 (0→5,000원)';
+        const csAmt=document.createElement('input');
+        csAmt.type='text';csAmt.className='fi-amt';csAmt.value='5,000';
+        csAmt.style.cssText='width:75px;padding:2px 5px;border:1px solid #fcd34d;border-radius:4px;font-size:11px;background:#fefce8;';
+        csAmt.oninput=()=>{let v=csAmt.value.replace(/[^0-9]/g,'');csAmt.value=v?Number(v).toLocaleString():'';if(csCb.checked)updateExtra();};
+        csCb.onchange=updateExtra;
+        csRow.append(csCb,csLbl,csAmt);
+        itemsWrap.appendChild(csRow);
+      }
+
+      // 대기요금 (금액 직접입력)
+      const hasWaiting=fareItems.some(fi=>/대기/.test(fi.label));
+      if(!hasWaiting){
+        const wRow=document.createElement('div');
+        wRow.style.cssText='display:flex;align-items:center;gap:6px;margin:3px 0;flex-wrap:wrap;background:#f0f9ff;border-radius:4px;padding:2px 4px;';
+        const wCb=document.createElement('input');
+        wCb.type='checkbox';wCb.className='fi-cb';
+        wCb.dataset.label='대기요금';wCb.dataset.origAmt=0;
+        wCb.style.cssText='cursor:pointer;flex-shrink:0;';
+        const wLbl=document.createElement('span');
+        wLbl.style.cssText='font-size:12px;color:#374151;min-width:150px;flex-shrink:0;';
+        wLbl.textContent='대기요금 (금액 입력)';
+        const wAmt=document.createElement('input');
+        wAmt.type='text';wAmt.className='fi-amt';wAmt.placeholder='금액';
+        wAmt.style.cssText='width:75px;padding:2px 5px;border:1px solid #bae6fd;border-radius:4px;font-size:11px;';
+        wAmt.oninput=()=>{let v=wAmt.value.replace(/[^0-9]/g,'');wAmt.value=v?Number(v).toLocaleString():'';if(wCb.checked)updateExtra();};
+        wCb.onchange=updateExtra;
+        wRow.append(wCb,wLbl,wAmt);
+        itemsWrap.appendChild(wRow);
+      }
+
+      // 직접 입력
+      const cusRow=document.createElement('div');
+      cusRow.style.cssText='display:flex;align-items:center;gap:6px;margin:4px 0 2px;flex-wrap:wrap;border-top:1px solid #f3f4f6;padding-top:4px;';
+      const cusCb=document.createElement('input');
+      cusCb.type='checkbox';cusCb.className='fi-cb';
+      cusCb.dataset.label='';cusCb.dataset.origAmt=0;
+      cusCb.style.cssText='cursor:pointer;flex-shrink:0;';
+      const cusName=document.createElement('input');
+      cusName.type='text';cusName.placeholder='항목명 직접입력';
+      cusName.style.cssText='flex:1;min-width:100px;max-width:160px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;font-size:11px;';
+      const cusAmt=document.createElement('input');
+      cusAmt.type='text';cusAmt.className='fi-amt';cusAmt.placeholder='금액';
+      cusAmt.style.cssText='width:75px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;font-size:11px;';
+      cusName.oninput=()=>{cusCb.dataset.label=cusName.value.trim();if(cusCb.checked)updateExtra();};
+      cusAmt.oninput=()=>{let v=cusAmt.value.replace(/[^0-9]/g,'');cusAmt.value=v?Number(v).toLocaleString():'';if(cusCb.checked)updateExtra();};
+      cusCb.onchange=()=>{
+        if(cusCb.checked&&!cusName.value.trim()){alert('항목명을 입력해주세요.');cusCb.checked=false;return;}
+        updateExtra();
+      };
+      cusRow.append(cusCb,cusName,cusAmt);
+      itemsWrap.appendChild(cusRow);
+
+      row.appendChild(itemsWrap);
+
+      // 라디오 선택 시 항목 패널 토글
+      const origOnchange=radio.onchange;
+      radio.onchange=()=>{
+        origOnchange&&origOnchange();
+        itemsWrap.style.display=rideId?'block':'none';
+      };
+    }
+
+    row.setAttribute('data-trow',idx);
+    if(idx===0){
+      row.style.borderColor='#0052cc';row.style.background='#eff6ff';
+      // 첫 번째 항목도 포커스
+      if(t.extra) setTimeout(()=>input.focus(),50);
+    }
+    form.appendChild(row);
+  });
+
+  box.appendChild(form);
+
+  const btnWrap=document.createElement('div');
+  btnWrap.style.cssText='margin-top:12px;display:flex;justify-content:space-between;align-items:center;';
+
+  const resetBtn=document.createElement('button');
+  resetBtn.textContent='🗑 ID 초기화';
+  resetBtn.style.cssText='padding:6px 12px;background:#fff;color:#dc2626;border:1px solid #fca5a5;border-radius:4px;cursor:pointer;font-size:12px;';
+
+  const rightBtns=document.createElement('div');
+  rightBtns.style.cssText='display:flex;gap:8px;';
+
+  const copyBtn=document.createElement('button');
+  copyBtn.textContent='복사하기';
+  copyBtn.style.cssText='padding:6px 16px;background:#0052cc;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;';
+
+  // ── 선택된 템플릿에 따라 버튼 텍스트 업데이트 ─────────────────────────
+  function updateCopyBtn(){
+    const sel=form.querySelector('input[name="tada_template"]:checked');
+    if(!sel) return;
+    const idx=parseInt(sel.value,10);
+    const t=templates[idx];
+    const needsRide=t.extraWarning&&!rideId;
+    // 예약 파생 라이드인데 요금정정 탭이면 라이드에서 ㄱㄱ
+    const needsRideFromResv=false; // 봉투 환경: 라이드 재실행 불필요
+    const isWaiting=needsRide||needsRideFromResv;
+    copyBtn.textContent=isWaiting?'라이드에서 ㄱㄱ':'복사하기';
+    copyBtn.style.background=isWaiting?'#d97706':'#0052cc';
+    // 항목 패널 표시 여부
+    const itemsWrap=document.getElementById('fare_items_wrap_'+idx);
+    if(itemsWrap) itemsWrap.style.display=(rideId&&!isWaiting)?'block':'none';
+  }
+  updateCopyBtn();
+
+  const cancelBtn=document.createElement('button');
+  cancelBtn.textContent='취소';
+  cancelBtn.style.cssText='padding:6px 16px;background:#eee;color:#333;border:none;border-radius:4px;cursor:pointer;';
+
+  rightBtns.append(copyBtn,cancelBtn);
+  btnWrap.append(resetBtn,rightBtns);
+  box.appendChild(btnWrap);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // ── 저장된 탭 자동선택 ───────────────────────────────────────────────
+  const lastTabIdx=localStorage.getItem('tada_last_tab');
+  if(lastTabIdx!==null){
+    const targetIdx=parseInt(lastTabIdx,10);
+    const targetRadio=form.querySelector(`input[name="tada_template"][value="${targetIdx}"]`);
+    if(targetRadio){
+      targetRadio.checked=true;
+      targetRadio.dispatchEvent(new Event('change'));
+    }
+    localStorage.removeItem('tada_last_tab');
+  }
+
+
+
+  // ✅ Fix: ESC 키로 팝업 닫기
+  function onKeydown(e){
+    if(e.key==='Escape'){overlay.remove();document.removeEventListener('keydown',onKeydown);}
+  }
+  document.addEventListener('keydown',onKeydown);
+
+  resetBtn.onclick=()=>{
+    clearIds();
+    overlay.remove();
+    document.removeEventListener('keydown',onKeydown);
+    blinkTitle('🗑 초기화 완료');
+  };
+  cancelBtn.onclick=()=>{
+    overlay.remove();
+    document.removeEventListener('keydown',onKeydown);
+  };
+
+  copyBtn.onclick=async()=>{
+    const sel=form.querySelector('input[name="tada_template"]:checked');
+    if(!sel)return;
+    const idx=parseInt(sel.value,10);
+    const tpl=templates[idx];
+
+    // 라이드에서 ㄱㄱ 상태면 탭 저장 후 팝업만 닫고 ID 유지
+    const needsRideNow=tpl.extraWarning&&!rideId;
+    if(needsRideNow){
+      localStorage.setItem('tada_last_tab', String(idx));
+      overlay.remove();
+      document.removeEventListener('keydown',onKeydown);
+      blinkTitle('📍 라이드 페이지에서 실행해주세요!');
+      return;
+    }
+
+    const inputEl=document.getElementById('extra_'+idx);
+    const finalExtra=inputEl&&inputEl.style.display!=='none'?inputEl.value.trim():'';
+
+    // ── 요금 정정 탭이면 fix 값 + 항목 저장 (꿀빠는 곰 연동용) ──────────
+    if(tpl.hasFareItems&&finalExtra){
+      const fixMatch=finalExtra.match(/결제요금\s*:\s*([\d,]+)원\s*>\s*([\d,]+)원/);
+      if(fixMatch){
+        localStorage.setItem('tada_fix_old', fixMatch[1].replace(/,/g,''));
+        localStorage.setItem('tada_fix_new', fixMatch[2].replace(/,/g,''));
+        localStorage.setItem('tada_fix_ride_id', rideId||'');
+        localStorage.setItem('tada_fix_resv_id', resvId||'');
+        // 항목별 정정 내역 파싱 후 저장
+        // "카시트 부가서비스요금 : 5,000원 > 0원" 형태
+        const itemLines=finalExtra.split('\n').slice(1).filter(Boolean);
+        const fixItems=itemLines.map(line=>{
+          const m=line.match(/^(.+?)\s*:\s*([\d,]+)원\s*>\s*([\d,]+)원$/);
+          return m?{label:m[1].trim(),from:m[2].replace(/,/g,''),to:m[3].replace(/,/g,'')}:null;
+        }).filter(Boolean);
+        localStorage.setItem('tada_fix_items', fixItems.length?JSON.stringify(fixItems):'');
+      }
+      localStorage.setItem('tada_last_bee_tab','fix');
+      localStorage.removeItem('tada_loss_subtype');
+      localStorage.removeItem('tada_loss_amount');
+    }else if(tpl.beeTab){
+      // 요금정정 외 탭도 bee tab 저장 — 라이드/예약 ID 각각 분리 저장
+      localStorage.setItem('tada_last_bee_tab', tpl.beeTab);
+      localStorage.setItem('tada_fix_ride_id', rideId||'');   // 실제 라이드 ID
+      localStorage.setItem('tada_fix_resv_id', resvId||'');   // 실제 예약 ID
+      localStorage.removeItem('tada_fix_items');
+      // 영업손실비 금액을 extra에서 파싱해 저장 (꿀빠는 곰 loss 탭 lossPrice 기본값 연동)
+      if(tpl.beeTab==='loss'){
+        const _lossM=finalExtra.match(/영업손실비\s*[:：]\s*([\d,]+)\s*원/);
+        if(_lossM){localStorage.setItem('tada_loss_amount', _lossM[1].replace(/,/g,''));}
+        else{localStorage.removeItem('tada_loss_amount');}
+      }else{
+        localStorage.removeItem('tada_loss_amount');
+      }
+      // 분실물 물품명을 msg_data에 저장 (꿀빠는 곰 분실물 칸 자동입력)
+      if(tpl.beeTab==='lost'){
+        try{
+          const _md=JSON.parse(localStorage.getItem('tada_msg_data')||'{}');
+          const _m=finalExtra.match(/분실물\s*[:：]\s*([\s\S]+)/);
+          _md.lostItem=(_m?_m[1]:finalExtra).split('\n')[0].trim();
+          localStorage.setItem('tada_msg_data', JSON.stringify(_md));
+        }catch(e){}
+      }
+      // 분실물 영손비: subtype 플래그 + 분실물명 저장 (꿀빠는 곰 loss 탭 자동선택용)
+      if(tpl.lossSubtype){
+        localStorage.setItem('tada_loss_subtype', tpl.lossSubtype);
+        if(tpl.lossSubtype==='분실물'){
+          try{
+            const _md2=JSON.parse(localStorage.getItem('tada_msg_data')||'{}');
+            const _m2=finalExtra.match(/분실물[ \t]*[:：][ \t]*([^\n]+)/);
+            if(_m2&&_m2[1].trim())_md2.lostItem=_m2[1].trim();
+            localStorage.setItem('tada_msg_data', JSON.stringify(_md2));
+          }catch(e){}
+        }
+      }else{
+        localStorage.removeItem('tada_loss_subtype');
+      }
+    }else{
+      localStorage.removeItem('tada_last_bee_tab');
+      localStorage.removeItem('tada_fix_items');
+      localStorage.removeItem('tada_loss_subtype');
+      localStorage.removeItem('tada_loss_amount');
+    }
+
+    const BASE=(/(^|\.)tadatada\.(com|in)$/i.test(location.hostname)?location.origin:'https://admin.tadatada.in');
+    const uHtml=`<a href="${BASE}/users/${uId}">${uId}</a>`;
+    const dHtml=`<a href="${BASE}/drivers/${dId}">${dId}</a>`;
+    const mainPath=type==='resv'?'rideReservations':'rides';
+    const labelText=type==='resv'?'호출 예약 ID':'라이드 ID';
+    const mainHtml=`<a href="${BASE}/${mainPath}/${mainId}">${mainId}</a>`;
+
+    // ✅ Fix: 태그 없을 때 빈값 보장 (백틱 잔재 제거)
+    const tagPlain=tags.length?' '+tags.map(t=>'*`'+t+'`*').join(' '):'';
+    const tagHtml =tags.length?' '+tags.map(t=>`<code><b>${t}</b></code>`).join(' '):'';
+    let effTitle=tpl.title;
+    if(tpl.carseatOption){
+      const _csCb=document.getElementById('carseat_cb_'+idx);
+      if(_csCb&&_csCb.checked)effTitle=effTitle.replace('[','[카시트 ');
+    }
+    const titleLine=`[${effTitle.replace(/^\[|\]$/g,'')}]`;
+
+    let plain=`*${titleLine}*${tagPlain}\n유저 : ${uId} / 드라이버 : ${dId}\n${labelText} : ${mainId}`;
+    let html=`<b>${titleLine}${tagHtml}</b><br>유저 : ${uHtml} / 드라이버 : ${dHtml}<br>${labelText} : ${mainHtml}`;
+    if(finalExtra){plain+=`\n${finalExtra}`;html+='<br>'+finalExtra.split('\n').join('<br>');}
+
+    // ── 티켓뷰 연동: CTX 스냅샷을 복사물 html에 마커로 심기(오리진 우회) ──
+    try{
+      const _ck=['tada_msg_data','tada_is_from_resv','tada_is_cash','tada_is_plus','tada_third_party_tag','tada_cancel_fee','tada_total_fare','tada_est_fare','tada_last_user_id','tada_last_driver_id'];
+      const _snap={}; _ck.forEach(k=>{const v=localStorage.getItem(k); if(v!=null&&v!=='')_snap[k]=v;});
+      const _b64=btoa(unescape(encodeURIComponent(JSON.stringify(_snap))));
+      html+='<!--TADACTX:'+_b64+'-->';   // text/html에만, slack용 plain은 그대로
+    }catch(e){}
+
+    let copied=false;
+    try{
+      function listener(e){
+        e.clipboardData.setData('text/html',html);
+        e.clipboardData.setData('text/plain',plain);
+        e.preventDefault();
+      }
+      document.addEventListener('copy',listener,{once:true});
+      copied=document.execCommand('copy');
+      if(!copied)document.removeEventListener('copy',listener);
+    }catch(e){copied=false;}
+    if(!copied){
+      try{await navigator.clipboard.writeText(plain);}
+      catch(e){alert('클립보드 복사 실패');return;}
+    }
+
+    clearIds(true); // msg_data는 유지 (꿀빠는 곰 연동)
+    overlay.remove();
+    document.removeEventListener('keydown',onKeydown);
+
+    try{
+      const ctx=new(window.AudioContext||window.webkitAudioContext)();
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.type='sine';
+      osc.frequency.setValueAtTime(587.33,ctx.currentTime);
+      osc.frequency.setValueAtTime(880,ctx.currentTime+0.1);
+      gain.gain.setValueAtTime(0.1,ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01,ctx.currentTime+0.3);
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.start();osc.stop(ctx.currentTime+0.3);
+    }catch(e){}
+    const savedBeeTab=localStorage.getItem('tada_last_bee_tab')||'';
+    blinkTitle(savedBeeTab?`🍯 꿀통 복사 완료! (꿀빠는곰→${savedBeeTab})`:'🍯 꿀통 복사 완료!');
+  };
+    }
+
+    async function hbRunBeeForm() {
+      const c = HBStore.loadCase();
+      if (!(c && c.ts && (c.ids.type === 'ride' || c.ids.type === 'resv'))) { toast('🐻 라이드/예약 캡처 후 사용하세요'); return; }
+      hbSpreadCaseToTada(c);
+      toast('🐻 꿀빠는 문자는 다음 단계에서 이식 예정');
+    }
 
   /* 리치 클립보드 (text/html + text/plain) */
   function copyRich(html, plain) {
