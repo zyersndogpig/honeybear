@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.1.1
+// @version      0.1.2
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -38,7 +38,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 v0.1.1 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 v0.1.2 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 2; // 케이스 봉투 스키마 버전
 
@@ -185,6 +185,43 @@
     } catch (e) {
       console.warn('[HB] API 가로채기 실패 — 버튼/캡처는 정상 동작:', e.message);
     }
+
+    /* 응답 구조 덤프 — captureFromApi 설계용.
+     * 값은 남기되 전화번호·이메일·9자리 이상 숫자(전화/주민 류)는 마스킹.
+     * TM 메뉴 "📋 API 구조 복사" 클릭 → 클립보드에 JSON 트리 복사됨. */
+    function _schema(v, d) {
+      if (d > 7) return '…';
+      if (v == null) return v;
+      if (Array.isArray(v)) {
+        if (!v.length) return [];
+        return v.length > 1 ? [_schema(v[0], d + 1), '…외 ' + (v.length - 1) + '개'] : [_schema(v[0], d + 1)];
+      }
+      if (typeof v === 'object') {
+        const o = {};
+        Object.keys(v).forEach(k => { o[k] = _schema(v[k], d + 1); });
+        return o;
+      }
+      if (typeof v === 'string') {
+        if (/@/.test(v)) return '(email 마스킹)';
+        if (/01[016789][-\s]?\d{3,4}[-\s]?\d{4}/.test(v) || /^\d{9,}$/.test(v)) return '(전화/숫자열 마스킹)';
+        return v.length > 48 ? v.slice(0, 48) + '…' : v;
+      }
+      if (typeof v === 'number' && String(Math.abs(Math.trunc(v))).length >= 9) return '(num' + String(Math.trunc(v)).length + ')'; // epoch 등
+      return v;
+    }
+    try {
+      GM_registerMenuCommand('📋 API 구조 복사 (수집된 응답 전체)', () => {
+        const keys = Object.keys(_lastApi);
+        if (!keys.length) { toast('아직 수집된 응답이 없어요 — 라이드/예약 상세를 먼저 열어주세요'); return; }
+        const out = {};
+        keys.forEach(k => { out[k] = _schema(_lastApi[k].json, 0); });
+        const txt = JSON.stringify(out, null, 2);
+        const done = () => toast('📋 ' + keys.length + '개 응답 구조 복사됨');
+        try {
+          navigator.clipboard.writeText(txt).then(done, () => { console.log('[HB schema]\n' + txt); toast('클립보드 실패 — 콘솔에 출력했어요'); });
+        } catch (e) { console.log('[HB schema]\n' + txt); toast('클립보드 실패 — 콘솔에 출력했어요'); }
+      });
+    } catch (e) {}
 
     /* (B) 캡처 ────────────────────────────────────────────────────────────
      * 1단계(지금): 꿀통의 DOM 파싱을 그대로 이식해 아래 captureFromDom을 완성.
