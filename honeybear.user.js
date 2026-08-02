@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.3.0
+// @version      0.3.1
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -39,7 +39,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 v0.3.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 v0.3.1 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 2; // 케이스 봉투 스키마 버전
 
@@ -256,7 +256,25 @@
       if (/TMONEY/i.test(s)) return '티머니 고';
       return '';
     }
-    function _locName(l) { return (l && (l.name || l.address)) || ''; }
+    /* 주소 단순화: "서울 서초구 잠원동 50" → "서울 서초구 잠원동"
+     * (끝의 번지·숫자 토큰 제거. 동/읍/면/가 까지만 남김) */
+    function simplifyAddr(addr) {
+      if (!addr) return '';
+      let s = addr.split('（').join('(').split('）').join(')').trim();
+      // 동/읍/면/가/로/길 이 나오면 그 지점까지만 (뒤 번지 컷)
+      const m = s.match(/^(.*?[가-힣]+(?:동|읍|면|가))(?:\s|$)/);
+      if (m) return m[1].trim();
+      // 폴백: 끝에서 숫자·하이픈 토큰 제거
+      let parts = s.split(/\s+/);
+      while (parts.length && /^[0-9-]+$/.test(parts[parts.length - 1])) parts.pop();
+      return parts.join(' ');
+    }
+    /* 장소 표기: address(행정동)에서 단순화한 게 있으면 우선, 없으면 name */
+    function _locName(l) {
+      if (!l) return '';
+      const byAddr = simplifyAddr(l.address || '');
+      return byAddr || l.name || l.address || '';
+    }
     function _isPlusOf(driver, rideType) {
       return (driver && (driver.typeDisplayName === 'PLUS' || /^DTX/i.test(driver.id || ''))) || rideType === 'PREMIUM';
     }
@@ -533,12 +551,38 @@
             } else i++;
           }
         } else {
-          // 이메일/일반: 노이즈 제거 후 한 덩어리
-          const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !isNoiseLine(l) &&
-            !/^https?:\/\//.test(l) && !/\.(png|jpg|jpeg|gif|pdf)$/i.test(l) &&
-            !/^수신자:$|^자세히 보기$|^원본 메일|^-{3,}/.test(l));
-          const msg = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-          if (msg) msgs.push(msg);
+          // 이메일/일반 티켓: 코멘트 단위로 순회하며 TADA 아웃바운드(상담사 답변) 제외
+          const comments = document.querySelectorAll('.zd-comment');
+          if (comments.length) {
+            comments.forEach(cm => {
+              const box = cm.closest('article, li, [data-comment-id], [class*="event"]') || cm.parentElement;
+              const boxTxt = box ? box.innerText : '';
+              const author = (boxTxt.split('\n').map(x => x.trim()).filter(Boolean)[0]) || '';
+              // TADA 발신 or 내부 노트 제외
+              if (/^TADA\b/.test(author) || /(^|\n)\s*내부\s*(\n|$)/.test(boxTxt)) return;
+              const tmp = document.createElement('div'); tmp.innerHTML = cm.innerHTML;
+              let raw = tmp.innerText || tmp.textContent || '';
+              // 전화 상담 코멘트 제외
+              if (/전화구분\s*[:：]|통화시간\s*[:：]|발신내선\s*[:：]/.test(raw)) return;
+              // 원본 메일 인용부 컷
+              const oi = raw.search(/-{2,}\s*원본 메일|원본 메일\s*-{2,}|-{3,}\s*Original/);
+              if (oi >= 0) raw = raw.slice(0, oi);
+              // TADA 아웃바운드 시그니처가 있으면(상담사 답변) 제외
+              if (/타다 팀 드림|타다를 이용해 주셔서|안녕하세요\.\s*[가-힣]+\s*파트너님|드라이버 센터입니다|안심 운행 도우미/.test(raw)) return;
+              const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !isNoiseLine(l) &&
+                !/^https?:\/\//.test(l) && !/\.(png|jpg|jpeg|gif|pdf)$/i.test(l) &&
+                !/^수신자:$|^자세히 보기$|^원본 메일|^-{3,}/.test(l));
+              const msg = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+              if (msg) msgs.push(msg);
+            });
+          }
+          // 코멘트를 못 찾았으면 제목을 인입 후보로 (웹 양식 티켓 대비)
+          if (!msgs.length) {
+            const subj = (document.querySelector('[data-test-id="ticketHeader-subject"]') || {}).innerText ||
+              (document.querySelector('input[name="subject"]') || {}).value || '';
+            const s = (subj || '').replace(/^\s*\(\d+\)\s*/, '').replace(/\s*[–—\-|·]\s*(VCNC|TADA|타다|Zendesk).*$/i, '').trim();
+            if (s.length > 1) msgs.push(s);
+          }
         }
       } catch (e) {}
       // 중복 제거
