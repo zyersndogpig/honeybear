@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.1.0
+// @version      0.1.1
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -11,6 +11,7 @@
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        GM_addValueChangeListener
+// @grant        GM_registerMenuCommand
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
 // @connect      raw.githubusercontent.com
@@ -35,6 +36,9 @@
 
 (function () {
   'use strict';
+
+  // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
+  console.log('%c[HB] 허니베어 v0.1.1 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 2; // 케이스 봉투 스키마 버전
 
@@ -129,45 +133,58 @@
     /* (A) API 발굴 모드 ────────────────────────────────────────────────────
      * DOM 스크래핑(getRowValue)을 걷어내는 게 이번 이관의 최대 이득.
      * 그러려면 어드민이 어떤 API에서 라이드/예약 JSON을 받는지 알아야 한다.
-     * 켜는 법: Tampermonkey 콘솔에서 GM_setValue('hb_api_log', true) 후 새로고침.
+     * 켜는 법: Tampermonkey 아이콘 클릭 → 허니베어 메뉴 → "API 로그 켜기" → 새로고침.
+     *          (F12 콘솔은 페이지 컨텍스트라 GM 함수가 안 보임 — 콘솔 입력 불필요)
      * 라이드 상세를 열면 콘솔에 [HB api] 로 응답 JSON 요약이 찍힌다.
      * → 엔드포인트를 파악하면 아래 captureFromApi()를 채우고 DOM 파싱을 은퇴시킨다.
      */
     const API_LOG = GM_getValue('hb_api_log', false);
+    try {
+      GM_registerMenuCommand(API_LOG ? '🔴 API 로그 끄기 (새로고침 필요)' : '🟢 API 로그 켜기 (새로고침 필요)', () => {
+        GM_setValue('hb_api_log', !API_LOG);
+        location.reload();
+      });
+    } catch (e) {}
     const _lastApi = {}; // url pattern → 최근 응답 (captureFromApi에서 사용)
 
-    const uw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-    const _fetch = uw.fetch;
-    uw.fetch = async function (...args) {
-      const res = await _fetch.apply(this, args);
-      try {
-        const url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url) || '';
-        if (/\/(rides?|rideReservations?|users?|drivers?)\//.test(url)) {
-          const clone = res.clone();
-          clone.json().then(j => {
-            _lastApi[url.replace(/[A-Z0-9]{10,}/g, ':id')] = { url, json: j, at: Date.now() };
-            if (API_LOG) console.log('[HB api]', url, j);
-          }).catch(() => {});
-        }
-      } catch (e) {}
-      return res;
-    };
-    // XHR도 동일하게 (어드민이 axios/XHR 기반일 수 있음)
-    const _open = uw.XMLHttpRequest.prototype.open;
-    uw.XMLHttpRequest.prototype.open = function (m, url, ...rest) {
-      this._hbUrl = url;
-      this.addEventListener('load', function () {
+    // 가로채기 실패가 스크립트 전체를 죽이지 않도록 격리 (버튼·캡처는 이것 없이도 동작)
+    try {
+      const uw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+      const _fetch = uw.fetch;
+      uw.fetch = async function (...args) {
+        const res = await _fetch.apply(this, args);
         try {
-          if (/\/(rides?|rideReservations?|users?|drivers?)\//.test(this._hbUrl) &&
-              /json/.test(this.getResponseHeader('content-type') || '')) {
-            const j = JSON.parse(this.responseText);
-            _lastApi[this._hbUrl.replace(/[A-Z0-9]{10,}/g, ':id')] = { url: this._hbUrl, json: j, at: Date.now() };
-            if (API_LOG) console.log('[HB api]', this._hbUrl, j);
+          const url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url) || '';
+          if (/\/(rides?|rideReservations?|users?|drivers?)\//.test(url)) {
+            const clone = res.clone();
+            clone.json().then(j => {
+              _lastApi[url.replace(/[A-Z0-9]{10,}/g, ':id')] = { url, json: j, at: Date.now() };
+              if (API_LOG) console.log('[HB api]', url, j);
+            }).catch(() => {});
           }
         } catch (e) {}
-      });
-      return _open.call(this, m, url, ...rest);
-    };
+        return res;
+      };
+      // XHR도 동일하게 (어드민이 axios/XHR 기반일 수 있음)
+      const _open = uw.XMLHttpRequest.prototype.open;
+      uw.XMLHttpRequest.prototype.open = function (m, url, ...rest) {
+        this._hbUrl = url;
+        this.addEventListener('load', function () {
+          try {
+            if (/\/(rides?|rideReservations?|users?|drivers?)\//.test(this._hbUrl) &&
+                /json/.test(this.getResponseHeader('content-type') || '')) {
+              const j = JSON.parse(this.responseText);
+              _lastApi[this._hbUrl.replace(/[A-Z0-9]{10,}/g, ':id')] = { url: this._hbUrl, json: j, at: Date.now() };
+              if (API_LOG) console.log('[HB api]', this._hbUrl, j);
+            }
+          } catch (e) {}
+        });
+        return _open.call(this, m, url, ...rest);
+      };
+      console.log('[HB] API 가로채기 활성', API_LOG ? '(로그 ON)' : '(로그 OFF — TM 메뉴에서 켤 수 있음)');
+    } catch (e) {
+      console.warn('[HB] API 가로채기 실패 — 버튼/캡처는 정상 동작:', e.message);
+    }
 
     /* (B) 캡처 ────────────────────────────────────────────────────────────
      * 1단계(지금): 꿀통의 DOM 파싱을 그대로 이식해 아래 captureFromDom을 완성.
