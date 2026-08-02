@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.6.0
+// @version      0.6.1
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -39,7 +39,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 v0.6.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 v0.6.1 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 2; // 케이스 봉투 스키마 버전
 
@@ -427,33 +427,47 @@
       toast('🍯 캡처 완료 (' + src + ') → 젠데스크 패널 실시간 갱신');
     }
 
-    /* 플로팅 버튼 — 캡처 + 원본 도구 (꿀통양식 / 꿀빠는 문자) */
+    /* 플로팅 버튼 — 허니베어 하나로 통합 (누르면 도구 선택창) */
     onReady(() => {
-      const isRideResvPage = /\/(rides|rideReservations)\/[A-Za-z0-9]+/.test(location.pathname);
-      const stack = el('div', 'position:fixed;right:18px;bottom:18px;z-index:999999;display:flex;flex-direction:column;gap:8px;align-items:flex-end;');
+      const isRideResvPage = () => /\/(rides|rideReservations)\/[A-Za-z0-9]+/.test(location.pathname);
 
-      const mk = (bg, label, title, onclick) => {
-        const x = el('button', `width:44px;height:44px;border-radius:50%;border:none;background:${bg};color:#fff;font-size:19px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;`, label);
-        x.title = title; x.onclick = onclick;
-        return x;
-      };
-      // 원본 도구는 라이드/예약 페이지에서만 노출 (원본이 그 DOM을 전제로 동작)
-      if (isRideResvPage) {
-        stack.appendChild(mk('#b45309', '🐻', '꿀빠는 문자 (Alt+B)', () => {
-          try { hbRunBeeForm(); } catch (e) { console.warn('[HB] 꿀빠는곰 오류:', e.message); toast('🐻 실행 오류 — 콘솔 확인'); }
-        }));
-        stack.appendChild(mk('#ca8a04', '🍯', '꿀통양식 (Alt+K)', () => {
-          try { hbRunHoneyForm(); } catch (e) { console.warn('[HB] 꿀통 오류:', e.message); toast('🍯 실행 오류 — 콘솔 확인'); }
-        }));
+      function openPicker() {
+        const old = document.getElementById('hb_picker'); if (old) { old.remove(); return; }
+        const wrap = el('div', 'position:fixed;right:18px;bottom:72px;z-index:1000000;display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:190px;background:#fff;border:1px solid #e6eae8;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.2);padding:10px;font-family:-apple-system,sans-serif;');
+        wrap.id = 'hb_picker';
+        const c = HBStore.loadCase();
+        const ok = isRideResvPage();
+        const head = el('div', 'font-size:11px;font-weight:bold;color:#0a5d54;margin-bottom:2px;', '🍯 허니베어');
+        wrap.appendChild(head);
+        if (c && c.ts) {
+          wrap.appendChild(el('div', 'font-size:10px;color:#7b857f;margin-bottom:4px;line-height:1.4;',
+            (c.trip.name ? c.trip.name + ' · ' : '') + (c.trip.dateTime || '') + '<br>' + (c.ids.ride || c.ids.resv || '')));
+        }
+        const mk = (label, fn, disabled) => {
+          const b = el('button', `padding:9px;border-radius:8px;border:1px solid #e6eae8;background:${disabled ? '#f6f7f8' : '#fff'};color:${disabled ? '#b6bcb9' : '#243027'};font-size:12.5px;font-weight:bold;cursor:${disabled ? 'default' : 'pointer'};text-align:left;`, label);
+          if (!disabled) b.onclick = () => { wrap.remove(); fn(); };
+          return b;
+        };
+        wrap.appendChild(mk('📥 캡처 (Alt+H)', capture, false));
+        wrap.appendChild(mk('🍯 꿀통양식', () => { try { hbRunHoneyForm(); } catch (e) { console.warn('[HB] 꿀통 오류:', e.message); toast('🍯 실행 오류 — 콘솔 확인'); } }, !ok));
+        wrap.appendChild(mk('🐻 꿀빠는 문자', () => { try { hbRunBeeForm(); } catch (e) { console.warn('[HB] 꿀빠는곰 오류:', e.message); toast('🐻 실행 오류 — 콘솔 확인'); } }, !ok));
+        if (!ok) wrap.appendChild(el('div', 'font-size:10px;color:#b45309;margin-top:2px;', '라이드/예약 페이지에서 사용 가능'));
+        document.body.appendChild(wrap);
+        const off = e => { if (!wrap.contains(e.target) && e.target.id !== 'hb_fab') { wrap.remove(); document.removeEventListener('mousedown', off); } };
+        setTimeout(() => document.addEventListener('mousedown', off), 0);
       }
-      stack.appendChild(mk('#0a7d72', '📥', '허니베어 캡처 (Alt+H)', capture));
-      document.body.appendChild(stack);
+
+      const fab = el('button', 'position:fixed;right:18px;bottom:18px;z-index:999999;width:46px;height:46px;border-radius:50%;border:none;background:#0a7d72;color:#fff;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;', '🍯');
+      fab.id = 'hb_fab';
+      fab.title = '허니베어 (캡처: Alt+H)';
+      fab.onclick = openPicker;
+      document.body.appendChild(fab);
 
       document.addEventListener('keydown', e => {
         if (!e.altKey) return;
         if (e.code === 'KeyH') capture();
-        else if (e.code === 'KeyK' && isRideResvPage) { try { hbRunHoneyForm(); } catch (err) {} }
-        else if (e.code === 'KeyB' && isRideResvPage) { try { hbRunBeeForm(); } catch (err) {} }
+        else if (e.code === 'KeyK' && isRideResvPage()) { try { hbRunHoneyForm(); } catch (err) {} }
+        else if (e.code === 'KeyB' && isRideResvPage()) { try { hbRunBeeForm(); } catch (err) {} }
       });
     });
   }
