@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.1.2
+// @version      0.1.3
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -12,6 +12,7 @@
 // @grant        GM_deleteValue
 // @grant        GM_addValueChangeListener
 // @grant        GM_registerMenuCommand
+// @grant        GM_setClipboard
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
 // @connect      raw.githubusercontent.com
@@ -38,7 +39,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 v0.1.2 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 v0.1.3 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 2; // 케이스 봉투 스키마 버전
 
@@ -53,7 +54,7 @@
         ids: { type: '', ride: '', resv: '', fromResv: '', user: '', driver: '' },
         trip: { name: '', dateTime: '', departure: '', destination: '', actionWord: '', timeSrc: '', lostItem: '' },
         fare: {
-          total: 0, est: 0, cancel: 0,
+          total: 0, est: 0, cancel: 0, surge: 0,
           items: [],              // [{label, amt}]
           fix: null,              // {old, new, items:[{label,from,to}]} — 요금정정 시
           loss: 0                 // 영업손실비
@@ -158,7 +159,9 @@
           if (/\/(rides?|rideReservations?|users?|drivers?)\//.test(url)) {
             const clone = res.clone();
             clone.json().then(j => {
-              _lastApi[url.replace(/[A-Z0-9]{10,}/g, ':id')] = { url, json: j, at: Date.now() };
+              const pat = url.replace(/[A-Z0-9]{10,}/g, ':id');
+              _lastApi[pat] = { url, json: j, at: Date.now() };
+              _bankPut(pat, j);
               if (API_LOG) console.log('[HB api]', url, j);
             }).catch(() => {});
           }
@@ -174,7 +177,9 @@
             if (/\/(rides?|rideReservations?|users?|drivers?)\//.test(this._hbUrl) &&
                 /json/.test(this.getResponseHeader('content-type') || '')) {
               const j = JSON.parse(this.responseText);
-              _lastApi[this._hbUrl.replace(/[A-Z0-9]{10,}/g, ':id')] = { url: this._hbUrl, json: j, at: Date.now() };
+              const pat = this._hbUrl.replace(/[A-Z0-9]{10,}/g, ':id');
+              _lastApi[pat] = { url: this._hbUrl, json: j, at: Date.now() };
+              _bankPut(pat, j);
               if (API_LOG) console.log('[HB api]', this._hbUrl, j);
             }
           } catch (e) {}
@@ -209,25 +214,111 @@
       if (typeof v === 'number' && String(Math.abs(Math.trunc(v))).length >= 9) return '(num' + String(Math.trunc(v)).length + ')'; // epoch 등
       return v;
     }
+    /* 구조 은행 — 페이지 이동해도 마스킹된 구조가 GM 스토리지에 누적됨.
+     * (v0.1.2에서 라이드→예약 이동 시 라이드 응답이 날아가던 문제 해결) */
+    function _bankPut(pat, json) {
+      try {
+        const bank = JSON.parse(GM_getValue('hb_schema_bank', '{}'));
+        bank[pat] = _schema(json, 0);
+        GM_setValue('hb_schema_bank', JSON.stringify(bank));
+      } catch (e) {}
+    }
     try {
-      GM_registerMenuCommand('📋 API 구조 복사 (수집된 응답 전체)', () => {
-        const keys = Object.keys(_lastApi);
-        if (!keys.length) { toast('아직 수집된 응답이 없어요 — 라이드/예약 상세를 먼저 열어주세요'); return; }
-        const out = {};
-        keys.forEach(k => { out[k] = _schema(_lastApi[k].json, 0); });
-        const txt = JSON.stringify(out, null, 2);
-        const done = () => toast('📋 ' + keys.length + '개 응답 구조 복사됨');
-        try {
-          navigator.clipboard.writeText(txt).then(done, () => { console.log('[HB schema]\n' + txt); toast('클립보드 실패 — 콘솔에 출력했어요'); });
-        } catch (e) { console.log('[HB schema]\n' + txt); toast('클립보드 실패 — 콘솔에 출력했어요'); }
+      GM_registerMenuCommand('📋 API 구조 복사 (누적 은행)', () => {
+        const bank = GM_getValue('hb_schema_bank', '{}');
+        const n = Object.keys(JSON.parse(bank)).length;
+        if (!n) { toast('아직 수집된 응답이 없어요 — 라이드/예약 상세를 먼저 열어주세요'); return; }
+        const txt = JSON.stringify(JSON.parse(bank), null, 2);
+        try { GM_setClipboard(txt); toast('📋 ' + n + '개 엔드포인트 구조 복사됨'); }
+        catch (e) { console.log('[HB schema]\n' + txt); toast('클립보드 실패 — 콘솔에 출력했어요'); }
       });
+      GM_registerMenuCommand('🗑 구조 은행 비우기', () => { GM_deleteValue('hb_schema_bank'); toast('구조 은행 비움'); });
     } catch (e) {}
 
     /* (B) 캡처 ────────────────────────────────────────────────────────────
-     * 1단계(지금): 꿀통의 DOM 파싱을 그대로 이식해 아래 captureFromDom을 완성.
-     * 2단계(API 파악 후): captureFromApi가 _lastApi에서 직접 값을 꺼내면
-     *   simplifyAddress/영수증 합산 정규식의 상당수가 불필요해진다.
+     * 우선순위: API 응답(captureFromApi) → 실패 시 DOM 파싱(captureFromDom).
+     * 예약(/api/rideReservations/:id)은 구조 확인 완료 → 정식 매핑.
+     * 라이드(/api/rides/:id)는 구조 미확인 → 임시 매핑 (구조 덤프 확인 후 확정 예정).
      */
+    function fmtDT(ms) {
+      if (!ms) return '';
+      const d = new Date(Number(ms));
+      if (isNaN(d.getTime())) return '';
+      const p = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+    function apiOf(re) {
+      const k = Object.keys(_lastApi).find(k => re.test(k));
+      return k ? _lastApi[k].json : null;
+    }
+    function _thirdTag(u) {
+      const s = u && u.thirdPartyUser ? JSON.stringify(u.thirdPartyUser) : '';
+      if (/TOSS/i.test(s)) return '토스 택시타기';
+      if (/TMONEY/i.test(s)) return '티머니 고';
+      return '';
+    }
+
+    function captureFromApi() {
+      const rideM = location.href.match(/\/rides\/([A-Za-z0-9]+)/);
+      const resvM = location.href.match(/\/rideReservations\/([A-Za-z0-9]+)/);
+
+      if (resvM) {
+        const j = apiOf(/\/api\/rideReservations\/:id$/);
+        if (!j || j.id !== resvM[1]) return null; // 응답-URL 불일치 시 API 캡처 포기
+        const c = HBStore.emptyCase();
+        c.ids.type = 'resv';
+        c.ids.resv = j.id;
+        c.ids.ride = (j.ride && j.ride.id) || '';
+        c.ids.user = (j.user && j.user.id) || '';
+        c.ids.driver = (j.driver && j.driver.id) || '';
+        c.trip.name = (j.user && j.user.name) || '';
+        c.trip.dateTime = fmtDT(j.expectedPickUpAt);
+        c.trip.actionWord = '탑승';
+        c.trip.timeSrc = 'resv';
+        const dep = (j.origin && (j.origin.name || j.origin.address)) || '';
+        const dst = (j.destination && (j.destination.name || j.destination.address)) || '';
+        const wps = (j.waypoints || []).map(w => (w && (w.name || w.address)) || '').filter(Boolean);
+        const chain = [dep, ...wps, dst].filter(Boolean);
+        if (chain.length >= 2) { c.trip.departure = chain.slice(0, -1).join(' > '); c.trip.destination = chain[chain.length - 1]; }
+        else { c.trip.departure = dep; c.trip.destination = dst; }
+        const est = j.estimation || {};
+        c.fare.est = est.totalFee || 0;
+        c.fare.surge = est.surgePercentage || 0;
+        if (est.tollFee) c.fare.items.push({ label: '톨게이트 비용', amt: est.tollFee });
+        // 취소수수료·최종요금은 receipt에 있을 것으로 추정 — 구조 확인 전까지 미기록
+        c.flags.isCash = !!j.isOnSitePayment;
+        c.flags.thirdParty = _thirdTag(j.user);
+        c.flags.isPlus = /^DTX/i.test(c.ids.driver) || j.rideType === 'PLS';
+        return c;
+      }
+
+      if (rideM) {
+        const j = apiOf(/\/api\/rides\/:id$/);
+        if (!j || j.id !== rideM[1]) return null;
+        // ⚠️ 임시 매핑 — 라이드 응답 구조 덤프를 받으면 요금(영수증)까지 정식 매핑 예정
+        const c = HBStore.emptyCase();
+        c.ids.type = 'ride';
+        c.ids.ride = j.id;
+        c.ids.user = (j.user && j.user.id) || '';
+        c.ids.driver = (j.driver && j.driver.id) || '';
+        c.trip.name = (j.user && j.user.name) || '';
+        c.trip.dateTime = fmtDT(j.createdAt || j.requestedAt);
+        c.trip.actionWord = '호출';
+        c.trip.timeSrc = 'ride';
+        c.trip.departure = (j.origin && (j.origin.name || j.origin.address)) || '';
+        c.trip.destination = (j.destination && (j.destination.name || j.destination.address)) || '';
+        const est = j.estimation || {};
+        c.fare.est = est.totalFee || 0;
+        c.fare.surge = est.surgePercentage || 0;
+        c.flags.isCash = !!j.isOnSitePayment;
+        c.flags.thirdParty = _thirdTag(j.user);
+        c.flags.isPlus = /^DTX/i.test(c.ids.driver) || j.rideType === 'PLS';
+        console.log('[HB] 라이드 API 임시 매핑 사용 — 요금 정식 매핑은 구조 덤프 후 확정');
+        return c;
+      }
+      return null;
+    }
+
     function getRowValue(label) {
       const row = [...document.querySelectorAll('tr')]
         .find(tr => tr.innerText.replace(/\s+/, ' ').trim().startsWith(label));
@@ -267,11 +358,14 @@
     }
 
     function capture() {
-      const cur = captureFromDom();
+      let cur = null;
+      try { cur = captureFromApi(); } catch (e) { console.warn('[HB] API 캡처 오류:', e.message); }
+      const src = cur ? 'API' : 'DOM';
+      if (!cur) cur = captureFromDom();
       if (!cur) return;
       const merged = mergeCase(HBStore.loadCase(), cur);
       HBStore.saveCase(merged);
-      toast('🍯 캡처 완료 → 젠데스크 패널이 실시간 갱신됩니다');
+      toast('🍯 캡처 완료 (' + src + ') → 젠데스크 패널 실시간 갱신');
     }
 
     /* 플로팅 버튼 — 북마클릿 클릭을 대체 (Alt+H 단축키도 동일) */
@@ -323,6 +417,7 @@
         departure: c.trip.departure, destination: c.trip.destination,
         rideId: c.ids.ride, resvId: c.ids.resv,
         totalFare: won(c.fare.total), estFare: won(c.fare.est), cancelFee: won(c.fare.cancel),
+        surge: c.fare.surge ? (c.fare.surge + '%') : '',
         toll: toll ? won(toll.amt) : '', lossAmount: won(c.fare.loss),
         fareFix: c.fare.fix ? (won(c.fare.fix.old) + ' > ' + won(c.fare.fix.new)) : '',
         fixLines: c.fare.fix ? (c.fare.fix.items || []).map(i => i.label + ' : ' + won(i.from) + ' > ' + won(i.to)).join('\n') : '',
@@ -347,7 +442,8 @@
       const stale = has && (Date.now() - c.ts > 30 * 60 * 1000);
       const rows = !has ? '' : [
         ['일시', c.trip.dateTime], ['출발', c.trip.departure], ['도착', c.trip.destination],
-        ['이름', c.trip.name], ['총요금', won(c.fare.total)], ['취소료', won(c.fare.cancel)],
+        ['이름', c.trip.name], ['총요금', won(c.fare.total)], ['예상요금', won(c.fare.est)],
+        ['탄력', c.fare.surge ? c.fare.surge + '%' : ''], ['취소료', won(c.fare.cancel)],
         ['영손비', won(c.fare.loss)],
         ['정정', c.fare.fix ? (won(c.fare.fix.old) + ' → ' + won(c.fare.fix.new)) : ''],
         ['라이드', c.ids.ride], ['예약', c.ids.resv], ['유저', c.ids.user], ['파트너', c.ids.driver]
