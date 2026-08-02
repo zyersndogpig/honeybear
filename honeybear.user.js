@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.3.2
+// @version      0.4.0
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -39,7 +39,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 v0.3.2 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 v0.4.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 2; // 케이스 봉투 스키마 버전
 
@@ -471,12 +471,18 @@
       return {
         name: c.trip.name, dateTime: c.trip.dateTime,
         departure: c.trip.departure, destination: c.trip.destination,
+        actionWord: c.trip.actionWord || (IS_RESV ? '탑승' : '호출'),
+        lostItem: c.trip.lostItem,
         rideId: c.ids.ride, resvId: c.ids.resv,
         totalFare: won(c.fare.total), estFare: won(c.fare.est), cancelFee: won(c.fare.cancel),
         surge: c.fare.surge ? (c.fare.surge + '%') : '',
         toll: toll ? won(toll.amt) : '', lossAmount: won(c.fare.loss),
+        fixOld: c.fare.fix ? won(c.fare.fix.old) : won(c.fare.total),
+        fixNew: c.fare.fix ? won(c.fare.fix.new) : won(c.fare.est),
         fareFix: c.fare.fix ? (won(c.fare.fix.old) + ' > ' + won(c.fare.fix.new)) : '',
         fixLines: c.fare.fix ? (c.fare.fix.items || []).map(i => i.label + ' : ' + won(i.from) + ' > ' + won(i.to)).join('\n') : '',
+        fixItems: c.fare.fix && (c.fare.fix.items || []).length ? ('\n' + (c.fare.fix.items || []).map(i => i.label + ' : ' + won(i.from) + ' > ' + won(i.to)).join('\n')) : '',
+        fixIntro: '', lossPara: '',
         rideLine: (IS_RESV ? (dt + ' 탑승하시어') : (dt + '에 호출하시어')) + ' ' + route
       };
     }
@@ -702,6 +708,17 @@
         <div class="h"><span>🎫</span><b>티켓 뷰</b><span class="tn">#${TN}</span><button class="x" id="hb_x">✕</button></div>
         <div class="body">
           <div id="hb_card"></div>
+          <div id="hb_out" class="card" style="display:none;padding:9px 11px;">
+            <div class="chead" style="margin-bottom:6px;">🍯 봉투 출력 <span id="hb_out_hint" style="font-weight:normal;color:#7b857f;font-size:10px;"></span></div>
+            <select id="hb_out_event" class="sel" style="width:100%;margin-bottom:6px;"><option value="">사건 선택…</option></select>
+            <div id="hb_out_variant" style="display:none;margin-bottom:6px;"></div>
+            <div id="hb_out_btns" class="row" style="gap:6px;display:none;">
+              <button id="hb_out_slack" class="ghost" style="flex:1;">📋 슬랙 적재</button>
+              <button id="hb_out_sms" class="ghost" style="flex:1;">✉️ 문자</button>
+            </div>
+            <textarea id="hb_out_preview" rows="4" style="margin-top:6px;display:none;" placeholder="사건·형태 선택 시 봉투 데이터로 채워집니다"></textarea>
+          </div>
+          <div class="div" id="hb_out_div" style="display:none;"></div>
           <div class="row" style="justify-content:space-between;">
             <strong style="font-size:12px;color:#0a5d54;">📋 슬랙 적재</strong>
             <div class="seg"><button id="hb_user" class="on">이용자</button><button id="hb_partner">파트너</button></div>
@@ -874,12 +891,89 @@
 
       loadMents(arr => { MENTS = arr; g('hb_mc').textContent = arr.length; renderMents(); });
 
+      /* ── 봉투 출력 영역 (사건 → 슬랙적재/문자, ride·resv에서만 활성) ── */
+      const TEMPLATES_URL = 'https://raw.githubusercontent.com/zyersndogpig/honeybear/main/templates.json';
+      let EVENTS = [];
+      function loadTemplates(cb) {
+        const cached = GM_getValue('hb_tpl_cache', null);
+        const at = GM_getValue('hb_tpl_at', 0);
+        const parse = s => { try { return (JSON.parse(s).events) || []; } catch (e) { return []; } };
+        if (cached && Date.now() - at < 10 * 60 * 1000) { cb(parse(cached)); return; }
+        GM_xmlhttpRequest({
+          method: 'GET', url: TEMPLATES_URL + '?t=' + Date.now(),
+          onload: r => { const a = parse(r.responseText); if (a.length) { GM_setValue('hb_tpl_cache', r.responseText); GM_setValue('hb_tpl_at', Date.now()); cb(a); } else cb(cached ? parse(cached) : []); },
+          onerror: () => cb(cached ? parse(cached) : [])
+        });
+      }
+      const outBox = g('hb_out'), outSel = g('hb_out_event'), outVar = g('hb_out_variant'),
+        outBtns = g('hb_out_btns'), outPrev = g('hb_out_preview'), outDiv = g('hb_out_div'), outHint = g('hb_out_hint');
+      let curEvent = null, curVariantIdx = 0;
+
+      function renderOutput() {
+        const c = HBStore.loadCase();
+        const isRideResv = c.ids.type === 'ride' || c.ids.type === 'resv';
+        // ride/resv 아니면 비활성 (이용자·파트너 탭 캡처 시)
+        if (!c.ts || !isRideResv) {
+          outBox.style.display = 'block'; outDiv.style.display = 'block';
+          outBox.style.opacity = '0.5'; outSel.disabled = true;
+          outBtns.style.display = 'none'; outPrev.style.display = 'none'; outVar.style.display = 'none';
+          outHint.textContent = c.ts ? '(라이드/예약에서 캡처해야 사용 가능)' : '(캡처된 케이스 없음)';
+          return;
+        }
+        outBox.style.display = 'block'; outDiv.style.display = 'block';
+        outBox.style.opacity = '1'; outSel.disabled = false; outHint.textContent = '';
+      }
+      function renderOutButtons() {
+        if (!curEvent) { outBtns.style.display = 'none'; outVar.style.display = 'none'; outPrev.style.display = 'none'; return; }
+        // 문자 variant 있으면 드롭다운
+        const smsObj = curEvent.sms;
+        if (smsObj && smsObj.variants) {
+          outVar.innerHTML = '';
+          const s = el('select'); s.className = 'sel'; s.style.width = '100%';
+          smsObj.variants.forEach((v, i) => s.appendChild(new Option('문자: ' + v.label, String(i))));
+          s.onchange = () => { curVariantIdx = +s.value; };
+          curVariantIdx = 0;
+          outVar.appendChild(s); outVar.style.display = 'block';
+        } else { outVar.style.display = 'none'; }
+        // 형태 버튼: 있는 것만
+        g('hb_out_slack').style.display = curEvent.slack ? '' : 'none';
+        g('hb_out_sms').style.display = curEvent.sms ? '' : 'none';
+        outBtns.style.display = 'flex';
+      }
+      outSel.onchange = () => {
+        curEvent = EVENTS.find(e => e.id === outSel.value) || null;
+        curVariantIdx = 0; outPrev.style.display = 'none'; outPrev.value = '';
+        renderOutButtons();
+      };
+      g('hb_out_slack').onclick = () => {
+        if (!curEvent || !curEvent.slack) return;
+        const c = HBStore.loadCase();
+        const s = curEvent.slack;
+        const idLine = `유저 : ${c.ids.user || '[ ]'} / 드라이버 : ${c.ids.driver || '[ ]'}`;
+        const idLabel = c.ids.type === 'resv' ? '호출 예약 ID' : '라이드 ID';
+        const mainId = c.ids.type === 'resv' ? (c.ids.resv || c.ids.ride) : c.ids.ride;
+        const extra = s.extra ? '\n' + fillTokens(s.extra, c) : '';
+        const plain = `*${fillTokens(s.title, c)}*\n${idLine}\n${idLabel} : ${mainId || '[ ]'}${extra}`;
+        outPrev.value = plain; outPrev.style.display = 'block';
+        copyText(plain); toast('📋 슬랙 적재 복사');
+      };
+      g('hb_out_sms').onclick = () => {
+        if (!curEvent || !curEvent.sms) return;
+        const c = HBStore.loadCase();
+        const smsObj = curEvent.sms;
+        const body = smsObj.variants ? smsObj.variants[curVariantIdx].body : smsObj.body;
+        const filled = fillTokens(body, c);
+        outPrev.value = filled; outPrev.style.display = 'block';
+        copyText(filled); toast('✉️ 문자 복사');
+      };
+      loadTemplates(arr => { EVENTS = arr; outSel.innerHTML = '<option value="">사건 선택…</option>'; arr.forEach(e => outSel.appendChild(new Option(e.label, e.id))); renderOutput(); });
+
       /* 열고 닫기 + 실시간 동기화 */
-      function toggle() { const open = panel.style.display === 'none'; panel.style.display = open ? 'block' : 'none'; if (open) { renderCard(); draftText = getDraftText(); renderMents(); } }
+      function toggle() { const open = panel.style.display === 'none'; panel.style.display = open ? 'block' : 'none'; if (open) { renderCard(); draftText = getDraftText(); renderMents(); if (typeof renderOutput==='function') renderOutput(); } }
       btn.onclick = toggle;
       g('hb_x').onclick = () => panel.style.display = 'none';
       document.addEventListener('keydown', e => { if (e.altKey && e.code === 'KeyH') toggle(); if (e.key === 'Escape' && panel.style.display !== 'none') panel.style.display = 'none'; });
-      HBStore.onChange(c => { renderCard(); renderMents(); if (panel.style.display === 'none') toast('🍯 새 케이스 수신'); });
+      HBStore.onChange(c => { renderCard(); renderMents(); if (typeof renderOutput==='function') renderOutput(); if (panel.style.display === 'none') toast('🍯 새 케이스 수신'); });
       renderCard();
     });
   }
