@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🍯 허니베어 (honeybear)
 // @namespace    https://github.com/zyersndogpig/honeybear
-// @version      0.1.3
+// @version      0.2.0
 // @description  꿀통·티켓뷰 통합 유저스크립트 — 클립보드 브릿지 없이 admin↔Zendesk 케이스 실시간 공유
 // @match        https://admin.tadatada.in/*
 // @match        https://admin.tadatada.com/*
@@ -39,7 +39,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 v0.1.3 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 v0.2.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 2; // 케이스 봉투 스키마 버전
 
@@ -237,8 +237,7 @@
 
     /* (B) 캡처 ────────────────────────────────────────────────────────────
      * 우선순위: API 응답(captureFromApi) → 실패 시 DOM 파싱(captureFromDom).
-     * 예약(/api/rideReservations/:id)은 구조 확인 완료 → 정식 매핑.
-     * 라이드(/api/rides/:id)는 구조 미확인 → 임시 매핑 (구조 덤프 확인 후 확정 예정).
+     * /api/rides/:id, /api/rideReservations/:id 실제 구조(2026.08 덤프) 기준 정식 매핑.
      */
     function fmtDT(ms) {
       if (!ms) return '';
@@ -256,6 +255,35 @@
       if (/TOSS/i.test(s)) return '토스 택시타기';
       if (/TMONEY/i.test(s)) return '티머니 고';
       return '';
+    }
+    function _locName(l) { return (l && (l.name || l.address)) || ''; }
+    function _isPlusOf(driver, rideType) {
+      return (driver && (driver.typeDisplayName === 'PLUS' || /^DTX/i.test(driver.id || ''))) || rideType === 'PREMIUM';
+    }
+    /* receipt(영수증) → fare.items — 기존 꿀통의 "+항목 합산" 정규식을 대체.
+     * 이용요금 구성분(기본/거리/시간/driveFee)은 제외하고 추가 항목만 담는다. */
+    const RECEIPT_ITEM_MAP = [
+      ['tollgateFee', '톨게이트 비용'],
+      ['parkingFee', '주차 요금'],
+      ['additionalDistanceFee', '거리추가요금'],
+      ['additionalTimeFee', '시간추가요금'],
+      ['carSeatAdditionalServiceFee', '카시트 부가서비스요금'],
+      ['myDriverAdditionalServiceFee', '마이 드라이버'],
+      ['rideWaitingAdditionalServiceFee', '대기요금'],
+      ['directRideAdditionalServiceFee', '바로배정'],
+      ['callFee', '호출료'],
+      ['tipAmount', '팁']
+    ];
+    function receiptToFare(c, r) {
+      if (!r) return;
+      if (r.total) c.fare.total = r.total;
+      if (r.adjustedPriceTotal) c.fare.total = r.adjustedPriceTotal; // 요금정정 반영가 우선
+      if (r.cancellationFee) c.fare.cancel = r.cancellationFee;
+      if (r.lossFee) c.fare.loss = r.lossFee;
+      RECEIPT_ITEM_MAP.forEach(([k, label]) => {
+        const v = Number(r[k] || 0);
+        if (v > 0) c.fare.items.push({ label, amt: v });
+      });
     }
 
     function captureFromApi() {
@@ -275,45 +303,58 @@
         c.trip.dateTime = fmtDT(j.expectedPickUpAt);
         c.trip.actionWord = '탑승';
         c.trip.timeSrc = 'resv';
-        const dep = (j.origin && (j.origin.name || j.origin.address)) || '';
-        const dst = (j.destination && (j.destination.name || j.destination.address)) || '';
-        const wps = (j.waypoints || []).map(w => (w && (w.name || w.address)) || '').filter(Boolean);
-        const chain = [dep, ...wps, dst].filter(Boolean);
+        const wps = (j.waypoints || []).map(_locName).filter(Boolean);
+        const chain = [_locName(j.origin), ...wps, _locName(j.destination)].filter(Boolean);
         if (chain.length >= 2) { c.trip.departure = chain.slice(0, -1).join(' > '); c.trip.destination = chain[chain.length - 1]; }
-        else { c.trip.departure = dep; c.trip.destination = dst; }
+        else { c.trip.departure = _locName(j.origin); c.trip.destination = _locName(j.destination); }
         const est = j.estimation || {};
         c.fare.est = est.totalFee || 0;
         c.fare.surge = est.surgePercentage || 0;
-        if (est.tollFee) c.fare.items.push({ label: '톨게이트 비용', amt: est.tollFee });
-        // 취소수수료·최종요금은 receipt에 있을 것으로 추정 — 구조 확인 전까지 미기록
+        if (est.tollFee && !(j.ride && j.ride.receipt)) c.fare.items.push({ label: '톨게이트 비용(예상)', amt: est.tollFee });
+        // 예약 자체 영수증(취소수수료 등) + 파생 라이드 영수증(최종요금) 모두 반영
+        receiptToFare(c, j.receipt);
+        if (j.ride) receiptToFare(c, j.ride.receipt);
         c.flags.isCash = !!j.isOnSitePayment;
         c.flags.thirdParty = _thirdTag(j.user);
-        c.flags.isPlus = /^DTX/i.test(c.ids.driver) || j.rideType === 'PLS';
+        c.flags.isPlus = _isPlusOf(j.driver, j.rideType);
         return c;
       }
 
       if (rideM) {
         const j = apiOf(/\/api\/rides\/:id$/);
         if (!j || j.id !== rideM[1]) return null;
-        // ⚠️ 임시 매핑 — 라이드 응답 구조 덤프를 받으면 요금(영수증)까지 정식 매핑 예정
         const c = HBStore.emptyCase();
         c.ids.type = 'ride';
         c.ids.ride = j.id;
-        c.ids.user = (j.user && j.user.id) || '';
+        c.ids.user = (j.rider && j.rider.id) || '';       // 라이드는 user가 아니라 rider
         c.ids.driver = (j.driver && j.driver.id) || '';
-        c.trip.name = (j.user && j.user.name) || '';
-        c.trip.dateTime = fmtDT(j.createdAt || j.requestedAt);
+        c.trip.name = (j.rider && j.rider.name) || '';
+        c.trip.dateTime = fmtDT(j.createdAt);              // 호출 시각
         c.trip.actionWord = '호출';
         c.trip.timeSrc = 'ride';
-        c.trip.departure = (j.origin && (j.origin.name || j.origin.address)) || '';
-        c.trip.destination = (j.destination && (j.destination.name || j.destination.address)) || '';
-        const est = j.estimation || {};
-        c.fare.est = est.totalFee || 0;
-        c.fare.surge = est.surgePercentage || 0;
+        const stops = [...(j.stopovers || []), ...(j.waypoints || [])].map(_locName).filter(Boolean);
+        const chain = [_locName(j.origin), ...stops, _locName(j.destination)].filter(Boolean);
+        if (chain.length >= 2) { c.trip.departure = chain.slice(0, -1).join(' > '); c.trip.destination = chain[chain.length - 1]; }
+        else { c.trip.departure = _locName(j.origin); c.trip.destination = _locName(j.destination); }
+        c.fare.est = (j.estimation && (j.estimation.minCost || j.estimation.maxCost)) || 0;
+        c.fare.surge = j.surgePercentage || 0;
+        receiptToFare(c, j.receipt);
+        if (!c.fare.total && j.cost) c.fare.total = j.cost;
+        // 예약 파생 라이드: 중첩 rideReservation에서 예약 ID까지 즉시 확보
+        if (j.rideReservation && j.rideReservation.id) {
+          c.ids.fromResv = j.rideReservation.id;
+          c.ids.resv = j.rideReservation.id;
+          c.flags.isFromResv = true;
+          // 예약 탑승 시각·문구가 라이드 호출 시각보다 우선 (기존 꿀통 규칙과 동일)
+          if (j.rideReservation.expectedPickUpAt) {
+            c.trip.dateTime = fmtDT(j.rideReservation.expectedPickUpAt);
+            c.trip.actionWord = '탑승';
+            c.trip.timeSrc = 'resv';
+          }
+        }
         c.flags.isCash = !!j.isOnSitePayment;
-        c.flags.thirdParty = _thirdTag(j.user);
-        c.flags.isPlus = /^DTX/i.test(c.ids.driver) || j.rideType === 'PLS';
-        console.log('[HB] 라이드 API 임시 매핑 사용 — 요금 정식 매핑은 구조 덤프 후 확정');
+        c.flags.thirdParty = _thirdTag(j.rider);
+        c.flags.isPlus = _isPlusOf(j.driver, j.type);
         return c;
       }
       return null;
