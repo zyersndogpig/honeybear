@@ -92,6 +92,10 @@
       if (v === '' || v == null) return;
       out.flags[k] = v;
     });
+    // isFromResv 는 페이지 상태가 아니라 '이 건이 예약 파생인가'라는 사실이다.
+    // 예약 페이지에서 잡은 true 를, 파생 관계를 못 읽은 라이드 캡처의 false 가
+    // 지워버리면 예약 양식이 라이드 양식으로 되돌아간다. 한 번 참이면 유지.
+    out.flags.isFromResv = prev.flags.isFromResv || cur.flags.isFromResv;
     // 예약 문구(탑승)는 라이드(호출)보다 우선 — 기존 _timeSrc 규칙
     if (prev.trip.timeSrc === 'resv' && cur.trip.timeSrc === 'ride') {
       out.trip.actionWord = prev.trip.actionWord;
@@ -1492,11 +1496,17 @@
         lostItem: c.trip.lostItem || ''
       };
       S('tada_msg_data', JSON.stringify(md));
-      S('tada_id_type', c.ids.type === 'resv' ? 'resv' : 'ride');
-      S('tada_main_id', c.ids.type === 'resv' ? (c.ids.resv || c.ids.ride) : c.ids.ride);
+      /* ids.type 은 '어느 페이지에서 캡처했나'(URL 기준)일 뿐이다.
+       * 폼이 필요한 건 '이 건이 예약 건인가'이므로 여기서 분리한다.
+       * 예약 파생 라이드(/rides/:id + rideReservation 존재)에서 실행해도
+       * 예약 양식이 나와야 한다. 라이드 ID는 tada_ride_id 로 따로 넘어간다. */
+      const RESV_ID = c.ids.resv || c.ids.fromResv || '';
+      const RESV_CASE = !!RESV_ID && (c.ids.type === 'resv' || c.flags.isFromResv);
+      S('tada_id_type', RESV_CASE ? 'resv' : 'ride');
+      S('tada_main_id', RESV_CASE ? RESV_ID : c.ids.ride);
       S('tada_ride_id', c.ids.ride || '');
-      S('tada_resv_id', c.ids.resv || '');
-      S('tada_resv_ride_id', c.ids.type === 'resv' ? (c.ids.ride || '') : '');
+      S('tada_resv_id', RESV_ID);
+      S('tada_resv_ride_id', RESV_CASE ? (c.ids.ride || '') : '');
       S('tada_from_resv_id', c.ids.fromResv || '');
       S('tada_is_from_resv', c.flags.isFromResv ? '1' : '0');
       S('tada_last_user_id', c.ids.user || '');
@@ -1603,7 +1613,9 @@ function clearIds(keepMsgData){
      beeTab:'refund',
      extra:cancelStr?`취소수수료 : ${cancelStr} > 0원`:fareStr?`취소수수료 : ${fareStr} > 0원`:'취소수수료 : 원 > 0원',
      // 예약 페이지인데 파생 라이드 있으면 라이드에서 ㄱㄱ
-     extraWarning:type==='resv'&&!!resvRideId},
+     // 파생 라이드가 있는데 취소수수료를 아직 못 잡았을 때만 경고.
+     // (라이드에서 실행해 이미 감지했으면 갈 필요 없음)
+     extraWarning:type==='resv'&&!!resvRideId&&!cancelStr},
     {title:applyLineup('[취소수수료 청구 요청의 건 / 넥스트]'),
      beeTab:'charge',
      extra:cancelStr?`취소수수료 : 0원 > ${cancelStr}`:'취소수수료 : 0원 > 3,000원'},
