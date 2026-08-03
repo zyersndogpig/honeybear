@@ -104,6 +104,71 @@
   const IS_ADMIN = /admin\.tadatada\.(in|com)$/.test(location.hostname);
   const IS_ZD = /zendesk\.com$/.test(location.hostname);
 
+  /* ══════════════════════════════════════════════════════════════════
+   * 2-b. 공용 파서 유틸 — ADMIN 캡처와 꿀빠는 문자가 같은 함수를 쓴다.
+   *      (기존엔 hbRunBeeForm 안에만 있어 captureFromDom/simplifyAddr에서
+   *       참조 불가 → 주소 정규화 규칙이 두 갈래로 갈라져 있었다)
+   * ══════════════════════════════════════════════════════════════════ */
+
+  function simplifyAddress(text){
+    if(!text)return"";
+    let addr=text.trim();
+    addr=addr.split('（').join('(').split('）').join(')'); // 전각 괄호 → 반각 정규화
+    // 괄호 안 추출: 맨 마지막 최상위 괄호 그룹만 사용
+    // (영문 건물명 괄호 + 한글 주소 괄호처럼 괄호가 2개 이상일 때 둘을 한 덩어리로 묶지 않도록.
+    //  중첩 괄호 '명동1(il)가'는 depth 카운트로 안전 처리)
+    let _depth=0,_gStart=-1,_gEnd=-1,_lastInner=null;
+    for(let _i=0;_i<addr.length;_i++){
+      const _ch=addr[_i];
+      if(_ch==='('){if(_depth===0)_gStart=_i;_depth++;}
+      else if(_ch===')'){if(_depth>0){_depth--;if(_depth===0&&_gStart>=0){_lastInner=addr.substring(_gStart+1,_i);_gEnd=_i;}}}
+    }
+    // 괄호 밖 장소명(건물명) — 괄호 안이 번지수뿐이라 주소를 못 뽑을 때 폴백용
+    let _outer="";
+    if(_lastInner!==null&&_gStart>=0){_outer=(addr.slice(0,_gStart)+addr.slice(_gEnd+1)).replace(/\s+/g," ").trim();}
+    if(_lastInner!==null){
+      addr=_lastInner.trim();
+    }else{
+      const dongMatch=addr.match(/.*?([가-힣]+[동읍면리])(\s|$)/);
+      if(dongMatch){
+        const idx=addr.indexOf(dongMatch[1]);
+        addr=addr.substring(0,idx+dongMatch[1].length).trim();
+      }
+    }
+    let parts=addr.split(/\s+/);
+    while(parts.length&&/^[0-9-]+$/.test(parts[parts.length-1])){parts.pop();}
+    let _result=parts.join(" ");
+    // 괄호 안이 전부 숫자(번지 등)라 비워지면 괄호 밖 장소명으로 폴백 (공란 방지)
+    if(!_result&&_outer)_result=_outer;
+    return _result;
+  }
+
+  // ── 이름 추출 헬퍼 ───────────────────────────────────────────────────
+  const NOISE_FILTERS=[
+    "타다앱사용회원","만족","리뷰","핸드폰 번호","실제 탑승자"
+  ];
+  /* ── 발송 전 안전장치 ────────────────────────────────────────────
+   * 허니베어가 뽑는 건 고객에게 그대로 나가는 요금·환불 금액 문자다.
+   * 채움 표시 [   ] 나 [금액] 이 남은 채 복사되면 그대로 발송될 수 있어
+   * 복사 단계에서 한 번 잡는다. 상담사가 의도한 경우엔 통과시킨다. */
+  function guardPlaceholders(text){
+    const hits=[...String(text||'').matchAll(/\[\s*\]|\[\s{2,}\]|\[(금액|요금|숫자|날짜|시각|사유)\]/g)]
+      .map(m=>m[0]);
+    if(!hits.length) return true;
+    return confirm(
+      '⚠️ 아직 채우지 않은 항목이 '+hits.length+'개 있습니다.\n\n'+
+      [...new Set(hits)].slice(0,5).join('  ')+
+      '\n\n이대로 복사할까요?'
+    );
+  }
+
+  function extractName(rawText){
+    return rawText.split("\n")
+      .map(v=>v.trim())
+      .find(v=>v&&!NOISE_FILTERS.some(f=>v.includes(f)))||"(이름 미확인)";
+    // 빈값 대신 명시적 fallback → 문자에 "님" 앞이 비는 문제 방지
+  }
+
   /* ═══════════════════════════════════════════════════════════════════════
    * 3. ADMIN — (A) API 가로채기 로거  (B) 캡처
    * ═══════════════════════════════════════════════════════════════════════ */
@@ -236,13 +301,10 @@
     }
     /* 주소 단순화: "서울 서초구 잠원동 50" → "서울 서초구 잠원동"
      * (끝의 번지·숫자 토큰 제거. 동/읍/면/가 까지만 남김) */
-    /* 꿀빠는 문자의 simplifyAddress(호이스팅됨)로 위임.
-     * 이전 자체 구현은 괄호 처리가 없어 "롯데월드타워 (송파구 신천동" 처럼
-     * 여는 괄호가 남은 채 tada_msg_data → 고객 문자로 나갈 수 있었음. */
-    function simplifyAddr(addr) {
-      if (!addr) return '';
-      try { return simplifyAddress(addr); } catch (e) { return String(addr).trim(); }
-    }
+    // 공용 simplifyAddress 로 단일화. 자체 구현은 괄호 처리가 없어
+    // "롯데월드타워 (송파구 신천동" 처럼 여는 괄호가 남은 채
+    // tada_msg_data → 고객 발송 문자로 나갈 수 있었다.
+    const simplifyAddr = addr => simplifyAddress(addr || '');
     /* 장소 표기: address(행정동)에서 단순화한 게 있으면 우선, 없으면 name */
     function _locName(l) {
       if (!l) return '';
@@ -359,46 +421,179 @@
       return row.innerText.replace(/^[^\t]*\t/, '').trim();
     }
 
+    /* DOM 폴백 — API 캡처가 실패했을 때 어드민 표를 직접 읽는다.
+     * honey.html(꿀통 북마클릿)에서 검증된 파싱을 봉투 스키마로 이식.
+     * API 분기와 같은 모양의 case 를 돌려주는 것이 계약이다. */
     function captureFromDom() {
+      const ride = location.href.match(/\/rides\/([A-Za-z0-9]+)/);
+      const resv = location.href.match(/\/rideReservations\/([A-Za-z0-9]+)/);
+      if (!ride && !resv) return null;
+
       const c = HBStore.emptyCase();
-      const url = location.href;
-      const ride = url.match(/\/rides\/([A-Za-z0-9]+)/);
-      const resv = url.match(/\/rideReservations\/([A-Za-z0-9]+)/);
-      const user = url.match(/\/users\/([A-Za-z0-9]+)/);
-      const drv  = url.match(/\/drivers?\/([A-Za-z0-9]+)/);
+      const body = document.body.innerText;
 
-      if (user) { c.ids.user = user[1]; c.ids.type = 'user'; }
-      else if (drv) { c.ids.driver = drv[1]; c.ids.type = 'driver'; }
-      else if (ride) {
-        c.ids.type = 'ride'; c.ids.ride = ride[1];
+      // ── 공통: 이름 ──────────────────────────────────────────────
+      c.trip.name = extractName(getRowValue('탑승자') + '\n' + getRowValue('호출자'));
+
+      // ── 공통: 플러스 감지 (라인업 문구 or 드라이버 ID DTX 접두) ──
+      const lineup = getRowValue('라인업 / 운행타입') || getRowValue('라인업') || getRowValue('운행타입');
+      const driverIds = (getRowValue('드라이버').match(/[A-Za-z0-9]+/g) || []);
+      c.flags.isPlus = /플러스/i.test(lineup) || driverIds.some(id => /^DTX/i.test(id));
+      c.flags.thirdParty = (getRowValue('써드파티 정보') || '').trim();
+
+      // ── 공통: 취소수수료 (+N원(취소 수수료) 패턴, 라이드·예약 모두 표기됨) ──
+      let cancel = 0;
+      for (const mm of body.matchAll(/\+\s*([\d,]+)\s*원?\s*[(（]([^)）]*취소\s*수수료[^)）]*)[)）]/g)) {
+        cancel += Number(mm[1].replace(/,/g, ''));
+      }
+      c.fare.cancel = cancel;
+
+      // ── 경로 조립 헬퍼: [출발, ...경유, 도착] → departure / destination ──
+      const chainTo = (dep, vias, dest) => {
+        const chain = [dep, ...vias, dest].filter(Boolean);
+        if (chain.length >= 2) {
+          c.trip.departure = chain.slice(0, -1).join(' > ');
+          c.trip.destination = chain[chain.length - 1];
+        } else { c.trip.departure = dep || ''; c.trip.destination = dest || ''; }
+      };
+
+      if (ride) {
+        c.ids.type = 'ride';
+        c.ids.ride = ride[1];
         c.flags.isCash = getRowValue('탑승자').includes('현장결제');
-        // TODO: 꿀통 index의 라인업/플러스 감지, 실제요금·영수증 합산,
-        //       예상요금, fare items, 예약 파생 감지, saveMsgData('ride') 파싱 이식
-      }
-      else if (resv) {
-        c.ids.type = 'resv'; c.ids.resv = resv[1];
-        // TODO: 꿀통의 resv 파싱(취소수수료, 운행정보 행, saveMsgData('resv')) 이식
-      }
-      else { toast('🍯 라이드/예약/유저/파트너 페이지가 아니에요'); return null; }
+        c.trip.dateTime = getRowValue('호출 시각') || getRowValue('요청 탑승 일시');
+        c.trip.actionWord = '호출';
+        c.trip.timeSrc = 'ride';
 
-      // 써드파티 태그 (유저 페이지)
-      if (user) {
-        const tp = getRowValue('써드파티 정보');
-        if (/TOSS/i.test(tp)) c.flags.thirdParty = '토스 택시타기';
-        else if (/TMONEY/i.test(tp)) c.flags.thirdParty = '티머니 고';
+        // 경로: "출발:/경유N:/도착:" 복합 행이 있으면 우선, 없으면 출발지·도착지 행
+        const route = getRowValue('경로');
+        if (route) {
+          let dep = '', dest = ''; const vias = [];
+          route.split('\n').map(v => v.trim()).filter(Boolean).forEach(line => {
+            if (line.startsWith('출발:')) dep = simplifyAddress(line.replace('출발:', '').trim());
+            else if (line.startsWith('도착:')) dest = simplifyAddress(line.replace('도착:', '').trim());
+            else if (line.startsWith('경유')) vias.push(simplifyAddress(line.replace(/^경유\s*\d+:\s*/, '').trim()));
+          });
+          chainTo(dep, vias, dest);
+        } else {
+          chainTo(simplifyAddress(getRowValue('출발지')), [], simplifyAddress(getRowValue('도착지')));
+        }
+
+        // 실제요금: "총N원" > "= N" > "N원" 순
+        const realRaw = getRowValue('실제요금').replace(/,/g, '');
+        const mTot = realRaw.match(/총\s*([0-9]+)\s*원/);
+        const mEq  = realRaw.match(/=\s*([0-9]+)/);
+        const mNum = realRaw.match(/^([0-9]+)\s*원/);
+        c.fare.total = Number((mTot || mEq || mNum || [0, 0])[1]) || 0;
+
+        // 영수증 "+금액(항목)" 합산이 있으면 그쪽이 정본 (할인·크레딧 제외)
+        // 합산 범위를 영수증 칸으로 한정 — 실제요금 행의 계산식까지 긁으면 이중 계상된다.
+        const EXCLUDE = /할인|크레딧|계좌\s*이체|포인트/;
+        const norm = l => l.replace(/\s+/g, '')
+                           .replace(/^추가거리요금$/, '거리추가요금')
+                           .replace(/^추가시간요금$/, '시간추가요금');
+        let sum = 0; const seen = new Set();
+        for (const mm of getRowValue('영수증').matchAll(/\+\s*([\d,]+)\s*[(（]([^)）]+)[)）]/g)) {
+          const amt = Number(mm[1].replace(/,/g, '')); const label = norm(mm[2].trim());
+          if (!amt || EXCLUDE.test(label) || seen.has(label)) continue;
+          seen.add(label); sum += amt;
+        }
+        if (sum > 0) c.fare.total = sum;
+
+        // 요금정정 세부항목 (이용요금 제외한 추가 항목만)
+        const itemSeen = new Set();
+        for (const mm of body.matchAll(/\+\s*([\d,]+)\s*[(（]([^)）]+)[)）]/g)) {
+          const amt = Number(mm[1].replace(/,/g, '')); const label = norm(mm[2].trim());
+          if (!amt || /이용요금/.test(label) || itemSeen.has(label)) continue;
+          itemSeen.add(label); c.fare.items.push({ label, amt });
+        }
+
+        const mEst = getRowValue('예상요금').replace(/,/g, '').match(/([0-9]+)/);
+        c.fare.est = mEst ? Number(mEst[1]) : 0;
+
+        // 예약 파생 라이드 — "호출 예약" 행에서 예약 ID 확보
+        const resvRow = [...document.querySelectorAll('tr')]
+          .find(tr => tr.innerText.replace(/\s+/, ' ').trim().startsWith('호출 예약'));
+        const raw = resvRow ? resvRow.innerText.replace(/^호출\s*예약[\s\t\n]*/, '').trim() : '';
+        const rid = (raw.match(/[A-Z0-9]{10,}/) || [''])[0];
+        if (rid.length >= 10 && !/해당\s*없음/.test(raw)) {
+          c.ids.fromResv = rid; c.ids.resv = rid; c.flags.isFromResv = true;
+        }
+      } else {
+        c.ids.type = 'resv';
+        c.ids.resv = resv[1];
+        c.flags.isCash = false;
+        c.trip.dateTime = getRowValue('요청 탑승 일시') || getRowValue('호출 시각');
+        c.trip.actionWord = '탑승';
+        c.trip.timeSrc = 'resv';
+
+        const via = getRowValue('경유지');
+        let vias = [];
+        if (via && via.trim() && via.trim() !== '-') {
+          vias = via.split('\n').map(l => l.trim())
+            .filter(l => l && l !== '-' && !/^총\s*경유지/.test(l))
+            .map(l => { const mm = l.match(/^-?\s*경유지\s*\d+\s*:\s*(.+)$/); return simplifyAddress(mm ? mm[1].trim() : l); })
+            .filter(Boolean);
+        }
+        chainTo(simplifyAddress(getRowValue('출발지')), vias, simplifyAddress(getRowValue('도착지')));
+
+        // 예약의 "예상요금 구성항목"은 실제 청구액이 아니라 신뢰하지 않는다.
+        // 라이드 페이지를 거쳐 이미 실제요금을 모은 경우는 mergeCase 가 살려준다.
+        c.fare.total = 0;
+
+        // 예약 파생 라이드 ID (운행 정보 행)
+        const rr = (getRowValue('운행 정보').match(/[A-Z0-9]{10,}/) || [''])[0];
+        if (rr) c.ids.ride = rr;
       }
+
+      c.ids.user = (getRowValue('탑승자').match(/[A-Z0-9]{10,}/) || [''])[0] || c.ids.user;
+      c.ids.driver = (getRowValue('드라이버').match(/[A-Z0-9]{10,}/) || [''])[0] || c.ids.driver;
       return c;
     }
 
+    /* API 우선, 빈칸은 DOM 으로 메운다.
+     * 기존엔 API 성공 시 DOM 을 아예 안 봐서, API 응답에 없는 필드
+     * (써드파티 태그, 영수증 세부항목 등)가 통째로 비는 경우가 있었다.
+     * 반대로 API 실패 시엔 DOM 단독으로 완결되어야 한다. */
     function capture() {
-      let cur = null;
-      try { cur = captureFromApi(); } catch (e) { console.warn('[HB] API 캡처 오류:', e.message); }
-      const src = cur ? 'API' : 'DOM';
-      if (!cur) cur = captureFromDom();
-      if (!cur) return;
+      let api = null, dom = null;
+      try { api = captureFromApi(); } catch (e) { console.warn('[HB] API 캡처 오류:', e.message); }
+      try { dom = captureFromDom(); } catch (e) { console.warn('[HB] DOM 캡처 오류:', e.message); }
+      if (!api && !dom) { toast('🍯 캡처할 라이드/예약을 찾지 못했습니다'); return; }
+
+      let cur, src;
+      if (api && dom) { cur = fillBlanks(api, dom); src = 'API+DOM'; }
+      else { cur = api || dom; src = api ? 'API' : 'DOM'; }
+
       const merged = mergeCase(HBStore.loadCase(), cur);
       HBStore.saveCase(merged);
-      toast('🍯 캡처 완료 (' + src + ') → 젠데스크 패널 실시간 갱신');
+
+      const gaps = missingFields(merged);
+      toast(gaps.length
+        ? '🍯 캡처 완료 (' + src + ') — 미확보: ' + gaps.join(', ')
+        : '🍯 캡처 완료 (' + src + ') → 젠데스크 패널 실시간 갱신');
+    }
+
+    /* base 의 빈 값만 alt 로 채운다. 0·''·[] 를 빈 값으로 본다. */
+    function fillBlanks(base, alt) {
+      const blank = v => v === '' || v === 0 || v === null || v === undefined ||
+                         (Array.isArray(v) && v.length === 0);
+      ['ids', 'trip', 'fare', 'flags'].forEach(g => {
+        Object.keys(base[g] || {}).forEach(k => {
+          if (blank(base[g][k]) && !blank(alt[g] && alt[g][k])) base[g][k] = alt[g][k];
+        });
+      });
+      return base;
+    }
+
+    /* 문자 양식에서 [   ] 로 비어 나갈 항목을 미리 알려준다 */
+    function missingFields(c) {
+      const out = [];
+      if (!c.trip.name || c.trip.name === '(이름 미확인)') out.push('이름');
+      if (!c.trip.dateTime) out.push('일시');
+      if (!c.trip.departure && !c.trip.destination) out.push('경로');
+      if (!c.fare.total && !c.fare.cancel) out.push('요금');
+      return out;
     }
 
     /* 플로팅 버튼 — 누르면 자동 캡처 후 도구 선택창 (드래그 이동 가능) */
@@ -1316,11 +1511,6 @@ function clearIds(keepMsgData){
   }
 
   // ── 예약 파생 라이드인데 예약 미수집 → alert만 띄우고 팝업 없이 종료 ──
-  if(false && isFromResv&&!resvId){ // 봉투 환경: 예약 파생이면 resvId가 이미 채워짐
-    blinkTitle('⚠️ 예약 페이지에서 실행 필요!');
-    alert('⚠️ 예약 파생 라이드예요!\n호출 예약 ID 클릭해서 예약 페이지에서도 한번 더 실행해주세요!');
-    return;
-  }
   localStorage.removeItem('tada_auto_popup');
 
   // ── 예상요금도 저장해두기 (요금정정 기본값용) ────────────────────────
@@ -1812,10 +2002,9 @@ function clearIds(keepMsgData){
     let html=`<b>${titleLine}${tagHtml}</b><br>유저 : ${uHtml} / 드라이버 : ${dHtml}<br>${labelText} : ${mainHtml}`;
     if(finalExtra){plain+=`\n${finalExtra}`;html+='<br>'+finalExtra.split('\n').join('<br>');}
 
-    // ── 티켓뷰 연동: 유저스크립트 경로는 GM 스토리지(hb_case)로 두 도메인이
-    //    직접 공유하므로 TADACTX 클립보드 마커 불필요. 스냅샷 주입 블록 제거.
-    //    (마커를 남기면 젠데스크 티켓 본문 HTML에 유저ID·드라이버ID·요금
-    //     base64가 읽는 쪽 없이 계속 쌓임)
+    // 티켓뷰 연동은 GM 스토리지(hb_case)로 두 도메인이 직접 공유한다.
+    // TADACTX 클립보드 마커는 읽는 쪽이 없어 제거 — 남기면 젠데스크 티켓
+    // 본문 HTML에 유저ID·드라이버ID·요금 base64가 계속 쌓인다.
 
     let copied=false;
     try{
@@ -1902,43 +2091,12 @@ function clearIds(keepMsgData){
   }
 
   // ── 유틸: 주소 단순화 ────────────────────────────────────────────────
-  function simplifyAddress(text){
-    if(!text)return"";
-    let addr=text.trim();
-    addr=addr.split('（').join('(').split('）').join(')'); // 전각 괄호 → 반각 정규화
-    // 괄호 안 추출: 맨 마지막 최상위 괄호 그룹만 사용
-    // (영문 건물명 괄호 + 한글 주소 괄호처럼 괄호가 2개 이상일 때 둘을 한 덩어리로 묶지 않도록.
-    //  중첩 괄호 '명동1(il)가'는 depth 카운트로 안전 처리)
-    let _depth=0,_gStart=-1,_gEnd=-1,_lastInner=null;
-    for(let _i=0;_i<addr.length;_i++){
-      const _ch=addr[_i];
-      if(_ch==='('){if(_depth===0)_gStart=_i;_depth++;}
-      else if(_ch===')'){if(_depth>0){_depth--;if(_depth===0&&_gStart>=0){_lastInner=addr.substring(_gStart+1,_i);_gEnd=_i;}}}
-    }
-    // 괄호 밖 장소명(건물명) — 괄호 안이 번지수뿐이라 주소를 못 뽑을 때 폴백용
-    let _outer="";
-    if(_lastInner!==null&&_gStart>=0){_outer=(addr.slice(0,_gStart)+addr.slice(_gEnd+1)).replace(/\s+/g," ").trim();}
-    if(_lastInner!==null){
-      addr=_lastInner.trim();
-    }else{
-      const dongMatch=addr.match(/.*?([가-힣]+[동읍면리])(\s|$)/);
-      if(dongMatch){
-        const idx=addr.indexOf(dongMatch[1]);
-        addr=addr.substring(0,idx+dongMatch[1].length).trim();
-      }
-    }
-    let parts=addr.split(/\s+/);
-    while(parts.length&&/^[0-9-]+$/.test(parts[parts.length-1])){parts.pop();}
-    let _result=parts.join(" ");
-    // 괄호 안이 전부 숫자(번지 등)라 비워지면 괄호 밖 장소명으로 폴백 (공란 방지)
-    if(!_result&&_outer)_result=_outer;
-    return _result;
-  }
 
   // ── 유틸: Rich Text 클립보드 복사 ────────────────────────────────────
   // execCommand는 deprecated지만 HTML clipboardData 설정은 현재 유일한 방법.
   // text/plain은 navigator.clipboard.writeText 병행으로 fallback 확보.
   async function copyRichText(text){
+    if(!guardPlaceholders(text)) return;   // 미기입 [   ] 방치 방지
     const escaped=text
       .replace(/&/g,"&amp;")
       .replace(/</g,"&lt;")
@@ -1970,16 +2128,6 @@ function clearIds(keepMsgData){
     }
   }
 
-  // ── 이름 추출 헬퍼 ───────────────────────────────────────────────────
-  const NOISE_FILTERS=[
-    "타다앱사용회원","만족","리뷰","핸드폰 번호","실제 탑승자"
-  ];
-  function extractName(rawText){
-    return rawText.split("\n")
-      .map(v=>v.trim())
-      .find(v=>v&&!NOISE_FILTERS.some(f=>v.includes(f)))||"(이름 미확인)";
-    // 빈값 대신 명시적 fallback → 문자에 "님" 앞이 비는 문제 방지
-  }
 
   // ── info 초기화 ──────────────────────────────────────────────────────
   let info={
