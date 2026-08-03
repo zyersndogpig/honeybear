@@ -1237,11 +1237,15 @@
       const pageSnap = (() => { try { return document.body.innerText || ''; } catch (e) { return ''; } })();
 
       const panel = el('div',
-        'position:fixed;top:16px;right:16px;width:360px;max-height:92vh;overflow-y:auto;z-index:999999;background:#fff;border:1px solid #e6eae8;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.18);font-family:-apple-system,sans-serif;color:#243027;display:none;color-scheme:light;');
+        'position:fixed;top:16px;right:16px;width:360px;height:92vh;min-width:300px;min-height:220px;max-width:96vw;max-height:96vh;overflow:auto;resize:both;z-index:999999;background:#fff;border:1px solid #e6eae8;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.18);font-family:-apple-system,sans-serif;color:#243027;display:none;color-scheme:light;');
       panel.id = 'hb_zd_panel';
       panel.innerHTML = `
         <style>
           #hb_zd_panel *{box-sizing:border-box;}
+          /* 우하단 리사이즈 그립 — 네이티브 resize:both 의 코너를 시각화 */
+          #hb_zd_panel::-webkit-resizer{background:transparent;}
+          #hb_zd_panel .grip{position:sticky;bottom:0;margin-left:auto;width:16px;height:16px;pointer-events:none;
+            background:linear-gradient(135deg,transparent 45%,#cfd6d4 45%,#cfd6d4 55%,transparent 55%,transparent 70%,#cfd6d4 70%,#cfd6d4 80%,transparent 80%);}
           #hb_zd_panel .h{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #e6eae8;position:sticky;top:0;background:#fff;border-radius:12px 12px 0 0;z-index:2;}
           #hb_zd_panel .h b{font-size:14px;} #hb_zd_panel .tn{font-size:11px;font-weight:bold;color:#0a5d54;background:#e6f7f4;border:1px solid #bfe6de;padding:1px 7px;border-radius:20px;}
           #hb_zd_panel .x{margin-left:auto;border:none;background:#f1f3f5;border-radius:6px;width:24px;height:24px;cursor:pointer;color:#7b857f;}
@@ -1267,6 +1271,10 @@
           #hb_zd_panel .pick.on{background:#0a7d72;border-color:#0a7d72;color:#fff;font-weight:bold;}
           #hb_zd_panel .chip{padding:4px 10px;border-radius:20px;font-size:11px;border:1px solid #cfd6d4;background:#fff;color:#555;cursor:pointer;}
           #hb_zd_panel .chip.rec{border-color:#bfe6de;background:#e6f7f4;color:#0a5d54;font-weight:bold;}
+          #hb_zd_panel .chip.p-partner{border-left:3px solid #b58900;}
+          #hb_zd_panel .chip.p-user{border-left:3px solid #0a7d72;}
+          #hb_zd_panel .chip.p-both{border-left:3px dashed #9aa39e;}
+          #hb_zd_panel .chip.toggle{border-style:dashed;color:#7b857f;background:#fbfdfc;}
           #hb_zd_panel .div{height:1px;background:#e6eae8;margin:12px 0;}
           #hb_zd_panel .row{display:flex;align-items:center;gap:6px;}
           #hb_zd_panel .sel{flex:1;padding:5px 8px;border:1px solid #bfe6de;border-radius:6px;font-size:11.5px;background:#fff;color:#243027;cursor:pointer;}
@@ -1294,8 +1302,34 @@
           <div id="hb_addon" style="display:none;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;"></div>
           <textarea id="hb_preview" rows="6" placeholder="멘트 칩을 누르면 여기에 누적됩니다. 자유롭게 수정 후 복사하세요." style="margin-bottom:8px;"></textarea>
           <div class="row"><button id="hb_copy" class="btn" style="flex:1;">📋 복사하기</button><button id="hb_clear2" class="ghost">비우기</button></div>
+          <div class="grip" title="드래그해서 크기 조절"></div>
         </div>`;
       document.body.appendChild(panel);
+
+      /* 크기·위치 기억 — 상담사마다 모니터가 다르고 매번 다시 맞추긴 번거롭다.
+       * resize:both 는 인라인 style 에 width/height 를 써넣으므로 그대로 저장하면 된다. */
+      const GEO_KEY = 'hb_zd_panel_geo';
+      (function restoreGeo() {
+        let g0 = null;
+        try { g0 = JSON.parse(GM_getValue(GEO_KEY, 'null')); } catch (e) {}
+        if (!g0) return;
+        const vw = innerWidth, vh = innerHeight;
+        if (g0.w) panel.style.width = Math.min(g0.w, vw - 20) + 'px';
+        if (g0.h) panel.style.height = Math.min(g0.h, vh - 20) + 'px';
+        // 화면 밖으로 나간 위치는 복원하지 않는다 (다른 해상도에서 패널 실종 방지)
+        if (g0.l != null && g0.t != null && g0.l < vw - 60 && g0.t < vh - 40) {
+          panel.style.right = 'auto'; panel.style.left = Math.max(0, g0.l) + 'px'; panel.style.top = Math.max(0, g0.t) + 'px';
+        }
+      })();
+      let geoTimer = 0;
+      function saveGeo() {
+        clearTimeout(geoTimer);
+        geoTimer = setTimeout(() => {
+          const r = panel.getBoundingClientRect();
+          try { GM_setValue(GEO_KEY, JSON.stringify({ w: Math.round(r.width), h: Math.round(r.height), l: Math.round(r.left), t: Math.round(r.top) })); } catch (e) {}
+        }, 300);
+      }
+      if (typeof ResizeObserver === 'function') { try { new ResizeObserver(saveGeo).observe(panel); } catch (e) {} }
 
       const btn = el('button', 'position:fixed;right:18px;bottom:18px;z-index:999999;width:44px;height:44px;border-radius:50%;border:none;background:#0a7d72;color:#fff;font-size:19px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;', '🎫');
       btn.title = '허니베어 패널 (Alt+H · 드래그로 이동)';
@@ -1368,8 +1402,9 @@
         (p === '파트너' ? bp : bu).classList.add('on');
         (p === '파트너' ? bu : bp).classList.remove('on');
       }
-      bu.onclick = () => setParty('이용자');
-      bp.onclick = () => setParty('파트너');
+      // 대상 토글은 슬랙 적재 문구뿐 아니라 멘트 목록도 함께 바꾼다
+      bu.onclick = () => { setParty('이용자'); try { renderMents(); } catch (e) {} };
+      bp.onclick = () => { setParty('파트너'); try { renderMents(); } catch (e) {} };
       // 자동판별: 외부 ID 접두 우선 (D→파트너 / webuser·U 등→이용자), 없으면 드라이버 링크 보조 — 티켓뷰와 동일
       setParty(detectParty(pageSnap));
       g('hb_slack').onclick = function () {
@@ -1424,24 +1459,50 @@
         s.onchange = () => { if (s.value === '') return; addMent(m, m.variants[+s.value].text); variantBox.style.display = 'none'; };
         wrap.appendChild(s); variantBox.appendChild(wrap); variantBox.style.display = 'block'; s.focus();
       }
+      /* 멘트 대상: ments.json 의 party('user'|'partner'|'both') 우선.
+       * 없으면 id/label 로 추정한다 — 데이터가 먼저 배포되지 않아도 동작하도록. */
+      function mentParty(m) {
+        if (m.party === 'user' || m.party === 'partner' || m.party === 'both') return m.party;
+        const t = (m.id || '') + ' ' + (m.label || '');
+        if (/파트너|드라이버\s*진술|콜\s*수요/.test(t)) return 'partner';
+        if (/이용자|고객/.test(t)) return 'user';
+        return 'both';   // 모르면 숨기지 않는다
+      }
+      let showAllMents = false;   // '반대편 멘트도 보기' 토글
       function renderMents() {
         const txt = signalText(); const q = norm(filterEl.value); const hasSig = txt.trim().length > 0;
-        let scored = MENTS.map((m, idx) => ({ m, idx, score: scoreMent(m, txt) }));
+        const side = (party === '파트너') ? 'partner' : 'user';
+        let scored = MENTS.map((m, idx) => ({ m, idx, score: scoreMent(m, txt), party: mentParty(m) }));
+        // 검색 중이거나 '전체 보기'면 대상 필터를 건너뛴다 (멘트를 못 찾는 상황 방지)
+        const hidden = (q || showAllMents) ? [] : scored.filter(x => x.party !== side && x.party !== 'both');
+        if (!q && !showAllMents) scored = scored.filter(x => x.party === side || x.party === 'both');
         if (q) scored = scored.filter(x => norm(x.m.label).includes(q) || norm(x.m.id).includes(q));
         const matched = scored.filter(x => x.score > 0).sort((a, b) => (b.score - a.score) || (a.idx - b.idx));
         const rest = scored.filter(x => x.score === 0).sort((a, b) => a.idx - b.idx);
         const ordered = hasSig ? matched.concat(rest) : scored;
+        const sideName = side === 'partner' ? '파트너' : '이용자';
         statusEl.textContent = q ? ('"' + filterEl.value + '" 검색 ' + scored.length + '건')
-          : (hasSig ? (matched.length ? '문의·작성 글 기준 추천 (★=관련도 높음)' : '단서 없음 — 전체 표시') : '문의 기준 정렬. 작성 후 🔄로 갱신');
+          : (showAllMents ? ('전체 ' + scored.length + '건 표시 중')
+            : (sideName + ' 멘트 ' + scored.length + '건'
+               + (hidden.length ? ' · ' + (sideName === '파트너' ? '이용자' : '파트너') + ' 전용 ' + hidden.length + '건 숨김' : '')
+               + (hasSig && matched.length ? ' · ★=관련도 높음' : '')));
         chipsBox.innerHTML = ''; variantBox.style.display = 'none';
-        ordered.forEach(({ m, score }) => {
+        // 대상 표시 배지 (이 칩이 누구용인지 한눈에)
+        const partyMark = { user: '👤', partner: '🚕', both: '🔁' };
+        ordered.forEach(({ m, score, party: mp }) => {
           const hot = score > 0;
-          const b = el('button', null, (hot ? '★ ' : '') + m.label + (m.variants ? ' ▾' : ''));
-          b.className = 'chip' + (hot ? ' rec' : '');
+          const b = el('button', null, partyMark[mp] + ' ' + (hot ? '★ ' : '') + m.label + (m.variants ? ' ▾' : ''));
+          b.className = 'chip' + (hot ? ' rec' : '') + ' p-' + mp;
           b.title = m.variants ? ('경우: ' + m.variants.map(v => v.label).join(' / ')) : fillTokens(m.text, HBStore.loadCase());
           b.onclick = m.variants ? (() => showVariants(m)) : (() => addMent(m));
           chipsBox.appendChild(b);
         });
+        if (!q && (hidden.length || showAllMents)) {
+          const t = el('button', null, showAllMents ? '↩︎ ' + sideName + ' 멘트만 보기' : '＋ ' + (sideName === '파트너' ? '이용자' : '파트너') + ' 멘트도 보기');
+          t.className = 'chip toggle';
+          t.onclick = () => { showAllMents = !showAllMents; renderMents(); };
+          chipsBox.appendChild(t);
+        }
       }
       filterEl.oninput = renderMents;
       g('hb_refresh').onclick = () => { draftText = getDraftText(); blocks = parseInboundOriginal(); renderMents(); };
@@ -1535,7 +1596,7 @@
           panel.style.left = Math.max(0, ox + e.clientX - sx) + 'px';
           panel.style.top = Math.max(0, oy + e.clientY - sy) + 'px';
         });
-        document.addEventListener('mouseup', () => { dragging = false; });
+        document.addEventListener('mouseup', () => { if (dragging) { dragging = false; saveGeo(); } });
       })();
     });
   }
