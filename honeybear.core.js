@@ -236,16 +236,12 @@
     }
     /* 주소 단순화: "서울 서초구 잠원동 50" → "서울 서초구 잠원동"
      * (끝의 번지·숫자 토큰 제거. 동/읍/면/가 까지만 남김) */
+    /* 꿀빠는 문자의 simplifyAddress(호이스팅됨)로 위임.
+     * 이전 자체 구현은 괄호 처리가 없어 "롯데월드타워 (송파구 신천동" 처럼
+     * 여는 괄호가 남은 채 tada_msg_data → 고객 문자로 나갈 수 있었음. */
     function simplifyAddr(addr) {
       if (!addr) return '';
-      let s = addr.split('（').join('(').split('）').join(')').trim();
-      // 동/읍/면/가/로/길 이 나오면 그 지점까지만 (뒤 번지 컷)
-      const m = s.match(/^(.*?[가-힣]+(?:동|읍|면|가))(?:\s|$)/);
-      if (m) return m[1].trim();
-      // 폴백: 끝에서 숫자·하이픈 토큰 제거
-      let parts = s.split(/\s+/);
-      while (parts.length && /^[0-9-]+$/.test(parts[parts.length - 1])) parts.pop();
-      return parts.join(' ');
+      try { return simplifyAddress(addr); } catch (e) { return String(addr).trim(); }
     }
     /* 장소 표기: address(행정동)에서 단순화한 게 있으면 우선, 없으면 name */
     function _locName(l) {
@@ -523,7 +519,7 @@
     }
     function fillTokens(text, c) {
       const T = tokensOf(c);
-      return (text || '').replace(/\{(\w+)\}/g, (w, k) => (T[k] != null && T[k] !== '') ? T[k] : '[ ]');
+      return (text || '').replace(/\{(\w+)\}/g, (w, k) => (T[k] != null && T[k] !== '') ? T[k] : '[   ]');
     }
 
     /* ── 대괄호 처리 (원본 processBrackets 동일) ──
@@ -1816,13 +1812,10 @@ function clearIds(keepMsgData){
     let html=`<b>${titleLine}${tagHtml}</b><br>유저 : ${uHtml} / 드라이버 : ${dHtml}<br>${labelText} : ${mainHtml}`;
     if(finalExtra){plain+=`\n${finalExtra}`;html+='<br>'+finalExtra.split('\n').join('<br>');}
 
-    // ── 티켓뷰 연동: CTX 스냅샷을 복사물 html에 마커로 심기(오리진 우회) ──
-    try{
-      const _ck=['tada_msg_data','tada_is_from_resv','tada_is_cash','tada_is_plus','tada_third_party_tag','tada_cancel_fee','tada_total_fare','tada_est_fare','tada_last_user_id','tada_last_driver_id'];
-      const _snap={}; _ck.forEach(k=>{const v=localStorage.getItem(k); if(v!=null&&v!=='')_snap[k]=v;});
-      const _b64=btoa(unescape(encodeURIComponent(JSON.stringify(_snap))));
-      html+='<!--TADACTX:'+_b64+'-->';   // text/html에만, slack용 plain은 그대로
-    }catch(e){}
+    // ── 티켓뷰 연동: 유저스크립트 경로는 GM 스토리지(hb_case)로 두 도메인이
+    //    직접 공유하므로 TADACTX 클립보드 마커 불필요. 스냅샷 주입 블록 제거.
+    //    (마커를 남기면 젠데스크 티켓 본문 HTML에 유저ID·드라이버ID·요금
+    //     base64가 읽는 쪽 없이 계속 쌓임)
 
     let copied=false;
     try{
@@ -1903,7 +1896,7 @@ function clearIds(keepMsgData){
   // ── 유틸: 행 값 추출 (탭 외 공백도 허용) ──────────────────────────────
   function getRowValue(label){
     const row=[...document.querySelectorAll("tr")]
-      .find(tr=>tr.innerText.replace(/\s+/," ").startsWith(label));
+      .find(tr=>tr.innerText.replace(/\s+/," ").trim().startsWith(label));
     if(!row)return"";
     return row.innerText.replace(/^[^\t]*\t/,"").trim();
   }
@@ -1928,7 +1921,7 @@ function clearIds(keepMsgData){
     if(_lastInner!==null){
       addr=_lastInner.trim();
     }else{
-      const dongMatch=addr.match(/.*?([가-힗]+[동읍면리])(\s|$)/);
+      const dongMatch=addr.match(/.*?([가-힣]+[동읍면리])(\s|$)/);
       if(dongMatch){
         const idx=addr.indexOf(dongMatch[1]);
         addr=addr.substring(0,idx+dongMatch[1].length).trim();
