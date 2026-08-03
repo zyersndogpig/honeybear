@@ -301,23 +301,6 @@
       const k = Object.keys(_lastApi).find(k => re.test(k));
       return k ? _lastApi[k].json : null;
     }
-    /* 써드파티 판정 — 필드명에 의존하지 않는다.
-     * 기존엔 rider 하위의 특정 키 하나만 봐서, 응답 스키마가
-     * thirdParty / thirdPartyType / partner 등으로 조금만 달라도 조용히 빈값이 됐다.
-     * 어드민 호출내역이 유저 칸에 "7580 (TOSS)" 로 태그를 찍는 걸 보면
-     * 써드파티 정보는 라이드에 딸려 오므로, rider 객체 전체를 훑는 편이 안전하다. */
-    function _thirdTag(u) {
-      let s = '';
-      try { s = u ? JSON.stringify(u) : ''; } catch (e) { s = ''; }
-      return _tagOfText(s);
-    }
-    /* 문자열에서 써드파티 브랜드를 뽑는다. API·DOM 양쪽이 같은 규칙을 쓴다. */
-    function _tagOfText(t) {
-      const s = String(t || '');
-      if (/TOSS|토스/i.test(s)) return '토스 택시타기';
-      if (/TMONEY|티머니/i.test(s)) return '티머니 고';
-      return '';
-    }
     /* 주소 단순화: "서울 서초구 잠원동 50" → "서울 서초구 잠원동"
      * (끝의 번지·숫자 토큰 제거. 동/읍/면/가 까지만 남김) */
     // 공용 simplifyAddress 로 단일화. 자체 구현은 괄호 처리가 없어
@@ -330,6 +313,37 @@
       const byAddr = simplifyAddr(l.address || '');
       return byAddr || l.name || l.address || '';
     }
+    /* ── 써드파티 판정 ─────────────────────────────────────────────
+     * 어드민 API 응답을 실측해서 나온 규칙이다.
+     *   /api/users/:id            → thirdPartyUser 채워짐
+     *   rides/page 목록 API      → rider.thirdPartyUser 채워짐
+     *   /api/rides/:id            → rider.thirdPartyUser 가 null (같은 유저인데도!)
+     * 즉 라이드 상세에서는 rider 로 판정 불가 → paymentMethod.type 으로 잡는다.
+     *
+     * ⚠ 전체 응답을 문자열로 훑으면 안 된다. 오탐 지뢰가 셋 있다.
+     *   - 모든 드라이버 차량의 settlementAgency 가 "TMONEY"
+     *   - 일반 카드 결제의 tokenType 이 "TOSS_PG" (타다 PG사)
+     *   - pgTransactionId 가 "TM_NE..." 로 시작
+     *   - paymentMethod.type "TOSS_APP" 은 토스앱 등록 카드일 뿐 써드파티 아님
+     *     (thirdPartyUser=null 인 유저에게서 실제로 관측됨)
+     *   따라서 THIRD_PARTY_ 접두사가 붙은 것만 인정한다. */
+    function _tagOfCode(code) {
+      const s = String(code || '').toUpperCase();
+      if (s.includes('TOSS')) return '토스 택시타기';
+      if (s.includes('TMONEY')) return '티머니 고';
+      return '';
+    }
+    /* rider/user 객체 → 태그 (목록·유저 상세에서 유효) */
+    function _thirdTag(u) {
+      return _tagOfCode(u && u.thirdPartyUser && u.thirdPartyUser.thirdPartyType);
+    }
+    /* paymentMethod → 태그 (라이드 상세의 유일한 단서) */
+    function _thirdTagOfPayment(pm) {
+      const t = String((pm && pm.type) || '');
+      if (!/^THIRD_PARTY_/.test(t)) return '';
+      return _tagOfCode(t.slice('THIRD_PARTY_'.length));
+    }
+
     function _isPlusOf(driver, rideType) {
       return (driver && (driver.typeDisplayName === 'PLUS' || /^DTX/i.test(driver.id || ''))) || rideType === 'PREMIUM';
     }
@@ -388,7 +402,8 @@
         receiptToFare(c, j.receipt);
         if (j.ride) receiptToFare(c, j.ride.receipt);
         c.flags.isCash = !!j.isOnSitePayment;
-        c.flags.thirdParty = _thirdTag(j.user);
+        c.flags.thirdParty = _thirdTag(j.user)
+          || _thirdTagOfPayment(j.paymentMethod);
         c.flags.isPlus = _isPlusOf(j.driver, j.rideType);
         return c;
       }
@@ -426,7 +441,10 @@
           }
         }
         c.flags.isCash = !!j.isOnSitePayment;
-        c.flags.thirdParty = _thirdTag(j.rider);
+        c.flags.thirdParty = _thirdTag(j.rider)
+          || _thirdTagOfPayment(j.paymentMethod)
+          || _thirdTagOfPayment(j.paymentProfile && j.paymentProfile.paymentMethod)
+          || _thirdTagOfPayment(j.payment && j.payment.paymentMethod);
         c.flags.isPlus = _isPlusOf(j.driver, j.type);
         return c;
       }
@@ -461,7 +479,10 @@
       // '써드파티 정보' 행 자체는 라이드·예약 페이지에 없다. 다만 어드민이
       // 유저 표기를 "7580 (TOSS)" 형태로 렌더하므로 탑승자·호출자 칸에서 건질 수 있다.
       // 못 건지면 빈값을 넣지 않고 그대로 둔다 → mergeCase 가 유저 페이지 값을 보존.
-      const _tp = _tagOfText(getRowValue('탑승자') + ' ' + getRowValue('호출자'));
+      // 어드민이 유저 칸을 "7580 (TOSS)" 로 렌더 → 괄호 안 코드만 정확히 집는다.
+      const _tpm = (getRowValue('탑승자') + ' ' + getRowValue('호출자'))
+        .match(/[(（]\s*(TOSS|TMONEY)\s*[)）]/i);
+      const _tp = _tpm ? _tagOfCode(_tpm[1]) : '';
       if (_tp) c.flags.thirdParty = _tp;
 
       // ── 공통: 취소수수료 (+N원(취소 수수료) 패턴, 라이드·예약 모두 표기됨) ──
@@ -590,7 +611,7 @@
       let label = '';
       if (u) {
         c.ids.user = u[1];
-        const tag = _tagOfText(getRowValue('써드파티 정보'));
+        const tag = _tagOfCode(getRowValue('써드파티 정보'));
         c.flags.thirdParty = tag;   // 없는 유저면 명시적으로 비운다
         label = tag ? '👤 유저 저장 (' + tag + ')' : '👤 유저 저장';
       } else {
