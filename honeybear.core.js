@@ -301,10 +301,21 @@
       const k = Object.keys(_lastApi).find(k => re.test(k));
       return k ? _lastApi[k].json : null;
     }
+    /* 써드파티 판정 — 필드명에 의존하지 않는다.
+     * 기존엔 rider 하위의 특정 키 하나만 봐서, 응답 스키마가
+     * thirdParty / thirdPartyType / partner 등으로 조금만 달라도 조용히 빈값이 됐다.
+     * 어드민 호출내역이 유저 칸에 "7580 (TOSS)" 로 태그를 찍는 걸 보면
+     * 써드파티 정보는 라이드에 딸려 오므로, rider 객체 전체를 훑는 편이 안전하다. */
     function _thirdTag(u) {
-      const s = u && u.thirdPartyUser ? JSON.stringify(u.thirdPartyUser) : '';
-      if (/TOSS/i.test(s)) return '토스 택시타기';
-      if (/TMONEY/i.test(s)) return '티머니 고';
+      let s = '';
+      try { s = u ? JSON.stringify(u) : ''; } catch (e) { s = ''; }
+      return _tagOfText(s);
+    }
+    /* 문자열에서 써드파티 브랜드를 뽑는다. API·DOM 양쪽이 같은 규칙을 쓴다. */
+    function _tagOfText(t) {
+      const s = String(t || '');
+      if (/TOSS|토스/i.test(s)) return '토스 택시타기';
+      if (/TMONEY|티머니/i.test(s)) return '티머니 고';
       return '';
     }
     /* 주소 단순화: "서울 서초구 잠원동 50" → "서울 서초구 잠원동"
@@ -447,8 +458,11 @@
       const lineup = getRowValue('라인업 / 운행타입') || getRowValue('라인업') || getRowValue('운행타입');
       const driverIds = (getRowValue('드라이버').match(/[A-Za-z0-9]+/g) || []);
       c.flags.isPlus = /플러스/i.test(lineup) || driverIds.some(id => /^DTX/i.test(id));
-      // 써드파티 정보 행은 라이드·예약 페이지에 없다. 유저 페이지에서
-      // capturePartyPage() 가 채우고, mergeCase 가 보존한다.
+      // '써드파티 정보' 행 자체는 라이드·예약 페이지에 없다. 다만 어드민이
+      // 유저 표기를 "7580 (TOSS)" 형태로 렌더하므로 탑승자·호출자 칸에서 건질 수 있다.
+      // 못 건지면 빈값을 넣지 않고 그대로 둔다 → mergeCase 가 유저 페이지 값을 보존.
+      const _tp = _tagOfText(getRowValue('탑승자') + ' ' + getRowValue('호출자'));
+      if (_tp) c.flags.thirdParty = _tp;
 
       // ── 공통: 취소수수료 (+N원(취소 수수료) 패턴, 라이드·예약 모두 표기됨) ──
       let cancel = 0;
@@ -576,8 +590,7 @@
       let label = '';
       if (u) {
         c.ids.user = u[1];
-        const t = getRowValue('써드파티 정보');
-        const tag = /TOSS/i.test(t) ? '토스 택시타기' : /TMONEY/i.test(t) ? '티머니 고' : '';
+        const tag = _tagOfText(getRowValue('써드파티 정보'));
         c.flags.thirdParty = tag;   // 없는 유저면 명시적으로 비운다
         label = tag ? '👤 유저 저장 (' + tag + ')' : '👤 유저 저장';
       } else {
