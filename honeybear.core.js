@@ -83,7 +83,15 @@
       dst[k] = v;
     });
     fill(out.ids, cur.ids); fill(out.trip, cur.trip); fill(out.fare, cur.fare);
-    Object.assign(out.flags, cur.flags);
+    // flags 도 빈 값 보호. Object.assign 이면 유저 페이지에서 잡은 써드파티 태그가
+    // 이후 라이드 페이지 캡처의 thirdParty:'' 로 지워진다.
+    // 단 boolean 은 false 가 유의미한 값이므로 그대로 반영한다.
+    Object.keys(cur.flags).forEach(k => {
+      const v = cur.flags[k];
+      if (typeof v === 'boolean') { out.flags[k] = v; return; }
+      if (v === '' || v == null) return;
+      out.flags[k] = v;
+    });
     // 예약 문구(탑승)는 라이드(호출)보다 우선 — 기존 _timeSrc 규칙
     if (prev.trip.timeSrc === 'resv' && cur.trip.timeSrc === 'ride') {
       out.trip.actionWord = prev.trip.actionWord;
@@ -439,7 +447,8 @@
       const lineup = getRowValue('라인업 / 운행타입') || getRowValue('라인업') || getRowValue('운행타입');
       const driverIds = (getRowValue('드라이버').match(/[A-Za-z0-9]+/g) || []);
       c.flags.isPlus = /플러스/i.test(lineup) || driverIds.some(id => /^DTX/i.test(id));
-      c.flags.thirdParty = (getRowValue('써드파티 정보') || '').trim();
+      // 써드파티 정보 행은 라이드·예약 페이지에 없다. 유저 페이지에서
+      // capturePartyPage() 가 채우고, mergeCase 가 보존한다.
 
       // ── 공통: 취소수수료 (+N원(취소 수수료) 패턴, 라이드·예약 모두 표기됨) ──
       let cancel = 0;
@@ -555,7 +564,33 @@
      * 기존엔 API 성공 시 DOM 을 아예 안 봐서, API 응답에 없는 필드
      * (써드파티 태그, 영수증 세부항목 등)가 통째로 비는 경우가 있었다.
      * 반대로 API 실패 시엔 DOM 단독으로 완결되어야 한다. */
+    /* 유저·파트너 페이지 — 라이드/예약과 달리 '건'이 아니라 '주체' 정보다.
+     * 통째 교체하면 진행 중인 케이스가 날아가므로 기존 봉투에 덧칠만 한다.
+     * (써드파티 정보 행은 /users/{id} 에만 존재 — 라이드·예약 페이지엔 없다) */
+    function capturePartyPage() {
+      const u = location.href.match(/\/users\/([A-Za-z0-9]+)/);
+      const d = location.href.match(/\/drivers\/([A-Za-z0-9]+)/);
+      if (!u && !d) return null;
+
+      const c = HBStore.loadCase();
+      let label = '';
+      if (u) {
+        c.ids.user = u[1];
+        const t = getRowValue('써드파티 정보');
+        const tag = /TOSS/i.test(t) ? '토스 택시타기' : /TMONEY/i.test(t) ? '티머니 고' : '';
+        c.flags.thirdParty = tag;   // 없는 유저면 명시적으로 비운다
+        label = tag ? '👤 유저 저장 (' + tag + ')' : '👤 유저 저장';
+      } else {
+        c.ids.driver = d[1];
+        label = '🚕 파트너 저장';
+      }
+      HBStore.saveCase(c);
+      toast(label);
+      return true;
+    }
+
     function capture() {
+      try { if (capturePartyPage()) return; } catch (e) { console.warn('[HB] 주체 캡처 오류:', e.message); }
       let api = null, dom = null;
       try { api = captureFromApi(); } catch (e) { console.warn('[HB] API 캡처 오류:', e.message); }
       try { dom = captureFromDom(); } catch (e) { console.warn('[HB] DOM 캡처 오류:', e.message); }
