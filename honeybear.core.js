@@ -36,7 +36,8 @@
           paid: 0,                // 실제 결제 합 (total - discount)
           discount: 0,            // 할인·크레딧 등 차감 합
           est: 0, cancel: 0, surge: 0,
-          items: [],              // [{label, amt}]
+          items: [],              // [{label, amt, sum?}] — 요금정정 체크박스 목록
+          breakdown: [],          // [{label, amt}] 이용요금 내부 구성 (표시 안 함)
           fix: null,              // {old, new, items:[{label,from,to}]} — 요금정정 시
           loss: 0                 // 영업손실비
         },
@@ -389,18 +390,26 @@
       ['parentTaxiCreditAmount', '엄마아빠택시 포인트'],
       ['bankTransferAmount', '계좌 이체']
     ];
-    const RECEIPT_INNER = [                  // driveFee 의 내역 — 표시만, 합산 금지
+    /* 합산은 안 되지만 요금정정에서 빼고 넣는 대상이라 목록엔 있어야 하는 항목.
+     * 거리·시간 추가요금은 driveFee 안에 이미 포함돼 있어 더하면 이중 계상이지만,
+     * 상담사가 체크 해제해서 정정하는 항목이므로 체크박스에는 떠야 한다.
+     * (합산 제외 = 목록 제외 가 아니다) */
+    const RECEIPT_SURCHARGE = [
+      ['additionalDistanceFee', '거리추가요금'],
+      ['additionalTimeFee', '시간추가요금']
+    ];
+    /* 이용요금의 내부 구성 — 영수증에 +항목으로 뜨지도 않고 정정 대상도 아니다. 표시 안 함. */
+    const RECEIPT_BREAKDOWN = [
       ['basicFee', '기본요금'],
       ['distanceBasedFee', '거리요금'],
       ['timeBasedFee', '시간요금'],
-      ['rentFee', '대절요금'],
-      ['additionalDistanceFee', '거리추가요금'],
-      ['additionalTimeFee', '시간추가요금']
+      ['rentFee', '대절요금']
     ];
 
     function receiptToFare(c, r) {
       if (!r) return;
       const n = k => Number(r[k] || 0);
+      if (!c.fare.breakdown) c.fare.breakdown = [];
       let charge = 0, deduct = 0;
       RECEIPT_CHARGE.forEach(([k, label]) => {
         const v = n(k); if (v <= 0) return;
@@ -408,8 +417,11 @@
         if (k !== 'driveFee') c.fare.items.push({ label, amt: v });  // 이용요금은 항목에서 제외(원본 규칙)
       });
       RECEIPT_DEDUCT.forEach(([k]) => { deduct += n(k); });
-      RECEIPT_INNER.forEach(([k, label]) => {                        // 내역은 참고용으로만
-        const v = n(k); if (v > 0) c.fare.items.push({ label, amt: v, inner: true });
+      RECEIPT_SURCHARGE.forEach(([k, label]) => {   // 합산 X, 목록 O
+        const v = n(k); if (v > 0) c.fare.items.push({ label, amt: v, sum: false });
+      });
+      RECEIPT_BREAKDOWN.forEach(([k, label]) => {   // 합산 X, 목록 X (참고용)
+        const v = n(k); if (v > 0) c.fare.breakdown.push({ label, amt: v });
       });
 
       c.fare.total = charge;              // 할인 전 (북마클릿 tada_total_fare 와 같은 의미)
@@ -1567,10 +1579,9 @@
       S('tada_total_fare', c.fare.total ? String(c.fare.total) : '');
       S('tada_est_fare', c.fare.est ? String(c.fare.est) : '');
       S('tada_cancel_fee', c.fare.cancel ? String(c.fare.cancel) : '');
-      // inner(=driveFee 내역: 기본요금·거리요금 등)는 요금정정 항목 목록에서 뺀다.
-      // 원본 꿀통도 영수증의 '+항목'만 담았고 이용요금 내역은 담지 않았다.
-      const _items = (c.fare.items || []).filter(i => !i.inner);
-      S('tada_fare_items', _items.length ? JSON.stringify(_items) : '');
+      // items 는 그대로 넘긴다. 이용요금 내부 구성(기본요금·거리요금)은 breakdown 에
+      // 따로 담기므로 여기 섞이지 않는다. 거리·시간 추가요금은 정정 대상이라 포함된다.
+      S('tada_fare_items', (c.fare.items && c.fare.items.length) ? JSON.stringify(c.fare.items) : '');
       // 영손비는 loss_amount로 (원본 loss 탭 기본값)
       if (c.fare.loss) S('tada_loss_amount', String(c.fare.loss)); else localStorage.removeItem('tada_loss_amount');
     }
