@@ -19,7 +19,7 @@
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
   console.log('%c[HB] 허니베어 core v0.7.3 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
-  const HB_VER = 2; // 케이스 봉투 스키마 버전
+  const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
   /* ═══════════════════════════════════════════════════════════════════════
    * 1. HBStore — 케이스 봉투 저장소 (기존 tada_* 20여 키를 대체)
@@ -32,7 +32,10 @@
         ids: { type: '', ride: '', resv: '', fromResv: '', user: '', driver: '' },
         trip: { name: '', dateTime: '', departure: '', destination: '', actionWord: '', timeSrc: '', lostItem: '' },
         fare: {
-          total: 0, est: 0, cancel: 0, surge: 0,
+          total: 0,               // 할인·크레딧 적용 전 청구 합 (꿀통 기준값)
+          paid: 0,                // 실제 결제 합 (total - discount)
+          discount: 0,            // 할인·크레딧 등 차감 합
+          est: 0, cancel: 0, surge: 0,
           items: [],              // [{label, amt}]
           fix: null,              // {old, new, items:[{label,from,to}]} — 요금정정 시
           loss: 0                 // 영업손실비
@@ -353,28 +356,75 @@
     }
     /* receipt(영수증) → fare.items — 기존 꿀통의 "+항목 합산" 정규식을 대체.
      * 이용요금 구성분(기본/거리/시간/driveFee)은 제외하고 추가 항목만 담는다. */
-    const RECEIPT_ITEM_MAP = [
+    /* ── 영수증 화이트리스트 ──────────────────────────────────────────
+     * 단일 필드(total)만 읽으면 안 되는 이유를 실측으로 확인했다.
+     *  1) 예약 영수증은 total 이 없고 totalFee 를 쓴다 (취소 예약 → 요금 0원으로 나오던 원인)
+     *  2) total 의 의미가 일정하지 않다.
+     *     라이드는 할인 후(129,000+3,200-10,000=122,200),
+     *     예약은 할인 전(취소수수료 10,000 = totalFee, 크레딧 10,000 차감 전)
+     *  3) total 은 별도 청구되는 부가서비스까지 합산한다.
+     *     바로배정 건: total 67,700 이지만 카드 승인은 56,700 + 11,000 두 건
+     *  4) basicFee·distanceBasedFee·additionalDistanceFee 는 driveFee 의 "내역"이라
+     *     합산하면 이중 계상된다. (북마클릿이 겪었던 바로 그 버그)
+     * → 필드를 가산/차감/내역으로 명시 분류하고 직접 합산한다. */
+    const RECEIPT_CHARGE = [                 // 가산 (합산 대상)
+      ['driveFee', '이용요금'],
       ['tollgateFee', '톨게이트 비용'],
       ['parkingFee', '주차 요금'],
-      ['additionalDistanceFee', '거리추가요금'],
-      ['additionalTimeFee', '시간추가요금'],
+      ['callFee', '호출료'],
+      ['directRideAdditionalServiceFee', '바로배정'],
       ['carSeatAdditionalServiceFee', '카시트 부가서비스요금'],
       ['myDriverAdditionalServiceFee', '마이 드라이버'],
       ['rideWaitingAdditionalServiceFee', '대기요금'],
-      ['directRideAdditionalServiceFee', '바로배정'],
-      ['callFee', '호출료'],
+      ['cancellationFee', '취소 수수료'],
+      ['lossFee', '영업손실비'],
       ['tipAmount', '팁']
     ];
+    const RECEIPT_DEDUCT = [                 // 차감
+      ['discountAmount', '할인'],
+      ['employeeDiscountAmount', '임직원 할인'],
+      ['bizDiscountAmount', '비즈니스 할인'],
+      ['bulkReservationDiscountAmount', '묶음예약 할인'],
+      ['creditAmount', '크레딧'],
+      ['parentTaxiCreditAmount', '엄마아빠택시 포인트'],
+      ['bankTransferAmount', '계좌 이체']
+    ];
+    const RECEIPT_INNER = [                  // driveFee 의 내역 — 표시만, 합산 금지
+      ['basicFee', '기본요금'],
+      ['distanceBasedFee', '거리요금'],
+      ['timeBasedFee', '시간요금'],
+      ['rentFee', '대절요금'],
+      ['additionalDistanceFee', '거리추가요금'],
+      ['additionalTimeFee', '시간추가요금']
+    ];
+
     function receiptToFare(c, r) {
       if (!r) return;
-      if (r.total) c.fare.total = r.total;
-      if (r.adjustedPriceTotal) c.fare.total = r.adjustedPriceTotal; // 요금정정 반영가 우선
-      if (r.cancellationFee) c.fare.cancel = r.cancellationFee;
-      if (r.lossFee) c.fare.loss = r.lossFee;
-      RECEIPT_ITEM_MAP.forEach(([k, label]) => {
-        const v = Number(r[k] || 0);
-        if (v > 0) c.fare.items.push({ label, amt: v });
+      const n = k => Number(r[k] || 0);
+      let charge = 0, deduct = 0;
+      RECEIPT_CHARGE.forEach(([k, label]) => {
+        const v = n(k); if (v <= 0) return;
+        charge += v;
+        if (k !== 'driveFee') c.fare.items.push({ label, amt: v });  // 이용요금은 항목에서 제외(원본 규칙)
       });
+      RECEIPT_DEDUCT.forEach(([k]) => { deduct += n(k); });
+      RECEIPT_INNER.forEach(([k, label]) => {                        // 내역은 참고용으로만
+        const v = n(k); if (v > 0) c.fare.items.push({ label, amt: v, inner: true });
+      });
+
+      c.fare.total = charge;              // 할인 전 (북마클릿 tada_total_fare 와 같은 의미)
+      c.fare.discount = deduct;
+      c.fare.paid = Math.max(0, charge - deduct);
+      // 요금정정 반영가가 있으면 그 값이 최종 청구
+      if (n('adjustedPriceTotal')) { c.fare.total = n('adjustedPriceTotal'); c.fare.paid = c.fare.total - deduct; }
+      if (n('cancellationFee')) c.fare.cancel = n('cancellationFee');
+      if (n('lossFee')) c.fare.loss = n('lossFee');
+
+      // 합산 결과와 서버 total 이 어긋나면 콘솔에 남긴다 (스키마 변경 조기 감지)
+      const svr = r.total != null ? Number(r.total) : (r.totalFee != null ? Number(r.totalFee) : null);
+      if (svr != null && svr !== c.fare.paid && svr !== c.fare.total) {
+        console.warn('[HB] 영수증 합산 불일치 — 계산 charge/paid:', charge, c.fare.paid, '/ 서버:', svr, r);
+      }
     }
 
     function captureFromApi() {
@@ -1517,7 +1567,10 @@
       S('tada_total_fare', c.fare.total ? String(c.fare.total) : '');
       S('tada_est_fare', c.fare.est ? String(c.fare.est) : '');
       S('tada_cancel_fee', c.fare.cancel ? String(c.fare.cancel) : '');
-      S('tada_fare_items', (c.fare.items && c.fare.items.length) ? JSON.stringify(c.fare.items) : '');
+      // inner(=driveFee 내역: 기본요금·거리요금 등)는 요금정정 항목 목록에서 뺀다.
+      // 원본 꿀통도 영수증의 '+항목'만 담았고 이용요금 내역은 담지 않았다.
+      const _items = (c.fare.items || []).filter(i => !i.inner);
+      S('tada_fare_items', _items.length ? JSON.stringify(_items) : '');
       // 영손비는 loss_amount로 (원본 loss 탭 기본값)
       if (c.fare.loss) S('tada_loss_amount', String(c.fare.loss)); else localStorage.removeItem('tada_loss_amount');
     }
