@@ -17,7 +17,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.7.4 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v0.8.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -116,6 +116,114 @@
   const $ = (s, r) => (r || document).querySelector(s);
   const el = (tag, css, html) => { const e = document.createElement(tag); if (css) e.style.cssText = css; if (html != null) e.innerHTML = html; return e; };
   const onReady = fn => (document.readyState === 'loading') ? document.addEventListener('DOMContentLoaded', fn) : fn();
+
+  /* ── 플로팅 버튼(FAB) 꾸미기 ──────────────────────────────────────────
+   * 아이콘·크기·색·투명도·모양을 사용자가 바꾸고, 드래그 위치까지 기억한다.
+   * role: 'admin'(🍯 어드민) | 'zd'(🎫 젠데스크) — 둘을 따로 설정 가능.
+   * 설정 진입: FAB 우클릭. 초기화: Tampermonkey 메뉴.                     */
+  const HBFab = (() => {
+    const KEY = 'hb_fab_cfg';
+    const DEF = {
+      admin: { icon: '🍯', size: 46, bg: '#0a7d72', fg: '#ffffff', op: 100, round: 50 },
+      zd: { icon: '🎫', size: 44, bg: '#0a7d72', fg: '#ffffff', op: 100, round: 50 }
+    };
+    const all = () => { try { return JSON.parse(GM_getValue(KEY, '{}')) || {}; } catch (e) { return {}; } };
+    const load = role => Object.assign({}, DEF[role], (all()[role] || {}));
+    const save = (role, cfg) => { const a = all(); a[role] = Object.assign({}, a[role], cfg); GM_setValue(KEY, JSON.stringify(a)); };
+    const reset = role => { const a = all(); delete a[role]; GM_setValue(KEY, JSON.stringify(a)); };
+
+    /* 스타일 적용 — position 계열은 건드리지 않는다(드래그 로직과 충돌 방지) */
+    function apply(node, role) {
+      const c = load(role);
+      node.style.width = c.size + 'px';
+      node.style.height = c.size + 'px';
+      node.style.background = c.bg;
+      node.style.color = c.fg;
+      node.style.fontSize = Math.round(c.size * 0.43) + 'px';
+      node.style.opacity = (c.op / 100);
+      node.style.borderRadius = c.round + '%';
+      node.textContent = c.icon;
+      // 저장된 위치 복원 (없으면 기본 우하단 유지)
+      if (c.left != null && c.top != null) {
+        const L = Math.min(Math.max(0, c.left), Math.max(0, innerWidth - c.size));
+        const T = Math.min(Math.max(0, c.top), Math.max(0, innerHeight - c.size));
+        node.style.right = 'auto'; node.style.bottom = 'auto';
+        node.style.left = L + 'px'; node.style.top = T + 'px';
+      }
+    }
+    const savePos = (node, role) => {
+      const r = node.getBoundingClientRect();
+      save(role, { left: Math.round(r.left), top: Math.round(r.top) });
+    };
+
+    /* 우클릭 설정 팝업 — 변경 즉시 미리보기 + 저장 */
+    function openSettings(node, role) {
+      const old = document.getElementById('hb_fabcfg'); if (old) old.remove();
+      const c = load(role);
+      const r = node.getBoundingClientRect();
+      const w = el('div', `position:fixed;z-index:1000002;width:250px;background:#fff;border:1px solid #e6eae8;border-radius:12px;
+        box-shadow:0 8px 30px rgba(0,0,0,.22);padding:12px;font-family:-apple-system,sans-serif;font-size:12px;color:#243027;color-scheme:light;`);
+      w.id = 'hb_fabcfg';
+      w.style.left = Math.max(8, Math.min(r.left - 130, innerWidth - 262)) + 'px';
+      w.style.top = Math.max(8, Math.min(r.top - 250, innerHeight - 340)) + 'px';
+      const row = (label, inner) => `<div style="display:flex;align-items:center;gap:8px;margin:7px 0;">
+        <span style="width:52px;color:#5b6b63;flex-shrink:0;">${label}</span>${inner}</div>`;
+      w.innerHTML = `<div style="font-weight:bold;color:#0a5d54;margin-bottom:8px;">🎨 버튼 꾸미기</div>
+        ${row('아이콘', `<input id="hbf_icon" value="${c.icon}" maxlength="4" style="width:52px;text-align:center;font-size:17px;padding:3px;border:1px solid #d7dedb;border-radius:6px;">
+          <span id="hbf_presets" style="display:flex;gap:3px;flex-wrap:wrap;"></span>`)}
+        ${row('크기', `<input id="hbf_size" type="range" min="30" max="72" value="${c.size}" style="flex:1;"><span id="hbf_sizev" style="width:34px;text-align:right;">${c.size}px</span>`)}
+        ${row('배경', `<input id="hbf_bg" type="color" value="${c.bg}" style="width:38px;height:24px;padding:0;border:1px solid #d7dedb;border-radius:6px;background:#fff;">
+          <input id="hbf_fg" type="color" value="${c.fg}" style="width:38px;height:24px;padding:0;border:1px solid #d7dedb;border-radius:6px;background:#fff;">
+          <span style="color:#8a9992;font-size:11px;">배경 / 글자</span>`)}
+        ${row('투명도', `<input id="hbf_op" type="range" min="30" max="100" value="${c.op}" style="flex:1;"><span id="hbf_opv" style="width:34px;text-align:right;">${c.op}%</span>`)}
+        ${row('모서리', `<input id="hbf_round" type="range" min="0" max="50" value="${c.round}" style="flex:1;"><span id="hbf_roundv" style="width:34px;text-align:right;">${c.round}%</span>`)}
+        <div style="display:flex;gap:6px;margin-top:10px;">
+          <button id="hbf_reset" style="flex:1;padding:6px;border:1px solid #d7dedb;background:#f5f7f6;border-radius:7px;cursor:pointer;font-size:11.5px;">초기화</button>
+          <button id="hbf_close" style="flex:1;padding:6px;border:none;background:#0a7d72;color:#fff;border-radius:7px;cursor:pointer;font-weight:bold;font-size:11.5px;">닫기</button>
+        </div>
+        <div style="margin-top:7px;color:#8a9992;font-size:10.5px;line-height:1.5;">드래그로 위치 이동 · 위치도 저장됩니다</div>`;
+      document.body.appendChild(w);
+      const q = id => w.querySelector('#' + id);
+
+      // 이모지 프리셋 (직접 입력도 가능)
+      const box = q('hbf_presets');
+      ['🍯', '🐻', '🎫', '🧰', '⭐', '🔧'].forEach(ic => {
+        const b = el('button', 'width:24px;height:24px;padding:0;border:1px solid #e6eae8;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;line-height:1;', ic);
+        b.onclick = () => { q('hbf_icon').value = ic; upd(); };
+        box.appendChild(b);
+      });
+
+      function upd() {
+        const cfg = {
+          icon: q('hbf_icon').value.trim() || DEF[role].icon,
+          size: +q('hbf_size').value, bg: q('hbf_bg').value, fg: q('hbf_fg').value,
+          op: +q('hbf_op').value, round: +q('hbf_round').value
+        };
+        q('hbf_sizev').textContent = cfg.size + 'px';
+        q('hbf_opv').textContent = cfg.op + '%';
+        q('hbf_roundv').textContent = cfg.round + '%';
+        save(role, cfg); apply(node, role);
+      }
+      ['hbf_icon', 'hbf_size', 'hbf_bg', 'hbf_fg', 'hbf_op', 'hbf_round'].forEach(id => {
+        const e2 = q(id); e2.oninput = upd; e2.onchange = upd;
+      });
+      q('hbf_reset').onclick = () => { reset(role); apply(node, role); w.remove(); toast('버튼 설정 초기화됨'); };
+      q('hbf_close').onclick = () => w.remove();
+      const off = e => { if (!w.contains(e.target) && e.target !== node) { w.remove(); document.removeEventListener('mousedown', off); } };
+      setTimeout(() => document.addEventListener('mousedown', off), 0);
+    }
+
+    /* FAB에 스타일·우클릭 설정·툴팁을 한 번에 물린다 */
+    function attach(node, role) {
+      apply(node, role);
+      node.addEventListener('contextmenu', e => { e.preventDefault(); openSettings(node, role); });
+      node.title = (node.title || '') + ' · 우클릭으로 꾸미기';
+      try {
+        GM_registerMenuCommand('🎨 플로팅 버튼 초기화', () => { reset(role); apply(node, role); toast('버튼 설정 초기화됨'); });
+      } catch (e) {}
+    }
+    return { attach, apply, savePos, openSettings };
+  })();
 
   const IS_ADMIN = /admin\.tadatada\.(in|com)$/.test(location.hostname);
   const IS_ZD = /zendesk\.com$/.test(location.hostname);
@@ -776,6 +884,7 @@
       fab.id = 'hb_fab';
       fab.title = '허니베어 — 캡처 + 도구 (드래그로 이동)';
       document.body.appendChild(fab);
+      HBFab.attach(fab, 'admin');   // 저장된 아이콘·크기·색·위치 적용 + 우클릭 설정
 
       // 드래그 이동 (움직였으면 클릭으로 치지 않음)
       let dx = 0, dy = 0, sx = 0, sy = 0, moved = false, dragging = false;
@@ -795,6 +904,7 @@
       });
       document.addEventListener('mouseup', () => {
         if (dragging && !moved) openPicker();
+        else if (dragging && moved) HBFab.savePos(fab, 'admin');   // 옮긴 자리 기억
         dragging = false;
       });
 
@@ -1343,6 +1453,7 @@
       const btn = el('button', 'position:fixed;right:18px;bottom:18px;z-index:999999;width:44px;height:44px;border-radius:50%;border:none;background:#0a7d72;color:#fff;font-size:19px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;', '🎫');
       btn.title = '허니베어 패널 (Alt+H · 드래그로 이동)';
       document.body.appendChild(btn);
+      HBFab.attach(btn, 'zd');   // 저장된 아이콘·크기·색·위치 적용 + 우클릭 설정
 
       const g = id => panel.querySelector('#' + id);
       let ZDIDS = collectZdIds(pageSnap);
@@ -1572,7 +1683,7 @@
           btn.style.left = Math.max(0, fdx + e.clientX - fsx) + 'px';
           btn.style.top = Math.max(0, fdy + e.clientY - fsy) + 'px';
         });
-        document.addEventListener('mouseup', () => { if (fDrag && !fMoved) toggle(); fDrag = false; });
+        document.addEventListener('mouseup', () => { if (fDrag && !fMoved) toggle(); else if (fDrag && fMoved) HBFab.savePos(btn, 'zd'); fDrag = false; });
       })();
       g('hb_x').onclick = () => panel.style.display = 'none';
       document.addEventListener('keydown', e => { if (e.altKey && e.code === 'KeyH') toggle(); if (e.key === 'Escape' && panel.style.display !== 'none') panel.style.display = 'none'; });
