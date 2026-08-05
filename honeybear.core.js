@@ -17,7 +17,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.7.3 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v0.7.4 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -466,6 +466,12 @@
         if (est.tollFee && !(j.ride && j.ride.receipt)) c.fare.items.push({ label: '톨게이트 비용(예상)', amt: est.tollFee });
         // 예약 자체 영수증(취소수수료 등) + 파생 라이드 영수증(최종요금) 모두 반영
         receiptToFare(c, j.receipt);
+        // 파생 라이드 영수증이 있으면 그쪽이 최종 청구의 정본.
+        // 예약 영수증에서 push된 items가 남으면 라이드 total(base)에 없는 항목이
+        // 요금정정 체크박스에 섞여, 환불 체크 시 base에 없던 금액을 차감하게 된다.
+        // → items만 리셋 후 라이드 영수증으로 다시 모은다.
+        //   (cancel/loss는 값이 있을 때만 덮으므로 예약 영수증에서 잡은 값은 유지됨)
+        if (j.ride && j.ride.receipt) c.fare.items = [];
         if (j.ride) receiptToFare(c, j.ride.receipt);
         c.flags.isCash = !!j.isOnSitePayment;
         c.flags.thirdParty = _thirdTag(j.user)
@@ -611,10 +617,13 @@
         if (sum > 0) c.fare.total = sum;
 
         // 요금정정 세부항목 (이용요금 제외한 추가 항목만)
+        // sum과 같은 이유로 영수증 칸 한정 + EXCLUDE 적용 — body 전체를 긁으면
+        // 실제요금 계산식·결제 이력 등의 "+N(...)"이 정정 체크박스에 섞이고,
+        // 할인·크레딧류가 청구 항목처럼 노출될 수 있다. (sum에만 적용됐던 fix를 items에도 반영)
         const itemSeen = new Set();
-        for (const mm of body.matchAll(/\+\s*([\d,]+)\s*[(（]([^)）]+)[)）]/g)) {
+        for (const mm of getRowValue('영수증').matchAll(/\+\s*([\d,]+)\s*[(（]([^)）]+)[)）]/g)) {
           const amt = Number(mm[1].replace(/,/g, '')); const label = norm(mm[2].trim());
-          if (!amt || /이용요금/.test(label) || itemSeen.has(label)) continue;
+          if (!amt || /이용요금/.test(label) || EXCLUDE.test(label) || itemSeen.has(label)) continue;
           itemSeen.add(label); c.fare.items.push({ label, amt });
         }
 
@@ -1696,7 +1705,7 @@ function clearIds(keepMsgData){
     return val?Number(val).toLocaleString()+'원':'';
   }
 
-  const fareDetected=totalFare>0;
+  const fareDetected=Number(totalFare)>0;
   const fareStr  =fmtWon(totalFare)||'25,000원';
   const fareItemsRaw=localStorage.getItem('tada_fare_items')||'';
   let fareItems=[];
@@ -1718,7 +1727,7 @@ function clearIds(keepMsgData){
   localStorage.removeItem('tada_auto_popup');
 
   // ── 예상요금도 저장해두기 (요금정정 기본값용) ────────────────────────
-  const estDetected=estFare>0;
+  const estDetected=Number(estFare)>0;
   const estStr   =fmtWon(estFare)||'34,000원';
 
   const templates=[
@@ -1768,7 +1777,6 @@ function clearIds(keepMsgData){
     !rideId&&type==='resv'?`<span style="color:#d97706;font-weight:bold;">⚠️ 요금 정정 필요 시 라이드에서도 실행하세요</span>`:'',
     cancelStr?`<span style="color:#059669;">💰 취소수수료 감지: ${cancelStr}</span>`:'',
     isCash?`<span style="color:#dc2626;font-weight:bold;">💴 비회원 현장결제 감지됨</span>`:'',
-    false?'':''  // 봉투 환경: 경고 불필요,
   ].filter(Boolean).join('<br>');
 
   // ── 결제수단/회원 경고 배너 (토스·티머니 결제 변경 금지 / 비회원 전산수정 불가) ─────────────
@@ -1882,6 +1890,7 @@ function clearIds(keepMsgData){
         const checkedCbs=[...itemsWrap.querySelectorAll('input.fi-cb:checked')];
         if(checkedCbs.length===0){
           input.value=rideId?`결제요금 : ${fareStr} > ${estStr}`:'⚠️ 라이드에서 한번 더 실행 필요';
+          input.rows=2;
           return;
         }
         let adjFare=Number(localStorage.getItem('tada_total_fare')||'0');
@@ -1934,7 +1943,12 @@ function clearIds(keepMsgData){
           amtInput.value=v?Number(v).toLocaleString():'';
           if(cb.checked)updateExtra();
         };
-        cb.onchange=updateExtra;
+        cb.onchange=()=>{
+          // 금액 미입력 + 환불 미체크 상태로 체크하면 조용히 "> 0원"(환불)로 잡히는 함정 —
+          // 값이 비어 있으면 금액 입력칸으로 포커스를 보내 입력을 유도한다.
+          if(cb.checked&&!refundCb.checked&&!amtInput.value)setTimeout(()=>amtInput.focus(),0);
+          updateExtra();
+        };
 
         itemRow.append(cb,cbLabel,amtInput,refundLbl);
         itemsWrap.appendChild(itemRow);
@@ -2012,12 +2026,8 @@ function clearIds(keepMsgData){
 
       row.appendChild(itemsWrap);
 
-      // 라디오 선택 시 항목 패널 토글
-      const origOnchange=radio.onchange;
-      radio.onchange=()=>{
-        origOnchange&&origOnchange();
-        itemsWrap.style.display=rideId?'block':'none';
-      };
+      // 항목 패널 토글은 updateCopyBtn()이 단일 소유 (radio.onchange 말미에서 호출됨).
+      // 기존엔 여기서 rideId만 보고 display를 한 번 더 덮어써 조건이 어긋났다 → 래퍼 제거.
     }
 
     row.setAttribute('data-trow',idx);
@@ -2059,7 +2069,9 @@ function clearIds(keepMsgData){
     copyBtn.style.background=isWaiting?'#d97706':'#0052cc';
     // 항목 패널 표시 여부
     const itemsWrap=document.getElementById('fare_items_wrap_'+idx);
-    if(itemsWrap) itemsWrap.style.display=(rideId&&!isWaiting)?'block':'none';
+    // fareDetected 조건 추가: 요금 미감지(base=0) 상태에서 항목 체크 시
+    // placeholder(25,000원)와 base 0이 섞인 모순된 정정 문자열이 생성되던 버그 차단
+    if(itemsWrap) itemsWrap.style.display=(rideId&&fareDetected&&!isWaiting)?'block':'none';
   }
   updateCopyBtn();
 
@@ -2123,22 +2135,44 @@ function clearIds(keepMsgData){
     const inputEl=document.getElementById('extra_'+idx);
     const finalExtra=inputEl&&inputEl.style.display!=='none'?inputEl.value.trim():'';
 
+    // 봉투 fare.fix 동기화 헬퍼 — tokensOf의 {fixOld}/{fixNew}/{fareFix}/{fixLines}는
+    // 지금까지 채우는 곳이 없어 항상 폴백/빈값이던 죽은 토큰. 여기서 살린다.
+    // (saveCase가 GM 스토리지 change 이벤트를 쏘므로 열린 젠데스크 패널도 즉시 갱신)
+    const setEnvFix=(fixObj)=>{
+      try{
+        const _e=HBStore.loadCase();
+        if(_e&&_e.ts){_e.fare.fix=fixObj;HBStore.saveCase(_e);}
+      }catch(e){}
+    };
+
     // ── 요금 정정 탭이면 fix 값 + 항목 저장 (꿀빠는 곰 연동용) ──────────
     if(tpl.hasFareItems&&finalExtra){
-      const fixMatch=finalExtra.match(/결제요금\s*:\s*([\d,]+)원\s*>\s*([\d,]+)원/);
+      const fixMatch=finalExtra.match(/결제\s*요금\s*:\s*([\d,]+)원\s*>\s*([\d,]+)원/);
+      // ID는 항상 현재 건으로 갱신. fixMatch 실패(상담사가 결제요금 라인을 지우거나
+      // 형식을 바꾼 경우) 시엔 old/new/items를 명시적으로 지운다 —
+      // 안 지우면 이전 케이스 값이 같은 건 ID 매칭을 타고 되살아난다(stale).
+      localStorage.setItem('tada_fix_ride_id', rideId||'');
+      localStorage.setItem('tada_fix_resv_id', resvId||'');
       if(fixMatch){
         localStorage.setItem('tada_fix_old', fixMatch[1].replace(/,/g,''));
         localStorage.setItem('tada_fix_new', fixMatch[2].replace(/,/g,''));
-        localStorage.setItem('tada_fix_ride_id', rideId||'');
-        localStorage.setItem('tada_fix_resv_id', resvId||'');
-        // 항목별 정정 내역 파싱 후 저장
-        // "카시트 부가서비스요금 : 5,000원 > 0원" 형태
-        const itemLines=finalExtra.split('\n').slice(1).filter(Boolean);
-        const fixItems=itemLines.map(line=>{
-          const m=line.match(/^(.+?)\s*:\s*([\d,]+)원\s*>\s*([\d,]+)원$/);
-          return m?{label:m[1].trim(),from:m[2].replace(/,/g,''),to:m[3].replace(/,/g,'')}:null;
-        }).filter(Boolean);
+        // 항목별 정정 내역 파싱 후 저장 — "카시트 부가서비스요금 : 5,000원 > 0원" 형태.
+        // 기존 slice(1)은 "첫 줄 = 결제요금 라인" 가정이라 상담사가 위에 메모를 추가하면
+        // 결제요금 라인이 항목으로 오파싱됐다 → 위치 무관하게 결제요금 라인만 제외.
+        const fixItems=finalExtra.split('\n')
+          .map(l=>l.trim())
+          .filter(l=>l&&!/^결제\s*요금\s*:/.test(l))
+          .map(line=>{
+            const m=line.match(/^(.+?)\s*:\s*([\d,]+)원\s*>\s*([\d,]+)원$/);
+            return m?{label:m[1].trim(),from:m[2].replace(/,/g,''),to:m[3].replace(/,/g,'')}:null;
+          }).filter(Boolean);
         localStorage.setItem('tada_fix_items', fixItems.length?JSON.stringify(fixItems):'');
+        setEnvFix({old:Number(fixMatch[1].replace(/,/g,''))||0,
+                   new:Number(fixMatch[2].replace(/,/g,''))||0,
+                   items:fixItems});
+      }else{
+        ['tada_fix_old','tada_fix_new','tada_fix_items'].forEach(k=>localStorage.removeItem(k));
+        setEnvFix(null);
       }
       localStorage.setItem('tada_last_bee_tab','fix');
       localStorage.removeItem('tada_loss_subtype');
@@ -2148,7 +2182,11 @@ function clearIds(keepMsgData){
       localStorage.setItem('tada_last_bee_tab', tpl.beeTab);
       localStorage.setItem('tada_fix_ride_id', rideId||'');   // 실제 라이드 ID
       localStorage.setItem('tada_fix_resv_id', resvId||'');   // 실제 예약 ID
-      localStorage.removeItem('tada_fix_items');
+      // fix_old/new도 함께 삭제 — ID만 현재 건으로 덮고 old/new를 남기면,
+      // 같은 라이드를 (요금정정 → 다른 탭) 순서로 재작업했을 때 꿀빠는 곰 fix 탭이
+      // ID 매칭을 통과해 예전 정정 금액을 기본값으로 되살리던 버그(stale) 차단.
+      ['tada_fix_old','tada_fix_new','tada_fix_items'].forEach(k=>localStorage.removeItem(k));
+      setEnvFix(null);
       // 영업손실비 금액을 extra에서 파싱해 저장 (꿀빠는 곰 loss 탭 lossPrice 기본값 연동)
       if(tpl.beeTab==='loss'){
         const _lossM=finalExtra.match(/영업손실비\s*[:：]\s*([\d,]+)\s*원/);
@@ -2182,7 +2220,8 @@ function clearIds(keepMsgData){
       }
     }else{
       localStorage.removeItem('tada_last_bee_tab');
-      localStorage.removeItem('tada_fix_items');
+      ['tada_fix_old','tada_fix_new','tada_fix_items'].forEach(k=>localStorage.removeItem(k));
+      setEnvFix(null);
       localStorage.removeItem('tada_loss_subtype');
       localStorage.removeItem('tada_loss_amount');
     }
@@ -2342,6 +2381,24 @@ function clearIds(keepMsgData){
   };
   let estPrice="",realPrice="";
   let savedTab="";
+
+  // ── 꿀통 fix 저장값 컨텍스트 — 라이드/예약 ID가 현재 페이지와 일치할 때만 값 반환 ──
+  // 탭 자동선택·fix 탭 기본값·항목 렌더·복사 핸들러 5곳에 복붙돼 있던 매칭 로직 통합.
+  function hbFixCtx(){
+    const rid=localStorage.getItem('tada_fix_ride_id')||'';
+    const rsv=localStorage.getItem('tada_fix_resv_id')||'';
+    const cRid=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||'';
+    const cRsv=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||'';
+    const match=(rid&&cRid&&rid===cRid)||(rsv&&cRsv&&rsv===cRsv);
+    let items=[];
+    if(match){try{const raw=localStorage.getItem('tada_fix_items')||'';if(raw)items=JSON.parse(raw);}catch(e){}}
+    return {
+      match,
+      items,
+      old:match?(localStorage.getItem('tada_fix_old')||''):'',
+      neu:match?(localStorage.getItem('tada_fix_new')||''):''
+    };
+  }
 
   // ── 꿀통 연동: tada_msg_data 확인 ────────────────────────────────────
   // 꿀통에서 라이드/예약 처리하며 저장한 문자정보가 현재 페이지와 일치하면
@@ -2740,11 +2797,7 @@ function clearIds(keepMsgData){
   //  (1) msgData가 현재 페이지와 일치(상단에서 검증 완료)했으면 저장된 탭을 그대로 신뢰
   //      → 예약에서 꿀통 실행 후 라이드만 열어도 fix_resv_id 불일치로 탭이 안 바뀌던 문제 해결
   //  (2) 그 외엔 fix_ride_id/fix_resv_id가 현재 페이지와 일치할 때만 적용
-  const _btRid=localStorage.getItem('tada_fix_ride_id')||'';
-  const _btRsv=localStorage.getItem('tada_fix_resv_id')||'';
-  const _btCurRid=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||'';
-  const _btCurRsv=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||'';
-  const _btIdMatch=(_btRid&&_btCurRid&&_btRid===_btCurRid)||(_btRsv&&_btCurRsv&&_btRsv===_btCurRsv);
+  const _btIdMatch=hbFixCtx().match;
   const beeTab=(msgDataUsed||_btIdMatch)?(localStorage.getItem('tada_last_bee_tab')||''):'';
   let _lossSubtypeOnce=(msgDataUsed||_btIdMatch)?(localStorage.getItem('tada_loss_subtype')||''):'';
   let _lossAmountOnce=(msgDataUsed||_btIdMatch)?(localStorage.getItem('tada_loss_amount')||''):'';
@@ -2813,15 +2866,10 @@ function clearIds(keepMsgData){
           }
         });
       }catch(e){}
-      // 2차: 현재 페이지에 없을 때만 tada_fare_items (라이드 ID 일치 검증)
+      // 2차: 현재 페이지에 없을 때만 tada_fare_items (라이드 ID 일치 검증 — hbFixCtx로 통합)
       if(parsedBaseTotal===0){
         try{
-          const _fRid=localStorage.getItem('tada_fix_ride_id')||'';
-          const _fRsv=localStorage.getItem('tada_fix_resv_id')||'';
-          const _cRid=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||'';
-          const _cRsv=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||'';
-          const _match=(_fRid&&_cRid&&_fRid===_cRid)||(_fRsv&&_cRsv&&_fRsv===_cRsv);
-          if(_match){
+          if(hbFixCtx().match){
             const fi=JSON.parse(localStorage.getItem('tada_fare_items')||'[]');
             fi.forEach(item=>{
               if(/통행료|톨게이트|터널|대교|지하차도|IC/.test(item.label)) parsedBaseTotal+=Number(item.amt);
@@ -3019,6 +3067,18 @@ function clearIds(keepMsgData){
         blinkTitle('💾 라이드 저장됨 — 예약에서 실행 ㄱㄱ');
         return;
       }
+      // ── 기본값 계산 (hbFixCtx로 통합 — 기존엔 old/new/항목이 각자 매칭 로직 복붙) ──
+      // 우선순위 통일: ID 매칭된 꿀통 fix 값(old·new 쌍) > 현재 페이지 파싱값.
+      // 기존엔 old는 파싱값 우선, new는 저장값 우선으로 어긋나 있어서
+      // 꿀통에서 항목별 정정으로 만든 (old, old±Δ) 쌍의 old만 파싱값으로 대체되면
+      // "기존−정정 ≠ 항목 Δ 합"인 내부 모순 문자가 나갈 수 있었다
+      // (이미 정정된 라이드 재작업 시 adjustedPriceTotal 때문에 특히 잘 발생).
+      // fix 값이 없거나 다른 건이면 종전대로 realPrice/estPrice 파싱값 사용.
+      const _fc=hbFixCtx();
+      const fixOldDefault=_fc.old?Number(_fc.old).toLocaleString()
+        :realPrice?Number(realPrice).toLocaleString():"";
+      const fixNewDefault=_fc.neu?Number(_fc.neu).toLocaleString()
+        :estPrice?Number(estPrice).toLocaleString():"";
       contentArea.innerHTML=`
         <div style='margin:5px 0;'>
           <label style='display:block;font-weight:bold;margin-bottom:5px;'>정정 사유 선택:</label>
@@ -3036,43 +3096,18 @@ function clearIds(keepMsgData){
         <div style='margin-top:12px;display:flex;gap:10px;'>
           <div style='flex:1;'>
             <label style='display:block;font-weight:bold;margin-bottom:3px;'>기존 금액:</label>
-            <input id='fixOldPrice' value='${(()=>{
-              const fixRideId=localStorage.getItem("tada_fix_ride_id")||"";
-              const fixResvId=localStorage.getItem("tada_fix_resv_id")||"";
-              const curRideId=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||"";
-              const curResvId=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||"";
-              const rideMatch=(fixRideId&&curRideId&&fixRideId===curRideId)||(fixResvId&&curResvId&&fixResvId===curResvId);
-              // 라이드/예약 ID 일치하면 fix 값 우선 사용
-              const v=rideMatch?localStorage.getItem("tada_fix_old"):null;
-              return realPrice?Number(realPrice).toLocaleString():v?Number(v).toLocaleString():"";
-            })()}'
+            <input id='fixOldPrice' value='${fixOldDefault}'
               style='width:100%;padding:6px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>
           </div>
           <div style='flex:1;'>
             <label style='display:block;font-weight:bold;margin-bottom:3px;'>정정 금액 (예상최저):</label>
-            <input id='fixNewPrice' value='${(()=>{
-              const fixRideId2=localStorage.getItem("tada_fix_ride_id")||"";
-              const fixResvId2=localStorage.getItem("tada_fix_resv_id")||"";
-              const curRideId2=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||"";
-              const curResvId2=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||"";
-              const rideMatch2=(fixRideId2&&curRideId2&&fixRideId2===curRideId2)||(fixResvId2&&curResvId2&&fixResvId2===curResvId2);
-              const v=rideMatch2?localStorage.getItem("tada_fix_new"):null;
-              return v?Number(v).toLocaleString():estPrice?Number(estPrice).toLocaleString():"";
-            })()}'
+            <input id='fixNewPrice' value='${fixNewDefault}'
               style='width:100%;padding:6px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>
           </div>
         </div>`;
 
       // ── 꿀통 항목별 정정 내역 있으면 추가 칸 렌더링 ─────────────────────
-      const fixRideIdCheck=localStorage.getItem('tada_fix_ride_id')||'';
-      const fixResvIdCheck=localStorage.getItem('tada_fix_resv_id')||'';
-      const curRideIdCheck=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||'';
-      const curResvIdCheck=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||'';
-      const fixRideMatch=(fixRideIdCheck&&curRideIdCheck&&fixRideIdCheck===curRideIdCheck)||
-                         (fixResvIdCheck&&curResvIdCheck&&fixResvIdCheck===curResvIdCheck);
-      const fixItemsRaw=(fixRideMatch?localStorage.getItem('tada_fix_items'):'')||'';
-      let fixItemsList=[];
-      try{if(fixItemsRaw)fixItemsList=JSON.parse(fixItemsRaw);}catch(e){}
+      const fixItemsList=_fc.items;
       if(fixItemsList.length>0){
         const itemsDiv=document.createElement('div');
         itemsDiv.style.cssText='margin-top:10px;';
@@ -3513,25 +3548,15 @@ function clearIds(keepMsgData){
       if(!oldP||!newP){alert("기존 금액과 정정 금액을 확인해주세요.");return;}
       if(!oldP.includes("원"))oldP=oldP+"원";
       if(!newP.includes("원"))newP=newP+"원";
-      // 항목별 정정 내역 수집
-      // 라이드 ID 일치할 때만 fix_items 로드
-      const _fixRid=localStorage.getItem('tada_fix_ride_id')||'';
-      const _fixRsv=localStorage.getItem('tada_fix_resv_id')||'';
-      const _curRid=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||'';
-      const _curRsv=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||'';
-      const _fixMatch=(_fixRid&&_curRid&&_fixRid===_curRid)||(_fixRsv&&_curRsv&&_fixRsv===_curRsv);
-      let fixItemsRaw='';
-      try{fixItemsRaw=(_fixMatch?localStorage.getItem('tada_fix_items'):'')||'';}catch(e){}
-      let fixItemsList=[];
-      try{if(fixItemsRaw)fixItemsList=JSON.parse(fixItemsRaw);}catch(e){}
+      // 항목별 정정 내역 수집 — 라이드/예약 ID 일치할 때만 (hbFixCtx로 통합)
+      const fixItemsList=hbFixCtx().items;
       const itemLines=fixItemsList.map((fi,i)=>{
         const fromEl=document.getElementById('fixItem_from_'+i);
         const toEl=document.getElementById('fixItem_to_'+i);
         const fromV=fromEl?fromEl.value.trim():Number(fi.from).toLocaleString();
         const toV=toEl?toEl.value.trim():Number(fi.to).toLocaleString();
-        if(!fromV.includes('원')&&fromV){}
         // 항목명 가독성: '거리추가요금' → '거리추가 요금', '부가서비스요금' → '부가서비스 요금'
-        const labelFmt=fi.label.replace(/(추가|서비스|수수료)(요금)/, '$1 $2')
+        const labelFmt=fi.label.replace(/(추가|서비스|수수료)(요금)/g, '$1 $2')
           .replace(/톨게이트/g, '통행료');
         return `${labelFmt} : ${fromV.includes('원')?fromV:fromV+'원'} > ${toV.includes('원')?toV:toV+'원'}`;
       }).join('\n');
@@ -3541,7 +3566,9 @@ function clearIds(keepMsgData){
       // 정정 금액이 예상요금과 일치하는지 확인
       const newPNum=Number(newP.replace(/[^0-9]/g,''));
       const estPNum=Number(estPrice)||0;
-      const isEstMatch=estPNum>0&&newPNum===estPNum;
+      // 항목별 정정(카시트 추가 등)으로 만든 금액이 우연히 예상요금과 같을 때
+      // "호출 시 확인하시었던 금액" 문구가 나가면 사실과 다른 안내가 됨 → 항목 정정 시 제외
+      const isEstMatch=estPNum>0&&newPNum===estPNum&&!itemLines;
       const introLine=isEstMatch
         ?`이에 드라이버 요청에 따라 호출 시 확인하시었던 ${newP}으로 결제요금 정정하여 재결제 진행하고자 합니다`
         :isMinFareReason
