@@ -17,7 +17,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.8.0 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v0.8.1 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -142,7 +142,17 @@
       node.style.fontSize = Math.round(c.size * 0.43) + 'px';
       node.style.opacity = (c.op / 100);
       node.style.borderRadius = c.round + '%';
-      node.textContent = c.icon;
+      // 사용자 이미지가 있으면 이모지 대신 배경 이미지로 (없으면 이모지 복귀)
+      if (c.img) {
+        node.textContent = '';
+        node.style.backgroundImage = 'url(' + c.img + ')';
+        node.style.backgroundSize = 'cover';
+        node.style.backgroundPosition = 'center';
+        node.style.backgroundRepeat = 'no-repeat';
+      } else {
+        node.style.backgroundImage = 'none';
+        node.textContent = c.icon;
+      }
       // 저장된 위치 복원 (없으면 기본 우하단 유지)
       if (c.left != null && c.top != null) {
         const L = Math.min(Math.max(0, c.left), Math.max(0, innerWidth - c.size));
@@ -171,6 +181,10 @@
       w.innerHTML = `<div style="font-weight:bold;color:#0a5d54;margin-bottom:8px;">🎨 버튼 꾸미기</div>
         ${row('아이콘', `<input id="hbf_icon" value="${c.icon}" maxlength="4" style="width:52px;text-align:center;font-size:17px;padding:3px;border:1px solid #d7dedb;border-radius:6px;">
           <span id="hbf_presets" style="display:flex;gap:3px;flex-wrap:wrap;"></span>`)}
+        ${row('이미지', `<input id="hbf_file" type="file" accept="image/*" style="display:none;">
+          <button id="hbf_pick" style="padding:4px 9px;border:1px solid #d7dedb;background:#f5f7f6;border-radius:6px;cursor:pointer;font-size:11.5px;">파일 선택</button>
+          <button id="hbf_imgdel" style="padding:4px 9px;border:1px solid #f0d4d4;background:#fdf5f5;color:#b44;border-radius:6px;cursor:pointer;font-size:11.5px;display:${c.img ? 'inline-block' : 'none'};">제거</button>
+          <span id="hbf_imgst" style="color:#8a9992;font-size:10.5px;">${c.img ? '적용됨' : ''}</span>`)}
         ${row('크기', `<input id="hbf_size" type="range" min="30" max="72" value="${c.size}" style="flex:1;"><span id="hbf_sizev" style="width:34px;text-align:right;">${c.size}px</span>`)}
         ${row('배경', `<input id="hbf_bg" type="color" value="${c.bg}" style="width:38px;height:24px;padding:0;border:1px solid #d7dedb;border-radius:6px;background:#fff;">
           <input id="hbf_fg" type="color" value="${c.fg}" style="width:38px;height:24px;padding:0;border:1px solid #d7dedb;border-radius:6px;background:#fff;">
@@ -189,9 +203,45 @@
       const box = q('hbf_presets');
       ['🍯', '🐻', '🎫', '🧰', '⭐', '🔧'].forEach(ic => {
         const b = el('button', 'width:24px;height:24px;padding:0;border:1px solid #e6eae8;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;line-height:1;', ic);
-        b.onclick = () => { q('hbf_icon').value = ic; upd(); };
+        b.onclick = () => { q('hbf_icon').value = ic; clearImg(); upd(); };
         box.appendChild(b);
       });
+
+      /* 업로드 이미지는 원본을 그대로 저장하면 GM 스토리지가 금세 커진다.
+       * 128×128 정사각으로 잘라 리사이즈한 뒤 PNG data URL로 보관 (보통 10~30KB). */
+      q('hbf_pick').onclick = () => q('hbf_file').click();
+      q('hbf_file').onchange = () => {
+        const f = q('hbf_file').files && q('hbf_file').files[0];
+        if (!f) return;
+        if (!/^image\//.test(f.type)) { toast('이미지 파일만 가능합니다'); return; }
+        const fr = new FileReader();
+        fr.onload = () => {
+          const im = new Image();
+          im.onload = () => {
+            const S = 128, cv = document.createElement('canvas');
+            cv.width = cv.height = S;
+            const g2 = cv.getContext('2d');
+            const side = Math.min(im.width, im.height);          // 짧은 변 기준 중앙 크롭
+            g2.drawImage(im, (im.width - side) / 2, (im.height - side) / 2, side, side, 0, 0, S, S);
+            let url; try { url = cv.toDataURL('image/png'); } catch (e) { toast('이미지 처리 실패'); return; }
+            save(role, { img: url }); apply(node, role);
+            q('hbf_imgdel').style.display = 'inline-block';
+            q('hbf_imgst').textContent = '적용됨';
+          };
+          im.onerror = () => toast('이미지를 읽을 수 없습니다');
+          im.src = fr.result;
+        };
+        fr.onerror = () => toast('파일 읽기 실패');
+        fr.readAsDataURL(f);
+      };
+      function clearImg() {
+        if (!load(role).img) return;
+        save(role, { img: '' }); apply(node, role);
+        q('hbf_imgdel').style.display = 'none';
+        q('hbf_imgst').textContent = '';
+        q('hbf_file').value = '';
+      }
+      q('hbf_imgdel').onclick = clearImg;
 
       function upd() {
         const cfg = {
@@ -207,6 +257,8 @@
       ['hbf_icon', 'hbf_size', 'hbf_bg', 'hbf_fg', 'hbf_op', 'hbf_round'].forEach(id => {
         const e2 = q(id); e2.oninput = upd; e2.onchange = upd;
       });
+      // 이모지를 직접 바꾸면 이미지가 계속 우선 적용돼 혼란스러우므로 이미지를 해제한다
+      q('hbf_icon').addEventListener('input', clearImg);
       q('hbf_reset').onclick = () => { reset(role); apply(node, role); w.remove(); toast('버튼 설정 초기화됨'); };
       q('hbf_close').onclick = () => w.remove();
       const off = e => { if (!w.contains(e.target) && e.target !== node) { w.remove(); document.removeEventListener('mousedown', off); } };
