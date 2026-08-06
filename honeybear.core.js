@@ -17,7 +17,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.8.8 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v0.9.1 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -36,6 +36,8 @@
           paid: 0,                // 실제 결제 합 (total - discount)
           discount: 0,            // 할인·크레딧 등 차감 합
           est: 0, cancel: 0, surge: 0,
+          // 예상/실제 이동거리(미터)·소요시간(분) — 요금 정정·경로 우회 안내 멘트용
+          estDist: 0, estTime: 0, realDist: 0, realTime: 0,
           items: [],              // [{label, amt, sum?}] — 요금정정 체크박스 목록
           breakdown: [],          // [{label, amt}] 이용요금 내부 구성 (표시 안 함)
           fix: null,              // {old, new, items:[{label,from,to}]} — 요금정정 시
@@ -879,6 +881,26 @@
       return m ? Number(m[1]) : 0;
     }
 
+    /* ── 이동거리·소요시간 (예상 / 실제) ────────────────────────────────────
+     * 어드민 행 형태
+     *   예상요금  119200~119200 / 18700~18700원 / 68245 미터 / 약 74 분
+     *   실제요금  19300 원 / 68188 미터 / 65 분
+     * API estimation 에 대응 필드가 있는지 확인되지 않아 DOM 을 정본으로 쓴다.
+     * (없으면 0 → 멘트에서 [   ] 로 비워져 나가므로 잘못된 값이 나갈 일은 없다) */
+    function metricsFromDom() {
+      const rowOf = label => [...document.querySelectorAll('tr')]
+        .find(tr => tr.innerText.replace(/\s+/, ' ').startsWith(label));
+      const pick = (row) => {
+        if (!row) return { dist: 0, time: 0 };
+        const t = row.innerText.replace(/,/g, '');
+        const d = t.match(/([0-9]+)\s*미터/);
+        const m = t.match(/([0-9]+)\s*분/);
+        return { dist: d ? Number(d[1]) : 0, time: m ? Number(m[1]) : 0 };
+      };
+      const e = pick(rowOf('예상요금')), r = pick(rowOf('실제요금'));
+      return { estDist: e.dist, estTime: e.time, realDist: r.dist, realTime: r.time };
+    }
+
     function capture() {
       try { if (capturePartyPage()) return; } catch (e) { console.warn('[HB] 주체 캡처 오류:', e.message); }
       let api = null, dom = null;
@@ -898,6 +920,12 @@
           cur.fare.est = estDom;
         }
       } catch (e) { console.warn('[HB] 예상요금(할인 전) 파싱 오류:', e.message); }
+
+      // 이동거리·소요시간도 DOM 정본 — API에 대응 필드가 없어 빈 채로 남는다
+      try {
+        const mt = metricsFromDom();
+        Object.keys(mt).forEach(k => { if (mt[k] > 0) cur.fare[k] = mt[k]; });
+      } catch (e) { console.warn('[HB] 거리·시간 파싱 오류:', e.message); }
 
       const merged = mergeCase(HBStore.loadCase(), cur);
       HBStore.saveCase(merged);
@@ -1038,6 +1066,11 @@
         rideId: c.ids.ride, resvId: c.ids.resv,
         totalFare: won(c.fare.total), estFare: won(c.fare.est), cancelFee: won(c.fare.cancel),
         surge: c.fare.surge ? (c.fare.surge + '%') : '',
+        surgeX: c.fare.surge ? (Math.round(c.fare.surge) / 100).toFixed(1) + '배' : '',
+        estDist: c.fare.estDist ? c.fare.estDist.toLocaleString() + ' 미터' : '',
+        estTime: c.fare.estTime ? '약 ' + c.fare.estTime + ' 분' : '',
+        realDist: c.fare.realDist ? c.fare.realDist.toLocaleString() + ' 미터' : '',
+        realTime: c.fare.realTime ? c.fare.realTime + ' 분' : '',
         toll: toll ? won(toll.amt) : '', lossAmount: won(c.fare.loss),
         fixOld: c.fare.fix ? won(c.fare.fix.old) : won(c.fare.total),
         fixNew: c.fare.fix ? won(c.fare.fix.new) : won(c.fare.est),
@@ -1581,6 +1614,8 @@
           ['일시', c.trip.dateTime, ''], ['출발', c.trip.departure, ''], ['도착', c.trip.destination, ''],
           ['이름', c.trip.name, ''], ['총요금', won(c.fare.total), ''], ['예상요금', won(c.fare.est), ''],
           ['탄력', c.fare.surge ? c.fare.surge + '%' : '', ''], ['취소료', won(c.fare.cancel), ''],
+          ['예상이동', [c.fare.estDist ? c.fare.estDist.toLocaleString() + 'm' : '', c.fare.estTime ? '약 ' + c.fare.estTime + '분' : ''].filter(Boolean).join(' · '), ''],
+          ['실제이동', [c.fare.realDist ? c.fare.realDist.toLocaleString() + 'm' : '', c.fare.realTime ? c.fare.realTime + '분' : ''].filter(Boolean).join(' · '), ''],
           ['영손비', won(c.fare.loss), ''],
           ['라이드', c.ids.ride, ''], ['예약', c.ids.resv, ''],
           ['유저', ur.v, ur.cls], ['파트너', dr.v, dr.cls]
@@ -1739,7 +1774,7 @@
           previewEl.value = previewEl.value.slice(0, previewEl.value.length - lastSeg.length) + seg2; lastSeg = seg2;
         }
       };
-      g('hb_copy').onclick = function () { copyText(previewEl.value); toast('📋 복사 완료'); const t = this.textContent; this.textContent = '✅ 복사됨'; setTimeout(() => this.textContent = t, 1200); };
+      g('hb_copy').onclick = function () { copyRich(previewEl.value); toast('📋 복사 완료'); const t = this.textContent; this.textContent = '✅ 복사됨'; setTimeout(() => this.textContent = t, 1200); };
       g('hb_clear2').onclick = () => { previewEl.value = ''; lastMent = null; lastSeg = ''; optwrap.style.display = 'none'; optBox.checked = false; addonBox.style.display = 'none'; };
 
       loadMents(arr => { MENTS = arr; g('hb_mc').textContent = arr.length; renderMents(); });
@@ -3995,6 +4030,62 @@ function clearIds(keepMsgData){
     document.body.appendChild(ta); ta.focus(); ta.select();
     try { document.execCommand('copy'); } catch (e) {}
     document.body.removeChild(ta);
+  }
+
+  /* ── 파이프 표 → HTML 표 (멘트에 표를 넣기 위한 변환) ────────────────────
+   * 젠데스크 답장 에디터는 붙여넣기 시 text/html 을 받으므로,
+   * 클립보드에 평문과 HTML을 함께 실으면 실제 <table> 로 들어간다.
+   * 멘트 원문은 파이프 표로 두므로
+   *   - 미리보기(textarea)에서 그대로 읽히고 상담사가 수정할 수 있으며
+   *   - 표를 못 받는 채널에는 text/plain 이 그대로 떨어진다.
+   * 헤더 구분줄(|---|---|)이 있으면 첫 줄을 <th> 로 처리한다. */
+  function richHtmlOf(text) {
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const isRow = l => /^\s*\|.*\|\s*$/.test(l);
+    const isSep = l => /^\s*\|[\s:|-]+\|\s*$/.test(l);
+    const cells = l => l.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+    const TD = 'border:1px solid #d0d5d3;padding:6px 10px;';
+    const lines = (text || '').split(/\r?\n/);
+    const out = []; let i = 0;
+    while (i < lines.length) {
+      if (!isRow(lines[i])) {
+        const l = lines[i++];
+        out.push(l.trim() ? '<div>' + esc(l) + '</div>' : '<div><br></div>');
+        continue;
+      }
+      const block = [];
+      while (i < lines.length && isRow(lines[i])) block.push(lines[i++]);
+      let head = null, body = block;
+      if (block.length >= 2 && isSep(block[1])) { head = block[0]; body = block.slice(2); }
+      let html = '<table style="border-collapse:collapse;width:100%;margin:8px 0;font-size:13px;">';
+      if (head) html += '<thead><tr>' + cells(head)
+        .map(c => '<th style="' + TD + 'background:#f4f6f5;text-align:left;">' + esc(c) + '</th>').join('') + '</tr></thead>';
+      html += '<tbody>' + body.filter(r => !isSep(r))
+        .map(r => '<tr>' + cells(r).map(c => '<td style="' + TD + '">' + esc(c) + '</td>').join('') + '</tr>').join('')
+        + '</tbody></table>';
+      out.push(html);
+    }
+    return out.join('');
+  }
+
+  /* 평문 + HTML 동시 복사. 실패하면 평문으로 폴백한다. */
+  function copyRich(val) {
+    const html = richHtmlOf(val);
+    const ta = el('textarea', 'position:fixed;top:-9999px;'); ta.value = val;
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    const onCopy = e => {
+      try {
+        e.clipboardData.setData('text/plain', val);
+        e.clipboardData.setData('text/html', html);
+        e.preventDefault();
+      } catch (err) {}
+    };
+    document.addEventListener('copy', onCopy, { once: true });
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.removeEventListener('copy', onCopy);
+    document.body.removeChild(ta);
+    if (!ok) copyText(val);
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
