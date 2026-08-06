@@ -17,7 +17,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.9.2 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v0.9.3 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -888,16 +888,36 @@
      * API estimation 에 대응 필드가 있는지 확인되지 않아 DOM 을 정본으로 쓴다.
      * (없으면 0 → 멘트에서 [   ] 로 비워져 나가므로 잘못된 값이 나갈 일은 없다) */
     function metricsFromDom() {
-      const rowOf = label => [...document.querySelectorAll('tr')]
-        .find(tr => tr.innerText.replace(/\s+/, ' ').startsWith(label));
-      const pick = (row) => {
+      const rows = [...document.querySelectorAll('tr')];
+      /* 라벨 매칭은 공백을 전부 지우고 비교한다.
+       * 기존엔 innerText.replace(/\s+/, ' ')(비전역) 후 startsWith 라서
+       * '실제 요금'처럼 라벨 안에 공백이 들어간 표기를 놓쳤다. */
+      const norm = s => (s || '').replace(/\s+/g, '');
+      const rowOf = re => rows.find(tr => re.test(norm(tr.innerText).slice(0, 16)));
+      const pick = row => {
         if (!row) return { dist: 0, time: 0 };
         const t = row.innerText.replace(/,/g, '');
         const d = t.match(/([0-9]+)\s*미터/);
         const m = t.match(/([0-9]+)\s*분/);
         return { dist: d ? Number(d[1]) : 0, time: m ? Number(m[1]) : 0 };
       };
-      const e = pick(rowOf('예상요금')), r = pick(rowOf('실제요금'));
+      const e = pick(rowOf(/^예상요금/));
+      let r = pick(rowOf(/^(실제요금|실제운행|운행요금|최종요금)/));
+      /* 예약 페이지 등 라벨이 다를 때를 위한 보조 탐색:
+       * '예상요금'이 아니면서 미터·분을 동시에 가진 행을 찾는다. */
+      if (!r.dist || !r.time) {
+        const alt = rows.find(tr => {
+          const n = norm(tr.innerText);
+          return !/^예상요금/.test(n) && /[0-9]미터/.test(n) && /[0-9]분/.test(n);
+        });
+        const a = pick(alt);
+        if (a.dist && a.time) r = a;
+      }
+      if (!r.dist || !r.time) {
+        // 못 찾으면 어떤 행들이 있었는지 남긴다 — 라벨을 모르면 고칠 수 없다
+        console.log('[HB] 실제 이동거리·시간 미확보. 행 라벨 목록:',
+          rows.map(tr => norm(tr.innerText).slice(0, 14)).filter(Boolean));
+      }
       return { estDist: e.dist, estTime: e.time, realDist: r.dist, realTime: r.time };
     }
 
@@ -4051,6 +4071,10 @@ function clearIds(keepMsgData){
    * 헤더 구분줄(|---|---|)이 있으면 첫 줄을 <th> 로 처리한다. */
   function richHtmlOf(text) {
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    /* [텍스트](URL) → <a>. 대괄호 바로 뒤에 '(' 가 와야만 매칭되므로
+     * 기존 [   ] 채움 표시나 선택 문단 [..] 과는 충돌하지 않는다. */
+    const link = s => s.replace(/\[([^\][]+)\]\((https?:\/\/[^\s)]+)\)/g,
+      (w, label, url) => '<a href="' + url + '" target="_blank">' + label + '</a>');
     const isRow = l => /^\s*\|.*\|\s*$/.test(l);
     const isSep = l => /^\s*\|[\s:|-]+\|\s*$/.test(l);
     const cells = l => l.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
@@ -4060,7 +4084,10 @@ function clearIds(keepMsgData){
     while (i < lines.length) {
       if (!isRow(lines[i])) {
         const l = lines[i++];
-        out.push(l.trim() ? '<div>' + esc(l) + '</div>' : '<div><br></div>');
+        /* 빈 줄은 <div><br></div> 로 두면 젠데스크 에디터(ProseMirror)가
+         * '내용 없는 블록'으로 보고 붙여넣기 단계에서 통째로 버린다 → 문단 구분이 사라진다.
+         * &nbsp; 를 넣은 <p> 는 내용이 있는 문단으로 인식되어 살아남는다. */
+        out.push(l.trim() ? '<p style="margin:0;">' + link(esc(l)) + '</p>' : '<p style="margin:0;">&nbsp;</p>');
         continue;
       }
       const block = [];
@@ -4078,14 +4105,17 @@ function clearIds(keepMsgData){
     return out.join('');
   }
 
-  /* 평문 + HTML 동시 복사. 실패하면 평문으로 폴백한다. */
+  /* 평문 + HTML 동시 복사. 실패하면 평문으로 폴백한다.
+   * 평문 쪽은 [텍스트](URL) 을 '텍스트 + 줄바꿈 + URL' 로 풀어서 읽히게 한다. */
   function copyRich(val) {
     const html = richHtmlOf(val);
-    const ta = el('textarea', 'position:fixed;top:-9999px;'); ta.value = val;
+    const plain = String(val || '')
+      .replace(/\[([^\][]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1\n$2');
+    const ta = el('textarea', 'position:fixed;top:-9999px;'); ta.value = plain;
     document.body.appendChild(ta); ta.focus(); ta.select();
     const onCopy = e => {
       try {
-        e.clipboardData.setData('text/plain', val);
+        e.clipboardData.setData('text/plain', plain);
         e.clipboardData.setData('text/html', html);
         e.preventDefault();
       } catch (err) {}
@@ -4095,7 +4125,7 @@ function clearIds(keepMsgData){
     try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
     document.removeEventListener('copy', onCopy);
     document.body.removeChild(ta);
-    if (!ok) copyText(val);
+    if (!ok) copyText(plain);
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
