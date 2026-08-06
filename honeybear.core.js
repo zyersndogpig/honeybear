@@ -17,7 +17,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.8.6 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v0.8.7 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -1550,21 +1550,27 @@
         const stale = has && (Date.now() - c.ts > 30 * 60 * 1000);
         const uSt = idStatus(c.ids.user, ZDIDS.user), dSt = idStatus(c.ids.driver, ZDIDS.driver);
         const mism = uSt === 'bad' || dSt === 'bad';
-        /* ⚠️ 대조 불가 상태를 '이상 없음'과 반드시 구분한다.
-         * 이메일·웹 인입(외부 ID 없음)은 젠데스크 쪽에 맞춰볼 ID가 아예 없어서
-         * 불일치가 '검출되지 않을' 뿐, 일치가 확인된 게 아니다.
-         * 아무 표시도 없으면 상담사는 초록 배지를 보고 검증된 걸로 읽는다 —
-         * 검증 도구가 조용히 통과시키는 게 가장 위험한 실패 방식이다. */
-        const noZd = !ZDIDS.user.length && !ZDIDS.driver.length;
-        const unver = has && noZd && !!(c.ids.user || c.ids.driver);
-        const idCell = (mine, st, zd) => {
+        /* ⚠️ 티켓은 이용자 '또는' 파트너 한쪽에서만 인입된다.
+         * 따라서 젠데스크 쪽에 존재하는 ID는 인입 주체의 것 하나뿐이고,
+         * 반대쪽은 애초에 대조 대상이 아니다 — 여기에 '대조불가'를 띄우면 소음이 된다.
+         * 경고는 '인입 주체의 ID조차 못 찾은 경우'에만 의미가 있다.
+         *   예) 웹 유저 인입, 이메일만 있고 외부 ID 없음
+         * 이 경우 불일치가 '없는' 게 아니라 '확인이 안 된' 상태인데,
+         * 아무 표시가 없으면 상담사는 초록 배지를 보고 검증된 걸로 읽는다. */
+        const isPartnerTicket = party === '파트너';
+        const reqSt = isPartnerTicket ? dSt : uSt;                 // 인입 주체 쪽 대조 결과
+        const reqMine = isPartnerTicket ? c.ids.driver : c.ids.user;
+        const unver = has && reqSt === 'nozd' && !!reqMine;
+        const idCell = (mine, st, zd, isReq) => {
           if (!mine) return { v: zd.length ? ('— (젠데스크 ' + zd.join(', ') + ')') : '—', cls: zd.length ? 'bad' : 'miss' };
           if (st === 'ok') return { v: mine + ' ✅', cls: 'good' };
           if (st === 'bad') return { v: mine + ' ⚠️젠데스크 ' + zd.join(', '), cls: 'bad' };
-          if (st === 'nozd') return { v: mine + ' <span style="color:#b45309;font-weight:700;">❔대조불가</span>', cls: '' };
+          // 대조불가 표시는 인입 주체 쪽에만 — 반대쪽은 원래 젠데스크에 없는 게 정상
+          if (st === 'nozd' && isReq) return { v: mine + ' <span style="color:#b45309;font-weight:700;">❔대조불가</span>', cls: '' };
           return { v: mine, cls: '' };
         };
-        const ur = idCell(c.ids.user, uSt, ZDIDS.user), dr = idCell(c.ids.driver, dSt, ZDIDS.driver);
+        const ur = idCell(c.ids.user, uSt, ZDIDS.user, !isPartnerTicket);
+        const dr = idCell(c.ids.driver, dSt, ZDIDS.driver, isPartnerTicket);
         const flags = [];
         if (c.flags.isCash) flags.push('현장결제');
         if (c.flags.isPlus) flags.push('플러스');
@@ -1580,7 +1586,7 @@
         ].concat(flags.length ? [['기타', flags.join(' · '), '']] : [])
           .map(r => `<div class="k">${r[0]}</div><div class="${r[2] || (r[1] ? '' : 'miss')}">${r[1] || '—'}</div>`).join('');
         const note = unver ? `<div style="margin-top:8px;padding:7px 9px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;font-size:11px;line-height:1.65;color:#92400e;">
-          ❔ <b>ID 대조 불가</b> — 이 티켓에서 외부 ID·어드민 링크를 찾지 못했습니다 (이메일·웹 인입 등).<br>
+          ❔ <b>${isPartnerTicket ? '파트너' : '이용자'} ID 대조 불가</b> — 이 티켓에서 외부 ID·어드민 링크를 찾지 못했습니다 (웹 유저·이메일 인입 등).<br>
           불일치가 <u>없는 게 아니라 확인이 안 된 상태</u>입니다. 케이스가 이 문의 건이 맞는지 직접 확인해주세요.</div>` : '';
         const badgeBg = !has ? '#c3c9c6' : mism ? '#c0392b' : (unver || stale) ? '#d97706' : '#0a7d72';
         const badgeTx = !has ? '데이터 없음' : mism ? 'ID 불일치'
@@ -1621,9 +1627,9 @@
         (p === '파트너' ? bp : bu).classList.add('on');
         (p === '파트너' ? bu : bp).classList.remove('on');
       }
-      // 대상 토글은 슬랙 적재 문구뿐 아니라 멘트 목록도 함께 바꾼다
-      bu.onclick = () => { partyManual = true; setParty('이용자'); try { renderMents(); } catch (e) {} };
-      bp.onclick = () => { partyManual = true; setParty('파트너'); try { renderMents(); } catch (e) {} };
+      // 대상 토글은 슬랙 적재 문구·멘트 목록뿐 아니라 ID 대조 기준까지 바꾼다
+      bu.onclick = () => { partyManual = true; setParty('이용자'); try { renderCard(); renderMents(); } catch (e) {} };
+      bp.onclick = () => { partyManual = true; setParty('파트너'); try { renderCard(); renderMents(); } catch (e) {} };
       // 자동판별: 외부 ID 접두 우선 (D→파트너 / webuser·U 등→이용자), 없으면 드라이버 링크 보조 — 티켓뷰와 동일
       setParty(detectParty(pageSnap));
       g('hb_slack').onclick = function () {
