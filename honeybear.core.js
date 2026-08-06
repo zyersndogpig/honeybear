@@ -17,7 +17,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.8.3 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v0.8.5 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -1488,13 +1488,16 @@
           <div id="hb_card"></div>
           <div class="row" style="justify-content:space-between;">
             <strong style="font-size:12px;color:#0a5d54;">📋 슬랙 적재</strong>
-            <div class="seg"><button id="hb_user" class="on">이용자</button><button id="hb_partner">파트너</button></div>
+            <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+              <div class="seg"><button id="hb_user" class="on">이용자</button><button id="hb_partner">파트너</button></div>
+              <button id="hb_refresh" class="ghost" style="padding:3px 9px;font-size:10.5px;white-space:nowrap;">🔄 다시 읽기</button>
+            </div>
           </div>
           <div id="hb_pick_wrap" style="display:none;margin-top:8px;"><div class="lbl">인입 선택 · 복수 가능</div><div id="hb_pick" style="display:flex;flex-wrap:wrap;gap:6px;"></div></div>
           <textarea id="hb_content" rows="6" style="margin-top:8px;"></textarea>
           <button id="hb_slack" class="btn" style="margin-top:8px;">티켓 적재 복사</button>
           <div class="div"></div>
-          <div class="row"><strong style="font-size:12px;color:#0a5d54;">💬 추천 멘트</strong><span id="hb_mc" class="badge" style="background:#0a7d72;"></span><button id="hb_refresh" class="ghost" style="margin-left:auto;padding:3px 9px;font-size:10.5px;">🔄 다시 읽기</button></div>
+          <div class="row"><strong style="font-size:12px;color:#0a5d54;">💬 추천 멘트</strong><span id="hb_mc" class="badge" style="background:#0a7d72;"></span></div>
           <input id="hb_filter" class="s" type="text" placeholder="멘트 검색 (예: 요금, 바우처, 배차)" style="margin:8px 0;">
           <div id="hb_status" style="font-size:10px;color:#8a8f92;margin-bottom:6px;"></div>
           <div id="hb_chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
@@ -1599,14 +1602,15 @@
       /* 슬랙 적재 */
       let party = '이용자';
       const bu = g('hb_user'), bp = g('hb_partner');
+      let partyManual = false;   // 상담사가 직접 토글했는가 — 자동 재판별이 이걸 덮어쓰면 안 된다
       function setParty(p) {
         party = p;
         (p === '파트너' ? bp : bu).classList.add('on');
         (p === '파트너' ? bu : bp).classList.remove('on');
       }
       // 대상 토글은 슬랙 적재 문구뿐 아니라 멘트 목록도 함께 바꾼다
-      bu.onclick = () => { setParty('이용자'); try { renderMents(); } catch (e) {} };
-      bp.onclick = () => { setParty('파트너'); try { renderMents(); } catch (e) {} };
+      bu.onclick = () => { partyManual = true; setParty('이용자'); try { renderMents(); } catch (e) {} };
+      bp.onclick = () => { partyManual = true; setParty('파트너'); try { renderMents(); } catch (e) {} };
       // 자동판별: 외부 ID 접두 우선 (D→파트너 / webuser·U 등→이용자), 없으면 드라이버 링크 보조 — 티켓뷰와 동일
       setParty(detectParty(pageSnap));
       g('hb_slack').onclick = function () {
@@ -1707,7 +1711,8 @@
         }
       }
       filterEl.oninput = renderMents;
-      g('hb_refresh').onclick = () => { draftText = getDraftText(); blocks = parseInboundOriginal(); renderMents(); };
+      // (hb_refresh 핸들러는 아래 refreshForTicket 정의 이후에 한 번만 바인딩한다.
+      //  여기에도 있었으나 뒤쪽 바인딩이 덮어써 실행되지 않는 죽은 코드였다.)
       optBox.onchange = () => {
         if (lastMent && hasOptionalBracket(lastMent.text) && previewEl.value.endsWith(lastSeg)) {
           const seg2 = fillTokens(processBrackets(lastMent.text, optBox.checked), HBStore.loadCase());
@@ -1726,6 +1731,7 @@
       let readTN = '';       // ⚠️ '실제로 읽기에 성공한' 티켓 번호
       let readPending = false;
       let failedTN = '';     // 타임아웃난 티켓 — 무한 재시도/토스트 폭탄 방지
+      let healTries = 0;     // 외부 ID 지연 로딩 자가 점검 횟수
 
       /* readTN 이 따로 필요한 이유:
        * 패널 빌드 시점의 pageSnap 은 페이지 로드 직후라 본문이 아직 비어 있다.
@@ -1784,6 +1790,8 @@
           g('hb_pick_wrap').style.display = 'none';
           contentBox.value = '';
           ZDIDS = collectZdIds('');
+          partyManual = false;   // 티켓이 바뀌면 이전 티켓의 수동 선택은 무효
+          healTries = 0;
           renderCard();                                                  // 대조 경고도 함께 초기화
         }
         readPending = true;
@@ -1800,8 +1808,8 @@
           markTN('');
           // 외부 ID는 읽기에 성공할 때마다 다시 수집 — 대조가 빠지면 검증 자체가 무의미
           ZDIDS = collectZdIds(document.body.innerText || '');
-          // 파트너/이용자 자동 판별은 '이 티켓을 처음 읽을 때'만 → 같은 티켓 내 수동 토글 보존
-          if (nowTN !== readTN) setParty(detectParty(''));
+          // 파트너/이용자 자동 판별 — 상담사가 직접 토글한 경우만 건드리지 않는다
+          if (!partyManual) setParty(detectParty(''));
           renderCard();
           blocks = parseInboundOriginal();
           sel.clear(); if (blocks.length) sel.add(blocks.length - 1);
@@ -1840,17 +1848,38 @@
       g('hb_x').onclick = () => panel.style.display = 'none';
       document.addEventListener('keydown', e => { if (e.altKey && e.code === 'KeyH') toggle(); if (e.key === 'Escape' && panel.style.display !== 'none') panel.style.display = 'none'; });
       // 패널이 열려있는 동안 티켓 전환 감시 (SPA 대응)
+      // 티켓 전환 감지는 빠르게 (5초로 늦추면 전환 후 남은 데이터를 보는 시간이 길어진다)
       setInterval(() => {
         if (panel.style.display === 'none' || readPending) return;
         const nowTN = (location.href.match(/tickets\/(\d+)/) || [])[1] || '';
         if (!nowTN) return;
-        if (nowTN !== curTN) { refreshForTicket(); return; }          // 티켓 전환
-        // 아직 한 번도 제대로 못 읽은 티켓(새로고침 직후 등)은 자동으로 다시 시도.
-        // failedTN 가드가 없으면 타임아웃 티켓에서 1.2초마다 토스트가 반복된다.
+        if (nowTN !== curTN) { refreshForTicket(); return; }              // 티켓 전환
+        // 아직 한 번도 제대로 못 읽은 티켓(새로고침 직후 등)은 자동 재시도.
+        // failedTN 가드가 없으면 타임아웃 티켓에서 토스트가 반복된다.
         if (nowTN !== readTN && nowTN !== failedTN) refreshForTicket();
       }, 1200);
+
+      /* 5초 주기 자가 점검.
+       * 젠데스크 사이드바(요청자·외부 ID)는 대화 본문보다 늦게 채워지는 경우가 있다.
+       * 본문 기준으로 '읽기 성공' 판정이 나도 그 시점엔 외부 ID가 없을 수 있고,
+       * 그러면 ID 대조와 파트너/이용자 판별이 조용히 빈 채로 굳어버린다.
+       * → 외부 ID를 하나도 못 찾은 동안은 계속 다시 수집한다 (최대 1분). */
+      setInterval(() => {
+        if (panel.style.display === 'none' || readPending) return;
+        const nowTN = (location.href.match(/tickets\/(\d+)/) || [])[1] || '';
+        if (!nowTN || nowTN !== curTN || nowTN !== readTN) return;        // 읽기 성공 상태에서만
+        if (ZDIDS.user.length || ZDIDS.driver.length || healTries >= 12) return;
+        healTries++;
+        const z = collectZdIds(document.body.innerText || '');
+        if (!z.user.length && !z.driver.length) return;
+        ZDIDS = z;
+        if (!partyManual) setParty(detectParty(''));
+        renderCard();
+        try { renderMents(); } catch (e) {}
+        console.log('[HB] 외부 ID 지연 수집 —', z);
+      }, 5000);
       // 다시 읽기 = 실패 기록 지우고 강제 재읽기 (파트너/이용자 수동 토글은 유지)
-      g('hb_refresh').onclick = () => { failedTN = ''; refreshForTicket(); };
+      g('hb_refresh').onclick = () => { failedTN = ''; healTries = 0; refreshForTicket(); };
       HBStore.onChange(c => { renderCard(); renderMents(); if (panel.style.display === 'none') toast('🍯 새 케이스 수신'); });
       renderCard();
 
@@ -3858,7 +3887,7 @@ function clearIds(keepMsgData){
       if(typeRadio==="분실물"){
         const itemName=document.getElementById("lossItemName")?.value.trim();
         if(!itemName){alert("습득 분실물 명칭을 입력해주세요.");return;}
-        message=`[타다] 분실물 전달 영업손실비 발생 안내\n\n안녕하세요. ${info.name}님\n타다를 이용해주셔서 감사합니다.\n\n${info.timePhrase} 운행건 탑승 중 발생한 분실물[${itemName}]을 드라이버가 직접 전달 완료한 내용 확인되어 안내 드립니다.\n\n등록된 결제 수단으로 영업손실비 ${priceVal}이 결제될 예정이오니, 이용에 참고 부탁드립니다.\n\n타다 고객센터 서비스 주요 안내 <분실물 발생>에서 자세한 내용 확인하실 수 있습니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+        message=`[타다] 분실물 전달 영업손실비 발생 안내\n\n안녕하세요. ${info.name}님\n타다를 이용해주셔서 감사합니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}] 운행 건 탑승 중 발생한 분실물[${itemName}]을 드라이버가 직접 전달 완료한 내용 확인되어 안내 드립니다.\n\n영업손실비는 드라이버가 영업을 중단하고 이동한 시간과 거리에 따라 산정됩니다.\n\n10km/1시간 이내 거리 전달인 경우 : 30,000원\n10km/1시간 이상 거리 전달인 경우 : 50,000원\n\n등록된 결제 수단으로 영업손실비 ${priceVal}이 결제될 예정이오니, 이용에 참고 부탁드립니다.\n\n타다 고객센터 서비스 주요 안내 <분실물 발생>에서 자세한 내용 확인하실 수 있습니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n감사합니다. 타다 팀 드림`;
       }else{
         message=`[타다] 특수 세차비용 청구 안내\n\n안녕하세요. ${info.name}님\n타다를 이용해주셔서 감사합니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}]까지 이동 중 ${typeRadio}으로 영업손실비 ${priceVal}이 발생하였습니다.\n\n추가적으로 오염 영업 손실 비용은 실제 호출하신 계정의 등록된 결제 수단으로만 결제가 가능한 점 양해 부탁드립니다.\n\n해당 차량 이용 시 발생한 오염 관련 증빙사진이 확인되어 잠시 후, 운행료 결제 시 등록되어 있던 카드로 결제 예정입니다.\n\n보다 쾌적한 탑승 환경을 위한 차량 세차, 복구를 위한 휴업 영업손실비에 대한 청구액으로 안내 드린 내용은 타다 이용 약관에 의거하며 타다 도움말 <이동 중 문제 발생>에서 자세한 내용을 확인하실 수 있습니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n감사합니다. 타다 팀 드림`;
       }
