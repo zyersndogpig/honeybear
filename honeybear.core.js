@@ -17,7 +17,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.8.2 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v0.8.3 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -1722,7 +1722,17 @@
 
       /* 열고 닫기 + 실시간 동기화 + 티켓 전환 감지 */
       let curTN = TN;
-      let readySeq = 0; // 티켓 연속 전환 경합 방지 — 가장 최근 요청만 화면에 반영
+      let readySeq = 0;      // 티켓 연속 전환 경합 방지 — 가장 최근 요청만 화면에 반영
+      let readTN = '';       // ⚠️ '실제로 읽기에 성공한' 티켓 번호
+      let readPending = false;
+      let failedTN = '';     // 타임아웃난 티켓 — 무한 재시도/토스트 폭탄 방지
+
+      /* readTN 이 따로 필요한 이유:
+       * 패널 빌드 시점의 pageSnap 은 페이지 로드 직후라 본문이 아직 비어 있다.
+       * 그 상태로 수집된 ZDIDS 는 사실상 빈 값인데, 재수집 조건을 '티켓 번호 변경'으로만
+       * 두면 새로고침으로 해당 티켓에 바로 들어온 경우 curTN 이 처음부터 같아
+       * 영원히 재수집되지 않는다 → 젠데스크 외부 ID 대조가 조용히 무력화된다.
+       * 판단 기준은 '티켓이 바뀌었나'가 아니라 '이 티켓을 제대로 읽었나'여야 한다. */
 
       /* ⚠️ 젠데스크는 SPA다. 티켓 탭을 바꾸면 URL이 '먼저' 바뀌고
        *    본문·사이드바·커스텀 필드는 그 뒤에 비동기로 채워진다.
@@ -1774,28 +1784,33 @@
           g('hb_pick_wrap').style.display = 'none';
           contentBox.value = '';
           ZDIDS = collectZdIds('');
+          renderCard();                                                  // 대조 경고도 함께 초기화
         }
+        readPending = true;
         markTN('loading');
         whenTicketReady(nowTN, ok => {
+          readPending = false;
           if (nowTN !== curTN) return;                                   // 대기 중 또 전환됨
           if (!ok) {
+            failedTN = nowTN;
             markTN('fail');
             toast('⚠️ 티켓 로딩이 끝나지 않아 읽지 못했습니다 — 다시 읽기를 눌러주세요');
             return;                                                      // 조용히 넘어가지 않는다
           }
           markTN('');
-          if (changed) {
-            // 외부 ID·어드민 링크 재수집 → 대조/파트너 판별 갱신 (같은 티켓 내 수동 토글은 보존)
-            ZDIDS = collectZdIds(document.body.innerText || '');
-            setParty(detectParty(''));
-            renderCard();
-          }
+          // 외부 ID는 읽기에 성공할 때마다 다시 수집 — 대조가 빠지면 검증 자체가 무의미
+          ZDIDS = collectZdIds(document.body.innerText || '');
+          // 파트너/이용자 자동 판별은 '이 티켓을 처음 읽을 때'만 → 같은 티켓 내 수동 토글 보존
+          if (nowTN !== readTN) setParty(detectParty(''));
+          renderCard();
           blocks = parseInboundOriginal();
           sel.clear(); if (blocks.length) sel.add(blocks.length - 1);
           if (blocks.length) { g('hb_pick_wrap').style.display = 'block'; renderPick(); rebuild(); }
           else { g('hb_pick_wrap').style.display = 'none'; contentBox.value = ''; }
           draftText = getDraftText();
           renderMents();
+          readTN = nowTN;
+          failedTN = '';
         });
       }
       function toggle() {
@@ -1826,11 +1841,16 @@
       document.addEventListener('keydown', e => { if (e.altKey && e.code === 'KeyH') toggle(); if (e.key === 'Escape' && panel.style.display !== 'none') panel.style.display = 'none'; });
       // 패널이 열려있는 동안 티켓 전환 감시 (SPA 대응)
       setInterval(() => {
-        if (panel.style.display === 'none') return;
+        if (panel.style.display === 'none' || readPending) return;
         const nowTN = (location.href.match(/tickets\/(\d+)/) || [])[1] || '';
-        if (nowTN && nowTN !== curTN) refreshForTicket();
+        if (!nowTN) return;
+        if (nowTN !== curTN) { refreshForTicket(); return; }          // 티켓 전환
+        // 아직 한 번도 제대로 못 읽은 티켓(새로고침 직후 등)은 자동으로 다시 시도.
+        // failedTN 가드가 없으면 타임아웃 티켓에서 1.2초마다 토스트가 반복된다.
+        if (nowTN !== readTN && nowTN !== failedTN) refreshForTicket();
       }, 1200);
-      g('hb_refresh').onclick = () => refreshForTicket();
+      // 다시 읽기 = 실패 기록 지우고 강제 재읽기 (파트너/이용자 수동 토글은 유지)
+      g('hb_refresh').onclick = () => { failedTN = ''; refreshForTicket(); };
       HBStore.onChange(c => { renderCard(); renderMents(); if (panel.style.display === 'none') toast('🍯 새 케이스 수신'); });
       renderCard();
 
