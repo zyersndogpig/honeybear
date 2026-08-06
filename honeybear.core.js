@@ -16,8 +16,12 @@
 (function () {
   'use strict';
 
+  /* 도구 버전 — 콘솔·어드민 메뉴·젠데스크 패널에서 같은 값을 쓴다.
+   * 팀원이 "내 게 최신인가"를 F12 없이 확인할 수 있어야 한다. */
+  const HB_APP_VER = '0.9.6';
+
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.9.4 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v' + HB_APP_VER + ' 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -602,27 +606,29 @@
     }
 
     /* ── API 응답에서 이동거리·소요시간 추출 ────────────────────────────────
-     * 예약 상세 DOM 의 '실제요금' 행은 '- 원' 으로 비어 있어(운행 상세에만 존재)
-     * DOM 파싱으로는 실제 거리·시간을 절대 얻을 수 없다.
-     * 다만 예약 API 응답에는 j.ride 가 통째로 실려 오고(총요금이 여기서 나온다),
-     * 거기에 거리·시간 필드가 있을 가능성이 크다.
-     * 필드명이 확정되지 않았으므로 이름 후보를 훑되, 아래 안전장치를 둔다.
-     *   - 거리: 100m ~ 500km 범위만 인정 (그 밖이면 단위가 다르다고 보고 버림)
-     *   - 시간: 값이 600 이상이면 초 단위로 보고 분으로 환산
-     *   - 무엇을 골랐는지 콘솔에 남겨 잘못 잡히면 바로 확인 가능하게 한다
-     * 값을 못 찾으면 0 → 멘트에서 [   ] 로 비어 나가므로 틀린 값이 나갈 일은 없다. */
+     * 실제 응답에서 확인된 필드 (예약 API):
+     *   estimation: { distanceMeters: 71576, durationSeconds: 3729, ... }
+     * 반면 j.ride 는 id·origin·destination·receipt·status 만 담고 있어
+     * '실제' 거리·시간은 예약 API 어디에도 없다 → 라이드 상세를 열어야 한다.
+     * 이름이 다른 응답을 만날 때를 대비해 확인된 키를 먼저 보고, 없으면 유사 키를 훑는다.
+     * 단위는 키 이름으로 판정하고(…Meters / …Seconds), 이름이 모호하면 값 크기로 추정한다. */
     function apiMetrics(o, tag) {
       const out = { dist: 0, time: 0 };
       if (!o || typeof o !== 'object') return out;
       const keys = Object.keys(o);
-      const numOf = k => (typeof o[k] === 'number' && isFinite(o[k]) && o[k] > 0) ? o[k] : 0;
-      const dKey = keys.find(k => /dist|meter/i.test(k) && !/unit|type/i.test(k));
-      const tKey = keys.find(k => /duration|elapsed|drivingTime|ridingTime/i.test(k) && !/At$|stamp/i.test(k));
-      const d = dKey ? numOf(dKey) : 0;
-      let t = tKey ? numOf(tKey) : 0;
-      if (t >= 600) t = Math.round(t / 60);            // 초 → 분
-      if (d >= 100 && d <= 500000) out.dist = Math.round(d);
-      if (t > 0 && t <= 720) out.time = t;             // 12시간 초과는 버림
+      const numAt = k => (k && typeof o[k] === 'number' && isFinite(o[k]) && o[k] > 0) ? o[k] : 0;
+      const D_KNOWN = ['distanceMeters', 'totalDistanceMeters', 'distance', 'totalDistance'];
+      const T_KNOWN = ['durationSeconds', 'totalDurationSeconds', 'drivingTimeSeconds', 'duration'];
+      const dKey = D_KNOWN.find(k => numAt(k)) ||
+                   keys.find(k => /dist|meter/i.test(k) && !/unit|type|fee/i.test(k) && numAt(k));
+      const tKey = T_KNOWN.find(k => numAt(k)) ||
+                   keys.find(k => /duration|elapsed|drivingTime|ridingTime/i.test(k) && !/At$|stamp/i.test(k) && numAt(k));
+      const d = numAt(dKey);
+      let t = numAt(tKey);
+      // 초 → 분. 키 이름이 Seconds 면 확정, 아니면 값 크기로 판단(600분=10시간 초과는 비현실적)
+      if (t && (/seconds$/i.test(tKey || '') || t >= 600)) t = Math.round(t / 60);
+      if (d >= 100 && d <= 500000) out.dist = Math.round(d);   // 100m~500km 밖이면 단위가 다르다고 보고 버림
+      if (t > 0 && t <= 720) out.time = t;
       if (out.dist || out.time) {
         console.log('[HB] API 거리·시간(' + tag + ') —', dKey, o[dKey], '/', tKey, o[tKey], '→', out);
       } else if (keys.length) {
@@ -666,11 +672,13 @@
         //   (cancel/loss는 값이 있을 때만 덮으므로 예약 영수증에서 잡은 값은 유지됨)
         if (j.ride && j.ride.receipt) c.fare.items = [];
         if (j.ride) receiptToFare(c, j.ride.receipt);
-        // 예약 DOM 에는 실제 거리·시간이 없다 — 중첩된 라이드 객체에서 확보 시도
+        // 예약 DOM·API 어디에도 '실제' 거리·시간이 없다(j.ride 는 위치·영수증·상태만).
+        // 영수증에 들어있는 응답도 있을 수 있어 한 번 더 훑고, 없으면 라이드 캡처로 안내한다.
         if (j.ride) {
           const rm = apiMetrics(j.ride, '예약>라이드');
-          if (rm.dist) c.fare.realDist = rm.dist;
-          if (rm.time) c.fare.realTime = rm.time;
+          const rr = (rm.dist && rm.time) ? rm : apiMetrics(j.ride.receipt, '예약>라이드>영수증');
+          if (rr.dist) c.fare.realDist = rr.dist;
+          if (rr.time) c.fare.realTime = rr.time;
         }
         const em = apiMetrics(j.estimation, '예약>예상');
         if (em.dist) c.fare.estDist = em.dist;
@@ -945,9 +953,18 @@
       const pick = row => {
         if (!row) return { dist: 0, time: 0 };
         const t = row.innerText.replace(/,/g, '');
-        const d = t.match(/([0-9]+)\s*미터/);
-        const m = t.match(/([0-9]+)\s*분/);
-        return { dist: d ? Number(d[1]) : 0, time: m ? Number(m[1]) : 0 };
+        const d = t.match(/([0-9]+)\s*(?:미터|m\b)/);
+        /* 시간 표기가 한 가지가 아니다:
+         *   '65 분' / '1시간 5분' / '3900 초'
+         * '분'만 찾으면 '1시간 5분'에서 5분만 잡히고, 초 표기는 통째로 놓친다. */
+        let time = 0;
+        const hm = t.match(/([0-9]+)\s*시간\s*([0-9]+)?\s*분?/);
+        const mm = t.match(/([0-9]+)\s*분/);
+        const ss = t.match(/([0-9]+)\s*초/);
+        if (hm) time = Number(hm[1]) * 60 + Number(hm[2] || 0);
+        else if (mm) time = Number(mm[1]);
+        else if (ss) time = Math.round(Number(ss[1]) / 60);
+        return { dist: d ? Number(d[1]) : 0, time };
       };
       const e = pick(rowOf(/^예상요금/));
       let r = pick(rowOf(/^(실제요금|실제운행|운행요금|최종요금)/));
@@ -1053,6 +1070,8 @@
         };
         wrap.appendChild(mk('🍯 꿀통양식', () => { try { hbRunHoneyForm(); } catch (e) { console.warn('[HB] 꿀통 오류:', e.message); toast('🍯 실행 오류 — 콘솔 확인'); } }));
         wrap.appendChild(mk('🐻 꿀빠는 문자', () => { try { hbRunBeeForm(); } catch (e) { console.warn('[HB] 꿀빠는곰 오류:', e.message); toast('🐻 실행 오류 — 콘솔 확인'); } }));
+        // 버전 표시 — 팀원이 최신 스크립트를 받았는지 F12 없이 확인할 수 있게
+        wrap.appendChild(el('div', 'font-size:9.5px;color:#a3aba6;text-align:right;margin-top:2px;', '허니베어 v' + HB_APP_VER));
         document.body.appendChild(wrap);
         const off = e => { if (!wrap.contains(e.target) && e.target !== fab) { wrap.remove(); document.removeEventListener('mousedown', off); } };
         setTimeout(() => document.addEventListener('mousedown', off), 0);
@@ -1585,7 +1604,7 @@
           #hb_zd_panel .opt{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;margin:6px 0;}
           #hb_zd_panel input[type=checkbox]{accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;}
         </style>
-        <div class="h"><span>🎫</span><b>티켓 뷰</b><span class="tn">#${TN}</span><button class="x" id="hb_x">✕</button></div>
+        <div class="h"><span>🎫</span><b>티켓 뷰</b><span class="tn">#${TN}</span><span style="font-size:9.5px;color:#a3aba6;margin-left:6px;">v${HB_APP_VER}</span><button class="x" id="hb_x">✕</button></div>
         <div class="body">
           <div id="hb_card"></div>
           <div class="row" style="justify-content:space-between;">
@@ -4144,9 +4163,9 @@ function clearIds(keepMsgData){
       if (block.length >= 2 && isSep(block[1])) { head = block[0]; body = block.slice(2); }
       let html = '<table style="border-collapse:collapse;width:100%;margin:8px 0;font-size:13px;">';
       if (head) html += '<thead><tr>' + cells(head)
-        .map(c => '<th style="' + TD + 'background:#f4f6f5;text-align:left;">' + esc(c) + '</th>').join('') + '</tr></thead>';
+        .map(c => '<th style="' + TD + 'background:#f4f6f5;text-align:left;">' + link(esc(c)) + '</th>').join('') + '</tr></thead>';
       html += '<tbody>' + body.filter(r => !isSep(r))
-        .map(r => '<tr>' + cells(r).map(c => '<td style="' + TD + '">' + esc(c) + '</td>').join('') + '</tr>').join('')
+        .map(r => '<tr>' + cells(r).map(c => '<td style="' + TD + '">' + link(esc(c)) + '</td>').join('') + '</tr>').join('')
         + '</tbody></table>';
       out.push(html);
     }
@@ -4154,11 +4173,15 @@ function clearIds(keepMsgData){
   }
 
   /* 평문 + HTML 동시 복사. 실패하면 평문으로 폴백한다.
-   * 평문 쪽은 [텍스트](URL) 을 '텍스트 + 줄바꿈 + URL' 로 풀어서 읽히게 한다. */
-  function copyRich(val) {
-    const html = richHtmlOf(val);
-    const plain = String(val || '')
-      .replace(/\[([^\][]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1\n$2');
+   * 호출 형태가 두 가지라 둘 다 받는다:
+   *   copyRich(text)        — 멘트: 파이프 표·마크다운 링크를 변환해 HTML 생성
+   *   copyRich(html, plain) — 슬랙 적재: 이미 만들어 둔 HTML/평문을 그대로 사용
+   * (한때 1인자만 받게 바꿔 슬랙 적재가 HTML 원문을 평문으로 복사하는 버그가 있었다) */
+  function copyRich(a, b) {
+    const twoArg = (b != null);
+    const html = twoArg ? String(a) : richHtmlOf(a);
+    const plain = twoArg ? String(b)
+      : String(a || '').replace(/\[([^\][]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1\n$2');
     const ta = el('textarea', 'position:fixed;top:-9999px;'); ta.value = plain;
     document.body.appendChild(ta); ta.focus(); ta.select();
     const onCopy = e => {
