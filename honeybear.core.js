@@ -17,7 +17,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.8.1 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v0.8.2 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -858,6 +858,27 @@
       return true;
     }
 
+    /* ── 예상요금: '할인·크레딧 미적용가'가 정본 ─────────────────────────────
+     * 이용자 안내는 할인 전 금액 기준으로 나가므로 여기서도 할인 전을 잡아야 한다.
+     * ⚠️ API(estimation.minCost / totalFee)는 '할인 후' 값이다.
+     *    fillBlanks 는 API 를 base 로 두고 빈 칸만 DOM 으로 채우므로,
+     *    API 가 18,700(할인 후)을 채워두면 DOM 의 119,200(할인 전)이 영원히 반영되지 않는다.
+     *    → 예상요금만은 DOM 값으로 '덮어쓴다'.
+     * 어드민 예상요금 행은 할인이 있을 때만 취소선(할인 전) 줄이 먼저 렌더된다.
+     *   할인 있음: 119200~119200(취소선) → 18700~18700원
+     *   할인 없음: 18700~18700원        ← 취소선 줄 자체가 없음
+     * 따라서 취소선이 있으면 그 안, 없으면 행 전체의 첫 숫자를 쓰면
+     * 할인 유무와 무관하게 항상 할인 전 금액이 나온다. (꿀통 양식과 동일 기준) */
+    function estPreDiscountFromDom() {
+      const row = [...document.querySelectorAll('tr')]
+        .find(tr => tr.innerText.replace(/\s+/, ' ').startsWith('예상요금'));
+      if (!row) return 0;
+      const strike = row.querySelector('del, s, [style*="line-through"]');
+      const src = (strike ? strike.innerText : row.innerText).replace(/,/g, '');
+      const m = src.match(/([0-9]+)/);
+      return m ? Number(m[1]) : 0;
+    }
+
     function capture() {
       try { if (capturePartyPage()) return; } catch (e) { console.warn('[HB] 주체 캡처 오류:', e.message); }
       let api = null, dom = null;
@@ -868,6 +889,15 @@
       let cur, src;
       if (api && dom) { cur = fillBlanks(api, dom); src = 'API+DOM'; }
       else { cur = api || dom; src = api ? 'API' : 'DOM'; }
+
+      // 예상요금만 DOM(할인 전) 우선 — 빈 칸 채우기가 아니라 덮어쓰기여야 한다
+      try {
+        const estDom = estPreDiscountFromDom();
+        if (estDom > 0 && estDom !== cur.fare.est) {
+          console.log('[HB] 예상요금 할인 전 적용:', cur.fare.est, '→', estDom);
+          cur.fare.est = estDom;
+        }
+      } catch (e) { console.warn('[HB] 예상요금(할인 전) 파싱 오류:', e.message); }
 
       const merged = mergeCase(HBStore.loadCase(), cur);
       HBStore.saveCase(merged);
@@ -1692,26 +1722,81 @@
 
       /* 열고 닫기 + 실시간 동기화 + 티켓 전환 감지 */
       let curTN = TN;
-      // 젠데스크는 SPA — 티켓 탭을 바꿔도 새로고침되지 않으므로 인입을 다시 읽어야 한다.
+      let readySeq = 0; // 티켓 연속 전환 경합 방지 — 가장 최근 요청만 화면에 반영
+
+      /* ⚠️ 젠데스크는 SPA다. 티켓 탭을 바꾸면 URL이 '먼저' 바뀌고
+       *    본문·사이드바·커스텀 필드는 그 뒤에 비동기로 채워진다.
+       *    URL 변경 즉시 파싱하면 빈 DOM 또는 '이전 티켓의 잔여 DOM'을 읽는데,
+       *    이건 에러가 아니라 조용히 성공한 것처럼 보이기 때문에 가장 위험하다.
+       *    (검증 도구가 틀린 값으로 OK를 주면 도구가 없는 것보다 나쁘다)
+       *    → ① 전환 즉시 화면을 비우고 ② 로딩이 끝난 뒤 읽고 ③ 실패하면 명시적으로 알린다. */
+
+      function markTN(state) { // '' | 'loading' | 'fail'
+        const tn = panel.querySelector('.tn'); if (!tn) return;
+        tn.textContent = '#' + curTN + (state === 'loading' ? ' · 읽는 중…'
+                                      : state === 'fail' ? ' · ⚠ 로딩 미완료' : '');
+        tn.style.color = state === 'fail' ? '#dc2626' : '';
+      }
+
+      /* 로딩 완료 판정.
+       * 고정 setTimeout(예: 500ms)은 회선이 느린 날 그대로 깨지므로 쓰지 않는다.
+       *   ① 현재 티켓 번호가 화면에 실제로 떠 있고
+       *   ② 인입 블록이 하나 이상 파싱되고
+       *   ③ 본문 길이가 연속 2회 동일(렌더 안정화)
+       * 세 조건을 모두 만족할 때만 읽는다. 8초 내 미충족이면 실패로 끝낸다. */
+      function whenTicketReady(tn, cb) {
+        const seq = ++readySeq;
+        const started = Date.now();
+        let lastLen = -1, stable = 0;
+        (function poll() {
+          if (seq !== readySeq) return;                                  // 더 최신 전환이 들어옴 → 폐기
+          if (((location.href.match(/tickets\/(\d+)/) || [])[1] || '') !== tn) return;
+          const txt = document.body.innerText || '';
+          stable = (txt.length === lastLen) ? stable + 1 : 0;
+          lastLen = txt.length;
+          let hasBody = false;
+          try { hasBody = parseInboundOriginal().length > 0; } catch (e) {}
+          if (txt.indexOf(tn) >= 0 && hasBody && stable >= 1) return cb(true);
+          if (Date.now() - started > 8000) return cb(false);
+          setTimeout(poll, 250);
+        })();
+      }
+
       function refreshForTicket() {
         const nowTN = (location.href.match(/tickets\/(\d+)/) || [])[1] || '';
         if (!nowTN) return;
         const changed = nowTN !== curTN;
+        curTN = nowTN;
         if (changed) {
-          curTN = nowTN;
-          const tn = panel.querySelector('.tn'); if (tn) tn.textContent = '#' + nowTN;
-          // 티켓이 바뀌면 외부 ID·어드민 링크를 다시 읽어 대조/파트너 판별 갱신 (같은 티켓 내 수동 토글은 보존)
-          ZDIDS = collectZdIds(document.body.innerText || '');
-          setParty(detectParty(''));
-          renderCard();
+          /* 읽기 완료 '전에' 이전 티켓 데이터를 지운다.
+           * 남겨두면 그 사이 상담사가 앞 티켓 내용을 복사해갈 수 있다 — 실제 오염 경로. */
+          blocks = []; sel.clear();
+          g('hb_pick_wrap').style.display = 'none';
+          contentBox.value = '';
+          ZDIDS = collectZdIds('');
         }
-        // 인입 재파싱 (티켓이 바뀌었거나 패널을 새로 열 때)
-        blocks = parseInboundOriginal();
-        sel.clear(); if (blocks.length) sel.add(blocks.length - 1);
-        if (blocks.length) { g('hb_pick_wrap').style.display = 'block'; renderPick(); rebuild(); }
-        else { g('hb_pick_wrap').style.display = 'none'; contentBox.value = ''; }
-        draftText = getDraftText();
-        renderMents();
+        markTN('loading');
+        whenTicketReady(nowTN, ok => {
+          if (nowTN !== curTN) return;                                   // 대기 중 또 전환됨
+          if (!ok) {
+            markTN('fail');
+            toast('⚠️ 티켓 로딩이 끝나지 않아 읽지 못했습니다 — 다시 읽기를 눌러주세요');
+            return;                                                      // 조용히 넘어가지 않는다
+          }
+          markTN('');
+          if (changed) {
+            // 외부 ID·어드민 링크 재수집 → 대조/파트너 판별 갱신 (같은 티켓 내 수동 토글은 보존)
+            ZDIDS = collectZdIds(document.body.innerText || '');
+            setParty(detectParty(''));
+            renderCard();
+          }
+          blocks = parseInboundOriginal();
+          sel.clear(); if (blocks.length) sel.add(blocks.length - 1);
+          if (blocks.length) { g('hb_pick_wrap').style.display = 'block'; renderPick(); rebuild(); }
+          else { g('hb_pick_wrap').style.display = 'none'; contentBox.value = ''; }
+          draftText = getDraftText();
+          renderMents();
+        });
       }
       function toggle() {
         const open = panel.style.display === 'none';
