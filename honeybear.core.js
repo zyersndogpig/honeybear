@@ -17,7 +17,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.9.3 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v0.9.4 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -601,6 +601,37 @@
       }
     }
 
+    /* ── API 응답에서 이동거리·소요시간 추출 ────────────────────────────────
+     * 예약 상세 DOM 의 '실제요금' 행은 '- 원' 으로 비어 있어(운행 상세에만 존재)
+     * DOM 파싱으로는 실제 거리·시간을 절대 얻을 수 없다.
+     * 다만 예약 API 응답에는 j.ride 가 통째로 실려 오고(총요금이 여기서 나온다),
+     * 거기에 거리·시간 필드가 있을 가능성이 크다.
+     * 필드명이 확정되지 않았으므로 이름 후보를 훑되, 아래 안전장치를 둔다.
+     *   - 거리: 100m ~ 500km 범위만 인정 (그 밖이면 단위가 다르다고 보고 버림)
+     *   - 시간: 값이 600 이상이면 초 단위로 보고 분으로 환산
+     *   - 무엇을 골랐는지 콘솔에 남겨 잘못 잡히면 바로 확인 가능하게 한다
+     * 값을 못 찾으면 0 → 멘트에서 [   ] 로 비어 나가므로 틀린 값이 나갈 일은 없다. */
+    function apiMetrics(o, tag) {
+      const out = { dist: 0, time: 0 };
+      if (!o || typeof o !== 'object') return out;
+      const keys = Object.keys(o);
+      const numOf = k => (typeof o[k] === 'number' && isFinite(o[k]) && o[k] > 0) ? o[k] : 0;
+      const dKey = keys.find(k => /dist|meter/i.test(k) && !/unit|type/i.test(k));
+      const tKey = keys.find(k => /duration|elapsed|drivingTime|ridingTime/i.test(k) && !/At$|stamp/i.test(k));
+      const d = dKey ? numOf(dKey) : 0;
+      let t = tKey ? numOf(tKey) : 0;
+      if (t >= 600) t = Math.round(t / 60);            // 초 → 분
+      if (d >= 100 && d <= 500000) out.dist = Math.round(d);
+      if (t > 0 && t <= 720) out.time = t;             // 12시간 초과는 버림
+      if (out.dist || out.time) {
+        console.log('[HB] API 거리·시간(' + tag + ') —', dKey, o[dKey], '/', tKey, o[tKey], '→', out);
+      } else if (keys.length) {
+        console.log('[HB] API 거리·시간(' + tag + ') 미발견. 숫자 필드:',
+          keys.filter(k => typeof o[k] === 'number'));
+      }
+      return out;
+    }
+
     function captureFromApi() {
       const rideM = location.href.match(/\/rides\/([A-Za-z0-9]+)/);
       const resvM = location.href.match(/\/rideReservations\/([A-Za-z0-9]+)/);
@@ -635,6 +666,15 @@
         //   (cancel/loss는 값이 있을 때만 덮으므로 예약 영수증에서 잡은 값은 유지됨)
         if (j.ride && j.ride.receipt) c.fare.items = [];
         if (j.ride) receiptToFare(c, j.ride.receipt);
+        // 예약 DOM 에는 실제 거리·시간이 없다 — 중첩된 라이드 객체에서 확보 시도
+        if (j.ride) {
+          const rm = apiMetrics(j.ride, '예약>라이드');
+          if (rm.dist) c.fare.realDist = rm.dist;
+          if (rm.time) c.fare.realTime = rm.time;
+        }
+        const em = apiMetrics(j.estimation, '예약>예상');
+        if (em.dist) c.fare.estDist = em.dist;
+        if (em.time) c.fare.estTime = em.time;
         c.flags.isCash = !!j.isOnSitePayment;
         c.flags.thirdParty = _thirdTag(j.user)
           || _thirdTagOfPayment(j.paymentMethod);
@@ -659,6 +699,14 @@
         if (chain.length >= 2) { c.trip.departure = chain.slice(0, -1).join(' > '); c.trip.destination = chain[chain.length - 1]; }
         else { c.trip.departure = _locName(j.origin); c.trip.destination = _locName(j.destination); }
         c.fare.est = (j.estimation && (j.estimation.minCost || j.estimation.maxCost)) || 0;
+        {
+          const rm = apiMetrics(j, '라이드');
+          if (rm.dist) c.fare.realDist = rm.dist;
+          if (rm.time) c.fare.realTime = rm.time;
+          const em = apiMetrics(j.estimation, '라이드>예상');
+          if (em.dist) c.fare.estDist = em.dist;
+          if (em.time) c.fare.estTime = em.time;
+        }
         c.fare.surge = j.surgePercentage || 0;
         receiptToFare(c, j.receipt);
         if (!c.fare.total && j.cost) c.fare.total = j.cost;
