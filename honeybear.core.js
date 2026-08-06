@@ -18,7 +18,7 @@
 
   /* 도구 버전 — 콘솔·어드민 메뉴·젠데스크 패널에서 같은 값을 쓴다.
    * 팀원이 "내 게 최신인가"를 F12 없이 확인할 수 있어야 한다. */
-  const HB_APP_VER = '0.9.8';
+  const HB_APP_VER = '0.9.9';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
   console.log('%c[HB] 허니베어 core v' + HB_APP_VER + ' 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
@@ -1125,16 +1125,27 @@
     function loadMents(cb) {
       const cached = GM_getValue('hb_ments_cache', null);
       const at = GM_getValue('hb_ments_at', 0);
-      const parse = s => { try { const j = JSON.parse(s); return Array.isArray(j) ? j : (j.ments || []); } catch (e) { return []; } };
+      /* 애드온(날씨 인사말)은 특정 멘트에 딸려 있던 것을 최상위로 뺐다.
+       * 어떤 멘트를 골랐든 붙일 수 있어야 하기 때문. 구버전 JSON 호환을 위해
+       * 최상위에 없으면 멘트 안에 남아있는 addons 를 모아 쓴다. */
+      const parse = s => {
+        try {
+          const j = JSON.parse(s);
+          const arr = Array.isArray(j) ? j : (j.ments || []);
+          let add = (!Array.isArray(j) && Array.isArray(j.addons)) ? j.addons : null;
+          if (!add) { const owner = arr.find(m => m.addons && m.addons.length); add = owner ? owner.addons : []; }
+          return { ments: arr, addons: add };
+        } catch (e) { return { ments: [], addons: [] }; }
+      };
       if (cached && Date.now() - at < 10 * 60 * 1000) { cb(parse(cached)); return; }
       GM_xmlhttpRequest({
         method: 'GET', url: MENTS_URL + '?t=' + Date.now(),
         onload: r => {
-          const arr = parse(r.responseText);
-          if (arr.length) { GM_setValue('hb_ments_cache', r.responseText); GM_setValue('hb_ments_at', Date.now()); cb(arr); }
-          else cb(cached ? parse(cached) : []);
+          const got = parse(r.responseText);
+          if (got.ments.length) { GM_setValue('hb_ments_cache', r.responseText); GM_setValue('hb_ments_at', Date.now()); cb(got); }
+          else cb(cached ? parse(cached) : { ments: [], addons: [] });
         },
-        onerror: () => cb(cached ? parse(cached) : [])
+        onerror: () => cb(cached ? parse(cached) : { ments: [], addons: [] })
       });
     }
 
@@ -1862,8 +1873,8 @@
         (p === '파트너' ? bu : bp).classList.remove('on');
       }
       // 대상 토글은 슬랙 적재 문구·멘트 목록뿐 아니라 ID 대조 기준까지 바꾼다
-      bu.onclick = () => { partyManual = true; setParty('이용자'); try { renderCard(); renderMents(); } catch (e) {} };
-      bp.onclick = () => { partyManual = true; setParty('파트너'); try { renderCard(); renderMents(); } catch (e) {} };
+      bu.onclick = () => { partyManual = true; setParty('이용자'); try { renderCard(); renderMents(); renderAddons(); } catch (e) {} };
+      bp.onclick = () => { partyManual = true; setParty('파트너'); try { renderCard(); renderMents(); renderAddons(); } catch (e) {} };
       // 자동판별: 외부 ID 접두 우선 (D→파트너 / webuser·U 등→이용자), 없으면 드라이버 링크 보조 — 티켓뷰와 동일
       setParty(detectParty(pageSnap));
       g('hb_slack').onclick = function () {
@@ -1896,17 +1907,42 @@
         lastMent = { text: raw }; lastSeg = seg;
         if (hasOptionalBracket(raw)) { optwrap.style.display = 'flex'; g('hb_optlabel').textContent = optionalBracketName(raw) + ' 포함'; }
         else { optwrap.style.display = 'none'; optBox.checked = false; }
-        if (m && m.addons && m.addons.length) {
-          addonBox.innerHTML = ''; const lb = el('span', 'font-size:11px;color:#0a5d54;font-weight:bold;', '날씨 인사말:'); addonBox.appendChild(lb);
-          m.addons.forEach(ad => {
-            const l = el('label', 'display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:#0a5d54;border:1px solid #bfe6de;border-radius:20px;padding:3px 9px;cursor:pointer;');
-            const cb = el('input'); cb.type = 'checkbox'; const sp = el('span', null, ad.label); l.append(cb, sp);
-            cb.onchange = () => { const line = fillTokens(ad.text, HBStore.loadCase()).trim(); let v = previewEl.value; const idx = v.indexOf(line); if (idx >= 0) v = v.slice(0, idx) + v.slice(idx + line.length); if (cb.checked) v = v.replace(/\s+$/, '') + '\n\n' + line; previewEl.value = v.replace(/\n{3,}/g, '\n\n').trim(); };
-            addonBox.appendChild(l);
-          });
-          addonBox.style.display = 'flex';
-        } else { addonBox.style.display = 'none'; addonBox.innerHTML = ''; }
+        if (addonPick != null) reapplyAddon();   // 멘트를 새로 붙이면 인사말은 항상 맨 뒤로
         previewEl.focus(); previewEl.scrollTop = previewEl.scrollHeight;
+      }
+
+      /* ── 날씨 인사말 (전역 애드온) ────────────────────────────────────────
+       * 예전엔 특정 멘트(배차불만파트너)에만 딸려 있어서, 다른 멘트를 고르면
+       * 인사말을 붙일 수 없었다. 멘트와 무관하게 항상 쓸 수 있어야 하므로 전역으로 뺀다.
+       * 인사말은 두 개를 겹쳐 붙일 이유가 없어 단일 선택(다시 누르면 해제)으로 둔다. */
+      let ADDONS = [], addonPick = null;
+      const addonLine = i => (ADDONS[i] ? fillTokens(ADDONS[i].text, HBStore.loadCase()).trim() : '');
+      function stripAddons() {
+        let v = previewEl.value;
+        ADDONS.forEach((_, i) => {
+          const line = addonLine(i);
+          if (line) v = v.split(line).join('');
+        });
+        return v.replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '');
+      }
+      function reapplyAddon() {
+        const base = stripAddons();
+        const line = addonPick == null ? '' : addonLine(addonPick);
+        previewEl.value = (line ? (base ? base + '\n\n' + line : line) : base).trim();
+        [...addonBox.querySelectorAll('button.chip')].forEach((b, i) => b.classList.toggle('rec', i === addonPick));
+      }
+      function renderAddons() {
+        addonBox.innerHTML = '';
+        /* 문구가 '운행하시느라 고생 많으십니다' 라 파트너 대상 전용이다.
+         * 이용자 티켓에 노출하면 잘못 붙일 위험이 있어 대상이 파트너일 때만 띄운다. */
+        if (!ADDONS.length || party !== '파트너') { addonBox.style.display = 'none'; return; }
+        addonBox.appendChild(el('span', 'font-size:11px;color:var(--acc);font-weight:bold;', '날씨 인사말:'));
+        ADDONS.forEach((ad, i) => {
+          const b = el('button', null, ad.label); b.className = 'chip' + (i === addonPick ? ' rec' : '');
+          b.onclick = () => { addonPick = (addonPick === i) ? null : i; reapplyAddon(); };
+          addonBox.appendChild(b);
+        });
+        addonBox.style.display = 'flex';
       }
       function showVariants(m) {
         variantBox.innerHTML = '';
@@ -1973,9 +2009,9 @@
         }
       };
       g('hb_copy').onclick = function () { copyRich(previewEl.value); toast('📋 복사 완료'); const t = this.textContent; this.textContent = '✅ 복사됨'; setTimeout(() => this.textContent = t, 1200); };
-      g('hb_clear2').onclick = () => { previewEl.value = ''; lastMent = null; lastSeg = ''; optwrap.style.display = 'none'; optBox.checked = false; addonBox.style.display = 'none'; };
+      g('hb_clear2').onclick = () => { previewEl.value = ''; lastMent = null; lastSeg = ''; optwrap.style.display = 'none'; optBox.checked = false; addonPick = null; renderAddons(); };
 
-      loadMents(arr => { MENTS = arr; g('hb_mc').textContent = arr.length; renderMents(); });
+      loadMents(got => { MENTS = got.ments; ADDONS = got.addons || []; g('hb_mc').textContent = MENTS.length; renderMents(); renderAddons(); });
 
 
       /* 열고 닫기 + 실시간 동기화 + 티켓 전환 감지 */
@@ -2064,6 +2100,7 @@
           // 파트너/이용자 자동 판별 — 상담사가 직접 토글한 경우만 건드리지 않는다
           if (!partyManual) setParty(detectParty(''));
           renderCard();
+          try { renderAddons(); } catch (e) {}
           blocks = parseInboundOriginal();
           sel.clear(); if (blocks.length) sel.add(blocks.length - 1);
           if (blocks.length) { g('hb_pick_wrap').style.display = 'block'; renderPick(); rebuild(); }
@@ -2128,6 +2165,7 @@
         ZDIDS = z;
         if (!partyManual) setParty(detectParty(''));
         renderCard();
+        try { renderAddons(); } catch (e) {}
         try { renderMents(); } catch (e) {}
         console.log('[HB] 외부 ID 지연 수집 —', z);
       }, 5000);
