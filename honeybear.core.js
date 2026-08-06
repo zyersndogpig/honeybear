@@ -18,7 +18,7 @@
 
   /* 도구 버전 — 콘솔·어드민 메뉴·젠데스크 패널에서 같은 값을 쓴다.
    * 팀원이 "내 게 최신인가"를 F12 없이 확인할 수 있어야 한다. */
-  const HB_APP_VER = '0.9.6';
+  const HB_APP_VER = '0.9.7';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
   console.log('%c[HB] 허니베어 core v' + HB_APP_VER + ' 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
@@ -4151,6 +4151,10 @@ function clearIds(keepMsgData){
     while (i < lines.length) {
       if (!isRow(lines[i])) {
         const l = lines[i++];
+        /* --- 또는 ─── 만 있는 줄 → 가로줄.
+         * 젠데스크 에디터는 <hr> 를 그대로 받는다. style 속성은 삽입 시 걸러질 수 있어
+         * 속성 없는 순수 <hr> 로 내보낸다. (표 구분줄 |---|---| 은 위 isRow 에서 이미 걸러짐) */
+        if (/^\s*[-─_]{3,}\s*$/.test(l)) { out.push('<hr>'); continue; }
         /* 빈 줄은 <div><br></div> 로 두면 젠데스크 에디터(ProseMirror)가
          * '내용 없는 블록'으로 보고 붙여넣기 단계에서 통째로 버린다 → 문단 구분이 사라진다.
          * &nbsp; 를 넣은 <p> 는 내용이 있는 문단으로 인식되어 살아남는다. */
@@ -4181,7 +4185,10 @@ function clearIds(keepMsgData){
     const twoArg = (b != null);
     const html = twoArg ? String(a) : richHtmlOf(a);
     const plain = twoArg ? String(b)
-      : String(a || '').replace(/\[([^\][]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1\n$2');
+      : String(a || '')
+        .replace(/\[([^\][]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1\n$2')
+        // 평문 채널에서는 <hr> 대신 실제 구분선 문자를 넣는다
+        .replace(/^[ \t]*[-─_]{3,}[ \t]*$/gm, '────────────────────────────');
     const ta = el('textarea', 'position:fixed;top:-9999px;'); ta.value = plain;
     document.body.appendChild(ta); ta.focus(); ta.select();
     const onCopy = e => {
