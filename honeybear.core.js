@@ -17,7 +17,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.9.1 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v0.9.2 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -1621,9 +1621,19 @@
           ['유저', ur.v, ur.cls], ['파트너', dr.v, dr.cls]
         ].concat(flags.length ? [['기타', flags.join(' · '), '']] : [])
           .map(r => `<div class="k">${r[0]}</div><div class="${r[2] || (r[1] ? '' : 'miss')}">${r[1] || '—'}</div>`).join('');
-        const note = unver ? `<div style="margin-top:8px;padding:7px 9px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;font-size:11px;line-height:1.65;color:#92400e;">
+        const notes = [];
+        if (unver) notes.push(`<div style="margin-top:8px;padding:7px 9px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;font-size:11px;line-height:1.65;color:#92400e;">
           ❔ <b>${isPartnerTicket ? '파트너' : '이용자'} ID 대조 불가</b> — 이 티켓에서 외부 ID·어드민 링크를 찾지 못했습니다 (웹 유저·이메일 인입 등).<br>
-          불일치가 <u>없는 게 아니라 확인이 안 된 상태</u>입니다. 케이스가 이 문의 건이 맞는지 직접 확인해주세요.</div>` : '';
+          불일치가 <u>없는 게 아니라 확인이 안 된 상태</u>입니다. 케이스가 이 문의 건이 맞는지 직접 확인해주세요.</div>`);
+        /* 실제 이동거리·시간은 라이드 상세 페이지의 '실제요금' 행에만 있다.
+         * 예약 페이지만 캡처하면 예상값만 잡히고 실제값은 빈 채로 남는다 —
+         * 멘트의 예상/실제 비교표가 반쪽이 되므로 눈에 띄게 알려준다. */
+        const needRide = has && c.ids.ride && c.fare.total > 0 && !c.fare.cancel
+                         && !(c.fare.realDist && c.fare.realTime);
+        if (needRide) notes.push(`<div style="margin-top:8px;padding:7px 9px;background:#eef6ff;border:1px solid #93c5fd;border-radius:6px;font-size:11px;line-height:1.65;color:#1e40af;">
+          📍 <b>실제 이동거리·시간 미확보</b> — 이 값은 라이드 상세의 '실제요금' 행에만 있습니다.<br>
+          어드민에서 라이드 <b>${c.ids.ride}</b> 를 열고 🍯 캡처를 한 번 더 눌러주세요.</div>`);
+        const note = notes.join('');
         const badgeBg = !has ? '#c3c9c6' : mism ? '#c0392b' : (unver || stale) ? '#d97706' : '#0a7d72';
         const badgeTx = !has ? '데이터 없음' : mism ? 'ID 불일치'
           : unver ? ('대조불가 · ' + fresh(c.ts) + (stale ? '·오래됨' : ''))
