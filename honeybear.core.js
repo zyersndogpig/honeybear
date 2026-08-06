@@ -17,7 +17,7 @@
   'use strict';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
-  console.log('%c[HB] 허니베어 core v0.8.7 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  console.log('%c[HB] 허니베어 core v0.8.8 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
@@ -1395,26 +1395,27 @@
       return { user: uniq(u), driver: uniq(d) };
     }
     /* ── 파트너/이용자 자동 판별 — 티켓뷰(zendesk.html) detectPartyAuto 이식 ──
-     * 요청자 외부 ID 접두로 확정: D…(DNX…)→파트너 / webuser…·U… 등 그 외→이용자.
-     * 외부 ID를 못 찾은 경우에만 드라이버 어드민 링크(정확한 href)로 보조 판별. */
+     * ① 요청자명이 'Web User <해시>' → 무조건 파트너.
+     *    드라이버 센터 웹 메시징은 로그인 없이 인입되어 요청자가 익명 해시로 잡힌다.
+     *    (외부 ID 'webuser:U…' 와는 다른 것 — 그쪽은 로그인한 웹 이용자라 이용자로 남긴다)
+     * ② 외부 ID 접두로 확정: D…(DNX…)→파트너 / webuser…·U… 등 그 외→이용자.
+     * ③ 드라이버 어드민 링크(정확한 href)로 보조 판별.
+     * ④ 그래도 못 정하면 브랜드로 — '타다 드라이버 센터' 인입은 파트너다.
+     *    (기존엔 무조건 '이용자'로 떨어져, 판별 실패가 이용자로 위장됐다) */
     function detectParty(snap) {
       try {
         const blob = snap || document.body.innerText || '';
+        // ① 웹 유저 인입 = 드라이버 센터 익명 메시징 → 파트너
+        if (/Web\s*User\s+[0-9a-f]{12,}/i.test(blob)) return '파트너';
         const m = blob.match(/외부\s*(?:ID|아이디)[\s\S]{0,40}?([A-Za-z0-9:_-]{6,})/);
         if (m) {
           const extId = m[1];
-          if (/^webuser/i.test(extId)) return '이용자';        // 웹 이용자 — D 검사보다 먼저
+          if (/^webuser/i.test(extId)) return '이용자';        // 로그인한 웹 이용자 — D 검사보다 먼저
           return /^D/i.test(extId) ? '파트너' : '이용자';
         }
-        // Web User <해시> — 메시징 웹 채널 인입(외부 ID 없음): 사이드바 '조회한 페이지'로 어느 센터에서 왔는지 판별
-        // 예) '조회한 페이지 … 타다 드라이버 센터' → 파트너. 메모에 붙은 어드민 링크보다 요청자 자체 신호라 우선.
-        if (/Web\s*User\s+[0-9a-f]{12,}/i.test(blob)) {
-          const i = blob.indexOf('조회한 페이지');
-          const seg = i >= 0 ? blob.slice(i, i + 200) : '';
-          if (/드라이버/.test(seg)) return '파트너';
-          if (seg) return '이용자';
-        }
         if ([...document.querySelectorAll('a[href]')].some(a => /admin\.tadatada\.(?:com|in)\/drivers\//i.test(a.getAttribute('href') || ''))) return '파트너';
+        // ④ 브랜드 폴백 — 드라이버 센터로 들어온 티켓은 파트너
+        if (/타다\s*드라이버\s*센터/.test(blob)) return '파트너';
       } catch (e) {}
       return '이용자';
     }
