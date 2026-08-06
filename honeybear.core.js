@@ -18,7 +18,7 @@
 
   /* 도구 버전 — 콘솔·어드민 메뉴·젠데스크 패널에서 같은 값을 쓴다.
    * 팀원이 "내 게 최신인가"를 F12 없이 확인할 수 있어야 한다. */
-  const HB_APP_VER = '0.9.7';
+  const HB_APP_VER = '0.9.8';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
   console.log('%c[HB] 허니베어 core v' + HB_APP_VER + ' 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
@@ -1559,52 +1559,91 @@
       const pageSnap = (() => { try { return document.body.innerText || ''; } catch (e) { return ''; } })();
 
       const panel = el('div',
-        'position:fixed;top:16px;right:16px;width:360px;height:92vh;min-width:300px;min-height:220px;max-width:96vw;max-height:96vh;overflow:auto;resize:both;z-index:999999;background:#fff;border:1px solid #e6eae8;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.18);font-family:-apple-system,sans-serif;color:#243027;display:none;color-scheme:light;');
+        'position:fixed;top:16px;right:16px;width:360px;height:92vh;min-width:300px;min-height:220px;max-width:96vw;max-height:96vh;overflow:auto;resize:both;z-index:999999;background:var(--bg);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.28);font-family:-apple-system,sans-serif;color:var(--fg);display:none;');
       panel.id = 'hb_zd_panel';
       panel.innerHTML = `
         <style>
+          /* ── 테마 토큰 ────────────────────────────────────────────────
+           * 색을 전부 변수로 뺀 이유: 젠데스크가 다크 모드를 지원하는데
+           * 패널만 흰 배경으로 떠 있으면 눈이 부시고 오래 보기 어렵다.
+           * 강조색(--acc 계열)은 JS 에서 사용자 지정값으로 덮어쓴다. */
+          #hb_zd_panel{
+            --bg:#fff; --bg2:#fbfdfc; --fg:#243027; --fg2:#7b857f; --fg3:#9aa39e;
+            --line:#e6eae8; --line2:#cfd6d4;
+            --acc:#0a7d72; --accD:#0a5d54; --accBg:#e6f7f4; --accLine:#bfe6de;
+            --cardBg:#f4fbfa; --noneBg:#f6f7f8; --noneLine:#e3e6e8;
+            --badBg:#fdf5f4; --badLine:#e8b4ad; --danger:#c0392b;
+            --warnBg:#fffbeb; --warnLine:#fcd34d; --warnFg:#92400e;
+            --infoBg:#eef6ff; --infoLine:#93c5fd; --infoFg:#1e40af;
+            color-scheme:light;
+          }
+          #hb_zd_panel[data-theme="dark"]{
+            --bg:#1f2426; --bg2:#262c2e; --fg:#e6ecea; --fg2:#9aa5a1; --fg3:#78837f;
+            --line:#333b3d; --line2:#454f51;
+            --cardBg:#20302e; --noneBg:#262c2e; --noneLine:#333b3d;
+            --badBg:#3a2422; --badLine:#7a3a33; --danger:#ff8474;
+            --warnBg:#3a2f10; --warnLine:#7a6320; --warnFg:#f0d391;
+            --infoBg:#13283e; --infoLine:#31608f; --infoFg:#aacdf2;
+            color-scheme:dark;
+          }
           #hb_zd_panel *{box-sizing:border-box;}
-          /* 우하단 리사이즈 그립 — 네이티브 resize:both 의 코너를 시각화 */
           #hb_zd_panel::-webkit-resizer{background:transparent;}
           #hb_zd_panel .grip{position:sticky;bottom:0;margin-left:auto;width:16px;height:16px;pointer-events:none;
-            background:linear-gradient(135deg,transparent 45%,#cfd6d4 45%,#cfd6d4 55%,transparent 55%,transparent 70%,#cfd6d4 70%,#cfd6d4 80%,transparent 80%);}
-          #hb_zd_panel .h{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #e6eae8;position:sticky;top:0;background:#fff;border-radius:12px 12px 0 0;z-index:2;}
-          #hb_zd_panel .h b{font-size:14px;} #hb_zd_panel .tn{font-size:11px;font-weight:bold;color:#0a5d54;background:#e6f7f4;border:1px solid #bfe6de;padding:1px 7px;border-radius:20px;}
-          #hb_zd_panel .x{margin-left:auto;border:none;background:#f1f3f5;border-radius:6px;width:24px;height:24px;cursor:pointer;color:#7b857f;}
+            background:linear-gradient(135deg,transparent 45%,var(--line2) 45%,var(--line2) 55%,transparent 55%,transparent 70%,var(--line2) 70%,var(--line2) 80%,transparent 80%);}
+          #hb_zd_panel .h{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);border-radius:12px 12px 0 0;z-index:2;}
+          #hb_zd_panel .h b{font-size:14px;} #hb_zd_panel .tn{font-size:11px;font-weight:bold;color:var(--acc);background:var(--accBg);border:1px solid var(--accLine);padding:1px 7px;border-radius:20px;}
+          #hb_zd_panel .x,#hb_zd_panel .gear{border:none;background:var(--bg2);border-radius:6px;width:24px;height:24px;cursor:pointer;color:var(--fg2);font-size:12px;}
+          #hb_zd_panel .x{margin-left:auto;}
+          #hb_zd_panel .look{display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--bg2);font-size:11px;color:var(--fg2);}
+          #hb_zd_panel .look.on{display:flex;}
+          #hb_zd_panel .look input[type=color]{width:26px;height:22px;padding:0;border:1px solid var(--line);border-radius:5px;background:var(--bg);cursor:pointer;}
+          #hb_zd_panel .sw{width:16px;height:16px;border-radius:50%;border:1px solid var(--line2);cursor:pointer;padding:0;}
           #hb_zd_panel .body{padding:12px 14px;}
-          #hb_zd_panel .card{border:1px solid #bfe6de;background:#f4fbfa;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;}
-          #hb_zd_panel .card.none{border-color:#e3e6e8;background:#f6f7f8;}
-          #hb_zd_panel .card.warn{border-color:#e8b4ad;background:#fdf5f4;}
-          #hb_zd_panel .chead{display:flex;align-items:center;gap:6px;font-weight:bold;color:#0a5d54;}
+          #hb_zd_panel .card{border:1px solid var(--accLine);background:var(--cardBg);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;}
+          #hb_zd_panel .card.none{border-color:var(--noneLine);background:var(--noneBg);}
+          #hb_zd_panel .card.warn{border-color:var(--badLine);background:var(--badBg);}
+          #hb_zd_panel .chead{display:flex;align-items:center;gap:6px;font-weight:bold;color:var(--acc);}
           #hb_zd_panel .badge{font-size:9.5px;padding:1px 6px;border-radius:20px;color:#fff;}
-          #hb_zd_panel .grid{display:grid;grid-template-columns:52px 1fr;gap:1px 8px;margin-top:6px;line-height:1.5;color:#243027;}
-          #hb_zd_panel .grid .k{color:#7b857f;} #hb_zd_panel .grid .miss{color:#c0c7c4;} #hb_zd_panel .grid .bad{color:#c0392b;font-weight:bold;} #hb_zd_panel .grid .good{color:#0a7d72;}
-          #hb_zd_panel textarea,#hb_zd_panel input.s{width:100%;border:1px solid #e6eae8;border-radius:8px;font-family:inherit;color:#243027;background:#fff;caret-color:#243027;padding:8px;font-size:12.5px;line-height:1.6;}
-          #hb_zd_panel textarea::placeholder,#hb_zd_panel input.s::placeholder{color:#9aa39e;opacity:1;}
-          #hb_zd_panel textarea:focus,#hb_zd_panel input.s:focus{outline:none;border-color:#0a7d72;box-shadow:0 0 0 3px #e6f7f4;}
-          #hb_zd_panel .lbl{font-size:11px;color:#7b857f;margin:8px 0 5px;}
-          #hb_zd_panel .btn{background:#0a7d72;color:#fff;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:bold;cursor:pointer;width:100%;}
-          #hb_zd_panel .btn:hover{background:#0a5d54;}
-          #hb_zd_panel .ghost{background:#fff;border:1px solid #e6eae8;color:#7b857f;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:bold;cursor:pointer;}
-          #hb_zd_panel .seg{display:flex;background:#fbfdfc;border:1px solid #e6eae8;border-radius:8px;padding:2px;gap:2px;}
-          #hb_zd_panel .seg button{border:none;background:transparent;font-size:11px;font-weight:bold;color:#7b857f;padding:3px 11px;border-radius:6px;cursor:pointer;}
-          #hb_zd_panel .seg button.on{background:#0a7d72;color:#fff;}
-          #hb_zd_panel .pick{font-size:11px;padding:5px 10px;border-radius:20px;border:1px solid #e6eae8;background:#fff;color:#243027;cursor:pointer;text-align:left;max-width:100%;}
-          #hb_zd_panel .pick.on{background:#0a7d72;border-color:#0a7d72;color:#fff;font-weight:bold;}
-          #hb_zd_panel .chip{padding:4px 10px;border-radius:20px;font-size:11px;border:1px solid #cfd6d4;background:#fff;color:#555;cursor:pointer;}
-          #hb_zd_panel .chip.rec{border-color:#bfe6de;background:#e6f7f4;color:#0a5d54;font-weight:bold;}
+          #hb_zd_panel .grid{display:grid;grid-template-columns:52px 1fr;gap:1px 8px;margin-top:6px;line-height:1.5;color:var(--fg);}
+          #hb_zd_panel .grid .k{color:var(--fg2);} #hb_zd_panel .grid .miss{color:var(--fg3);} #hb_zd_panel .grid .bad{color:var(--danger);font-weight:bold;} #hb_zd_panel .grid .good{color:var(--acc);}
+          #hb_zd_panel .note{margin-top:8px;padding:7px 9px;border-radius:6px;font-size:11px;line-height:1.65;}
+          #hb_zd_panel .note.warn{background:var(--warnBg);border:1px solid var(--warnLine);color:var(--warnFg);}
+          #hb_zd_panel .note.info{background:var(--infoBg);border:1px solid var(--infoLine);color:var(--infoFg);}
+          #hb_zd_panel .unver{color:var(--warnFg);font-weight:700;}
+          #hb_zd_panel textarea,#hb_zd_panel input.s{width:100%;border:1px solid var(--line);border-radius:8px;font-family:inherit;color:var(--fg);background:var(--bg);caret-color:var(--fg);padding:8px;font-size:12.5px;line-height:1.6;}
+          #hb_zd_panel textarea::placeholder,#hb_zd_panel input.s::placeholder{color:var(--fg3);opacity:1;}
+          #hb_zd_panel textarea:focus,#hb_zd_panel input.s:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--accBg);}
+          #hb_zd_panel .lbl{font-size:11px;color:var(--fg2);margin:8px 0 5px;}
+          #hb_zd_panel .btn{background:var(--acc);color:#fff;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:bold;cursor:pointer;width:100%;}
+          #hb_zd_panel .btn:hover{background:var(--accD);}
+          #hb_zd_panel .ghost{background:var(--bg);border:1px solid var(--line);color:var(--fg2);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:bold;cursor:pointer;}
+          #hb_zd_panel .seg{display:flex;background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px;}
+          #hb_zd_panel .seg button{border:none;background:transparent;font-size:11px;font-weight:bold;color:var(--fg2);padding:3px 11px;border-radius:6px;cursor:pointer;}
+          #hb_zd_panel .seg button.on{background:var(--acc);color:#fff;}
+          #hb_zd_panel .pick{font-size:11px;padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer;text-align:left;max-width:100%;}
+          #hb_zd_panel .pick.on{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:bold;}
+          #hb_zd_panel .chip{padding:4px 10px;border-radius:20px;font-size:11px;border:1px solid var(--line2);background:var(--bg);color:var(--fg2);cursor:pointer;}
+          #hb_zd_panel .chip.rec{border-color:var(--accLine);background:var(--accBg);color:var(--acc);font-weight:bold;}
           #hb_zd_panel .chip.p-partner{border-left:3px solid #b58900;}
-          #hb_zd_panel .chip.p-user{border-left:3px solid #0a7d72;}
-          #hb_zd_panel .chip.p-both{border-left:3px dashed #9aa39e;}
-          #hb_zd_panel .chip.toggle{border-style:dashed;color:#7b857f;background:#fbfdfc;}
-          #hb_zd_panel .div{height:1px;background:#e6eae8;margin:12px 0;}
+          #hb_zd_panel .chip.p-user{border-left:3px solid var(--acc);}
+          #hb_zd_panel .chip.p-both{border-left:3px dashed var(--fg3);}
+          #hb_zd_panel .chip.toggle{border-style:dashed;color:var(--fg2);background:var(--bg2);}
+          #hb_zd_panel .div{height:1px;background:var(--line);margin:12px 0;}
           #hb_zd_panel .row{display:flex;align-items:center;gap:6px;}
-          #hb_zd_panel .sel{flex:1;padding:5px 8px;border:1px solid #bfe6de;border-radius:6px;font-size:11.5px;background:#fff;color:#243027;cursor:pointer;}
-          #hb_zd_panel .sel option{background:#fff;color:#243027;}
-          #hb_zd_panel .opt{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#0a5d54;cursor:pointer;margin:6px 0;}
-          #hb_zd_panel input[type=checkbox]{accent-color:#0a7d72;width:13px;height:13px;cursor:pointer;}
+          #hb_zd_panel .sel{flex:1;padding:5px 8px;border:1px solid var(--accLine);border-radius:6px;font-size:11.5px;background:var(--bg);color:var(--fg);cursor:pointer;}
+          #hb_zd_panel .sel option{background:var(--bg);color:var(--fg);}
+          #hb_zd_panel .opt{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--acc);cursor:pointer;margin:6px 0;}
+          #hb_zd_panel input[type=checkbox]{accent-color:var(--acc);width:13px;height:13px;cursor:pointer;}
         </style>
-        <div class="h"><span>🎫</span><b>티켓 뷰</b><span class="tn">#${TN}</span><span style="font-size:9.5px;color:#a3aba6;margin-left:6px;">v${HB_APP_VER}</span><button class="x" id="hb_x">✕</button></div>
+        <div class="h"><span>🎫</span><b>티켓 뷰</b><span class="tn">#${TN}</span><span style="font-size:9.5px;color:var(--fg3);margin-left:6px;">v${HB_APP_VER}</span><button class="gear" id="hb_gear" title="테마·색상">⚙</button><button class="x" id="hb_x">✕</button></div>
+        <div class="look" id="hb_look">
+          <span>테마</span>
+          <div class="seg" id="hb_theme"><button data-t="auto">자동</button><button data-t="light">밝게</button><button data-t="dark">어둡게</button></div>
+          <span>강조색</span>
+          <input type="color" id="hb_acc" value="#0a7d72">
+          <span id="hb_sw" style="display:flex;gap:4px;"></span>
+          <button class="ghost" id="hb_accreset" style="padding:3px 8px;font-size:10.5px;">기본</button>
+        </div>
         <div class="body">
           <div id="hb_card"></div>
           <div class="row" style="justify-content:space-between;">
@@ -1662,6 +1701,68 @@
       HBFab.attach(btn, 'zd');   // 저장된 아이콘·크기·색·위치 적용 + 우클릭 설정
 
       const g = id => panel.querySelector('#' + id);
+
+      /* ═══ 테마 · 강조색 ═══
+       * 젠데스크는 자체 다크 모드가 있고 OS 설정과 별개로 켤 수 있다.
+       * 그래서 '자동'은 prefers-color-scheme 이 아니라
+       * 실제 페이지 배경색의 밝기를 재서 판단한다 — 화면에 보이는 것과 어긋나지 않게. */
+      const LOOK_KEY = 'hb_zd_look';
+      const ACC_DEFAULT = '#0a7d72';
+      const SWATCHES = ['#0a7d72', '#2563eb', '#7c3aed', '#c2410c', '#be123c', '#475569'];
+      let look = { theme: 'auto', accent: ACC_DEFAULT };
+      try { Object.assign(look, JSON.parse(localStorage.getItem(LOOK_KEY) || '{}')); } catch (e) {}
+
+      function pageIsDark() {
+        try {
+          for (const node of [document.body, document.documentElement]) {
+            const bg = getComputedStyle(node).backgroundColor || '';
+            const m = bg.match(/rgba?\(([0-9.]+)[,\s]+([0-9.]+)[,\s]+([0-9.]+)(?:[,\s]+([0-9.]+))?/);
+            if (!m) continue;
+            if (m[4] !== undefined && Number(m[4]) === 0) continue;   // 투명하면 판단 불가
+            const lum = (0.299 * +m[1] + 0.587 * +m[2] + 0.114 * +m[3]) / 255;
+            return lum < 0.5;
+          }
+        } catch (e) {}
+        return !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+      }
+      const hex2rgb = h => {
+        const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '').trim());
+        if (!m) return [10, 125, 114];
+        const n = parseInt(m[1], 16);
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      };
+      const rgb2hex = a => '#' + a.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+      const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+
+      function applyLook() {
+        const dark = look.theme === 'dark' || (look.theme === 'auto' && pageIsDark());
+        panel.dataset.theme = dark ? 'dark' : 'light';
+        /* 강조색에서 파생색을 계산한다. 배경 쪽으로 섞는 비율을 테마별로 달리해야
+         * 다크에서 연한 하늘색 배지가 뜨는 것 같은 부조화를 피할 수 있다. */
+        const acc = hex2rgb(look.accent);
+        const base = dark ? [31, 36, 38] : [255, 255, 255];
+        panel.style.setProperty('--acc', rgb2hex(dark ? mix(acc, [255, 255, 255], 0.18) : acc));
+        panel.style.setProperty('--accD', rgb2hex(mix(acc, dark ? [255, 255, 255] : [0, 0, 0], 0.22)));
+        panel.style.setProperty('--accBg', rgb2hex(mix(base, acc, dark ? 0.16 : 0.10)));
+        panel.style.setProperty('--accLine', rgb2hex(mix(base, acc, dark ? 0.38 : 0.30)));
+        const seg = g('hb_theme');
+        if (seg) [...seg.children].forEach(b => b.classList.toggle('on', b.dataset.t === look.theme));
+        const ai = g('hb_acc'); if (ai) ai.value = look.accent;
+      }
+      function saveLook() { try { localStorage.setItem(LOOK_KEY, JSON.stringify(look)); } catch (e) {} applyLook(); }
+
+      g('hb_gear').onclick = () => g('hb_look').classList.toggle('on');
+      [...g('hb_theme').children].forEach(b => { b.onclick = () => { look.theme = b.dataset.t; saveLook(); }; });
+      g('hb_acc').oninput = e => { look.accent = e.target.value; saveLook(); };
+      g('hb_accreset').onclick = () => { look = { theme: look.theme, accent: ACC_DEFAULT }; saveLook(); };
+      SWATCHES.forEach(c => {
+        const b = el('button', 'background:' + c + ';', ''); b.className = 'sw'; b.title = c;
+        b.onclick = () => { look.accent = c; saveLook(); };
+        g('hb_sw').appendChild(b);
+      });
+      applyLook();
+      // 젠데스크 테마를 도중에 바꿔도 따라가도록 주기적으로 재판정 (자동일 때만)
+      setInterval(() => { if (look.theme === 'auto' && panel.style.display !== 'none') applyLook(); }, 4000);
       let ZDIDS = collectZdIds(pageSnap);
 
       /* 케이스 카드 렌더 + ID 대조 */
@@ -1687,7 +1788,7 @@
           if (st === 'ok') return { v: mine + ' ✅', cls: 'good' };
           if (st === 'bad') return { v: mine + ' ⚠️젠데스크 ' + zd.join(', '), cls: 'bad' };
           // 대조불가 표시는 인입 주체 쪽에만 — 반대쪽은 원래 젠데스크에 없는 게 정상
-          if (st === 'nozd' && isReq) return { v: mine + ' <span style="color:#b45309;font-weight:700;">❔대조불가</span>', cls: '' };
+          if (st === 'nozd' && isReq) return { v: mine + ' <span class="unver">❔대조불가</span>', cls: '' };
           return { v: mine, cls: '' };
         };
         const ur = idCell(c.ids.user, uSt, ZDIDS.user, !isPartnerTicket);
@@ -1709,7 +1810,7 @@
         ].concat(flags.length ? [['기타', flags.join(' · '), '']] : [])
           .map(r => `<div class="k">${r[0]}</div><div class="${r[2] || (r[1] ? '' : 'miss')}">${r[1] || '—'}</div>`).join('');
         const notes = [];
-        if (unver) notes.push(`<div style="margin-top:8px;padding:7px 9px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;font-size:11px;line-height:1.65;color:#92400e;">
+        if (unver) notes.push(`<div class="note warn">
           ❔ <b>${isPartnerTicket ? '파트너' : '이용자'} ID 대조 불가</b> — 이 티켓에서 외부 ID·어드민 링크를 찾지 못했습니다 (웹 유저·이메일 인입 등).<br>
           불일치가 <u>없는 게 아니라 확인이 안 된 상태</u>입니다. 케이스가 이 문의 건이 맞는지 직접 확인해주세요.</div>`);
         /* 실제 이동거리·시간은 라이드 상세 페이지의 '실제요금' 행에만 있다.
@@ -1717,7 +1818,7 @@
          * 멘트의 예상/실제 비교표가 반쪽이 되므로 눈에 띄게 알려준다. */
         const needRide = has && c.ids.ride && c.fare.total > 0 && !c.fare.cancel
                          && !(c.fare.realDist && c.fare.realTime);
-        if (needRide) notes.push(`<div style="margin-top:8px;padding:7px 9px;background:#eef6ff;border:1px solid #93c5fd;border-radius:6px;font-size:11px;line-height:1.65;color:#1e40af;">
+        if (needRide) notes.push(`<div class="note info">
           📍 <b>실제 이동거리·시간 미확보</b> — 이 값은 라이드 상세의 '실제요금' 행에만 있습니다.<br>
           어드민에서 라이드 <b>${c.ids.ride}</b> 를 열고 🍯 캡처를 한 번 더 눌러주세요.</div>`);
         const note = notes.join('');
