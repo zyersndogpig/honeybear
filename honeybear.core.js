@@ -76,8 +76,8 @@
         },
         /* 운행 타임스탬프(epoch ms) — 취소·미탑승 수수료 방어 멘트용.
          * 0이면 미수집. 구버전 봉투엔 이 키가 없으므로 읽는 쪽은 반드시 (c.times||{}) 로 감싼다. */
-        times: { accepted: 0, arrived: 0, canceled: 0, finished: 0, pickup: 0 },
-        flags: { isCash: false, isPlus: false, isFromResv: false, thirdParty: '', cancelReason: '' }
+        times: { called: 0, accepted: 0, arrived: 0, boarded: 0, canceled: 0, finished: 0, pickup: 0 },
+        flags: { isCash: false, isPlus: false, isFromResv: false, thirdParty: '', cancelReason: '', lineup: '' }
       };
     },
     loadCase() {
@@ -622,19 +622,33 @@
       const t = d.getTime();
       return isNaN(t) ? 0 : t;
     }
+    /* 어드민 한 칸에 값이 여러 줄인 행이 있다.
+     *   출발지 도착 시각 → "처음: …(예상)  /  실제: …  /  (수락 후 7분 29초 소요)"
+     *   운송 완료 시각   → "예상: …        /  실제: …"
+     * 첫 줄을 그대로 쓰면 '예상 도착'을 실제 도착으로 안내하게 된다 — 반드시 '실제'를 먼저 본다. */
     function domRowTime(labels) {
-      for (const L of labels) { const t = parseKDT(getRowValue(L)); if (t) return t; }
+      for (const L of labels) {
+        const raw = getRowValue(L);
+        if (!raw) continue;
+        const real = raw.split('\n').find(l => /^\s*(실제)\s*[:：]/.test(l));
+        const t = parseKDT(real || raw);
+        if (t) return t;
+      }
       return 0;
     }
     function harvestTimesDom() {
+      /* 라벨은 어드민 라이드 상세 화면에서 실제로 확인한 것 (2026.08 기준).
+       * 뒤쪽은 화면이 바뀌었을 때를 대비한 예비 후보다. */
       const out = {
-        accepted: domRowTime(['배차 수락 시각', '배차 수락', '배차 시각', '수락 시각', '배차 완료 시각']),
-        arrived:  domRowTime(['출발지 도착 시각', '출발지 도착', '도착 시각', '대기 시작 시각', '탑승지 도착 시각']),
+        called:   domRowTime(['호출 시각']),
+        accepted: domRowTime(['배차 수락 시각', '배차 시각', '수락 시각']),
+        arrived:  domRowTime(['출발지 도착 시각', '도착 시각', '탑승지 도착 시각']),
+        boarded:  domRowTime(['탑승 완료 시각', '탑승 시각']),
         canceled: domRowTime(['취소 시각', '취소 일시', '호출 취소 시각']),
-        finished: domRowTime(['운행 종료 시각', '하차 시각', '종료 시각', '운행 완료 시각']),
-        pickup:   domRowTime(['요청 탑승 일시', '탑승 예정 시각', '탑승 시각'])
+        finished: domRowTime(['운송 완료 시각', '운행 종료 시각', '하차 시각', '종료 시각']),
+        pickup:   domRowTime(['요청 탑승 일시', '탑승 예정 시각'])
       };
-      if (!out.accepted && !out.arrived && !out.canceled) {
+      if (!out.accepted && !out.called && !out.canceled) {
         const labels = [...document.querySelectorAll('tr')]
           .map(tr => (tr.innerText.split('\t')[0] || '').trim())
           .filter(v => v && v.length < 20);
@@ -642,12 +656,21 @@
       }
       return out;
     }
+    /* 라인업 — '라인업 / 운행타입' 행이 "넥스트 / 넥스트" 형태.
+     * 취소·미탑승 수수료가 차종별로 달라 멘트 금액 기본값에 쓴다. */
+    function domLineup() {
+      const raw = getRowValue('라인업 / 운행타입') || getRowValue('라인업') || '';
+      if (/플러스/.test(raw)) return '플러스';
+      if (/라이트/.test(raw)) return '라이트';
+      if (/넥스트/.test(raw)) return '넥스트';
+      return '';
+    }
     /* API 결과에 DOM 값을 덧대 메운다 (API 우선, 빈 칸만 DOM 으로) */
     function mergeTimes(api) {
       const dom = harvestTimesDom();
       const out = Object.assign({}, api);
       let filled = [];
-      ['accepted', 'arrived', 'canceled', 'finished', 'pickup'].forEach(k => {
+      ['called', 'accepted', 'arrived', 'boarded', 'canceled', 'finished', 'pickup'].forEach(k => {
         if (!out[k] && dom[k]) { out[k] = dom[k]; filled.push(k); }
       });
       if (filled.length) console.log('[HB] 시각 DOM 폴백으로 보강 —', filled.join(', '));
@@ -897,8 +920,13 @@
       const resvId = saved.ids.resv || saved.ids.fromResv;
       const jobs = [];
 
-      // 예약에서 눌렀을 때 비는 값: 실제 이동거리·시간 → 라이드 상세를 대신 조회
-      if (rideId && !(saved.fare.realDist && saved.fare.realTime)) {
+      /* 예약에서 눌렀을 때 비는 값 → 라이드 상세를 대신 조회.
+       * 거리·시간뿐 아니라 시각(배차 수락/도착/취소)과 라인업도 여기서 가져온다.
+       * 이 값들은 어드민 '라이드 페이지'에만 표시되는 행이라, 예약 페이지에서는
+       * DOM 폴백이 통째로 빈다 → API 로만 채울 수 있다. */
+      const _t0 = saved.times || {};
+      const needTimes = !(_t0.accepted || _t0.arrived || _t0.canceled || _t0.finished);
+      if (rideId && (!(saved.fare.realDist && saved.fare.realTime) || needTimes || !(saved.flags && saved.flags.lineup))) {
         jobs.push(hbApiGet(hbSiblingApiUrl('rides', rideId)).then(j => {
           if (!j || j.id !== rideId) return null;
           const p = {};
@@ -907,7 +935,15 @@
           if (rm.time) p.realTime = rm.time;
           if (j.surgePercentage) p.surge = j.surgePercentage;
           if (j.cost) p.total = j.cost;
-          return { fare: p, ids: { driver: (j.driver && j.driver.id) || '' } };
+          const tm = harvestTimes(j, '보강>라이드');
+          const lu = _isPlusOf(j.driver, j.type) ? '플러스'
+                   : (/LITE/i.test(j.type || '') ? '라이트' : (j.type ? '넥스트' : ''));
+          return {
+            fare: p,
+            ids: { driver: (j.driver && j.driver.id) || '' },
+            times: tm,
+            flags: { lineup: lu, cancelReason: cancelReasonOf(j) }
+          };
         }));
       }
       // 라이드에서 눌렀을 때 비는 값: 예약 예상 거리·시간 → 예약 상세를 대신 조회
@@ -941,13 +977,14 @@
         // 비어 있는 칸만 채운다 — 이미 잡힌 DOM 정본을 API 값으로 덮지 않는다
         const touched = [];
         got.forEach(g => {
-          ['fare', 'ids', 'trip'].forEach(grp => {
+          ['fare', 'ids', 'trip', 'times', 'flags'].forEach(grp => {
             Object.keys(g[grp] || {}).forEach(k => {
               const v = g[grp][k];
               if (!v) return;
+              if (!cur[grp]) cur[grp] = {};      // 구버전 봉투엔 times 가 없다
               if (cur[grp][k]) return;
               cur[grp][k] = v;
-              if (grp === 'fare') touched.push(k);
+              if (grp === 'fare' || grp === 'times') touched.push(k);
             });
           });
         });
@@ -955,9 +992,13 @@
         HBStore.saveCase(cur);
         const real = touched.some(k => /^real/.test(k));
         const est = touched.some(k => /^est/.test(k));
-        toast('🍯 교차 보강 — ' +
-          (real && est ? '예상·실제 이동거리·시간' : real ? '실제 이동거리·시간' : est ? '예상 이동거리·시간' : '요금 정보') +
-          ' 확보됨');
+        const tms = touched.some(k => /^(accepted|arrived|boarded|canceled|finished|called)$/.test(k));
+        const what = [];
+        if (real && est) what.push('예상·실제 이동거리·시간');
+        else if (real) what.push('실제 이동거리·시간');
+        else if (est) what.push('예상 이동거리·시간');
+        if (tms) what.push('운행 시각');
+        toast('🍯 교차 보강 — ' + (what.length ? what.join(' · ') : '요금 정보') + ' 확보됨');
         console.log('[HB] 교차 보강 반영:', touched.join(', '));
       });
     }
@@ -1024,6 +1065,7 @@
             pickup:   tRe.pickup || (j.expectedPickUpAt || 0)
           });
           c.flags.cancelReason = cancelReasonOf(j) || (j.ride ? cancelReasonOf(j.ride) : '') || getRowValue('취소 사유') || '';
+          c.flags.lineup = domLineup();
         }
         return c;
       }
@@ -1075,6 +1117,7 @@
           || _thirdTagOfPayment(j.payment && j.payment.paymentMethod);
         c.flags.isPlus = _isPlusOf(j.driver, j.type);
         c.times = mergeTimes(harvestTimes(j, '라이드'));
+        c.flags.lineup = domLineup();
         c.flags.cancelReason = cancelReasonOf(j) || getRowValue('취소 사유') || '';
         return c;
       }
@@ -1531,6 +1574,9 @@
            : h >= 12 ? RESV_BANDS[0] : h >= 9 ? RESV_BANDS[1] : h >= 2 ? RESV_BANDS[2] : RESV_BANDS[3];
       }
       const noshowItem = (c.fare.items || []).find(i => /미탑승/.test(i.label));
+      /* 라인업별 실시간 취소·미탑승 수수료 (이용약관 제10조 제1항) */
+      const FEE = { 넥스트: { c: 3000, n: 4000 }, 플러스: { c: 3000, n: 5000 }, 라이트: { c: 1000, n: 2000 } };
+      const LU = (c.flags && c.flags.lineup) || (c.flags && c.flags.isPlus ? '플러스' : '');
       const TIME_T = {
         acceptedAt: fmtDTS(TM.accepted), arrivedAt: fmtDTS(TM.arrived),
         canceledAt: fmtDTS(TM.canceled), finishedAt: fmtDTS(TM.finished),
@@ -1546,7 +1592,13 @@
         resvPct:      RB ? (RB.pct + '%') : '',
         resvCap:      RB && RB.cap ? RB.cap.toLocaleString() + '원' : '',
         /* '2시 27분' 형태 — 문장 안에 시각을 끼워 넣는 메크로 멘트용 */
-        acceptedHm: hm(TM.accepted), arrivedHm: hm(TM.arrived), canceledHm: hm(TM.canceled)
+        acceptedHm: hm(TM.accepted), arrivedHm: hm(TM.arrived), canceledHm: hm(TM.canceled),
+        calledAt: fmtDTS(TM.called), boardedAt: fmtDTS(TM.boarded),
+        /* 도착 → 탑승/취소 대기 시간. 미탑승 멘트가 쓰는 '탑승 대기 N분' */
+        lineup: LU,
+        /* 영수증에 잡힌 실제 부과액이 우선, 없으면 라인업별 정책 금액 */
+        cancelFeeStd: (c.fare.cancel ? won(c.fare.cancel) : (FEE[LU] ? won(FEE[LU].c) : '')),
+        noshowFeeStd: (noshowItem ? won(noshowItem.amt) : (FEE[LU] ? won(FEE[LU].n) : ''))
       };
       return {
         name: c.trip.name, dateTime: c.trip.dateTime,
@@ -1935,12 +1987,24 @@
       return best;
     }
 
-    /* ── 멘트 스코어링 (원본 scoreMent 동일: key +3, trig +1) ── */
+    /* ── 멘트 스코어링 (원본 scoreMent: key +3, trig +1) ──
+     * + 호출 구분(실시간/예약) 가중치.
+     *   같은 사안이라도 실시간과 예약은 수수료 체계가 완전히 달라 멘트를 잘못 고르면
+     *   그대로 오안내가 된다. 봉투에 잡힌 구분과 맞으면 올리고, 어긋나면 확실히 내린다.
+     *   (숨기지는 않는다 — 캡처가 없거나 구분이 애매한 건도 있어서 상담사가 고를 수 있어야 한다) */
+    function caseMode() {
+      try {
+        const c = HBStore.loadCase();
+        if (!(c && c.ts)) return '';
+        return (c.trip.actionWord === '탑승' || c.trip.timeSrc === 'resv' || c.flags.isFromResv) ? 'resv' : 'rt';
+      } catch (e) { return ''; }
+    }
     const norm = s => (s || '').toLowerCase();
-    function scoreMent(m, txt) {
+    function scoreMent(m, txt, mode) {
       let s = 0;
       (m.key || []).forEach(k => { if (txt.includes(norm(k))) s += 3; });
       (m.trig || []).forEach(k => { if (txt.includes(norm(k))) s += 1; });
+      if (m.mode && mode) s += (m.mode === mode) ? 4 : -6;
       return s;
     }
 
@@ -2476,7 +2540,8 @@
       function renderMents() {
         const txt = signalText(); const q = norm(filterEl.value); const hasSig = txt.trim().length > 0;
         const side = (party === '파트너') ? 'partner' : 'user';
-        let scored = MENTS.map((m, idx) => ({ m, idx, score: scoreMent(m, txt), party: mentParty(m) }));
+        const mode = caseMode();
+        let scored = MENTS.map((m, idx) => ({ m, idx, score: scoreMent(m, txt, mode), party: mentParty(m) }));
         // 검색 중이거나 '전체 보기'면 대상 필터를 건너뛴다 (멘트를 못 찾는 상황 방지)
         const hidden = (q || showAllMents) ? [] : scored.filter(x => x.party !== side && x.party !== 'both');
         if (!q && !showAllMents) scored = scored.filter(x => x.party === side || x.party === 'both');
@@ -2485,9 +2550,10 @@
         const rest = scored.filter(x => x.score === 0).sort((a, b) => a.idx - b.idx);
         const ordered = hasSig ? matched.concat(rest) : scored;
         const sideName = side === 'partner' ? '파트너' : '이용자';
+        const modeTag = mode === 'resv' ? ' · 예약 건' : mode === 'rt' ? ' · 실시간 건' : '';
         statusEl.textContent = q ? ('"' + filterEl.value + '" 검색 ' + scored.length + '건')
           : (showAllMents ? ('전체 ' + scored.length + '건 표시 중')
-            : (sideName + ' 멘트 ' + scored.length + '건'
+            : (sideName + ' 멘트 ' + scored.length + '건' + modeTag
                + (hidden.length ? ' · ' + (sideName === '파트너' ? '이용자' : '파트너') + ' 전용 ' + hidden.length + '건 숨김' : '')
                + (hasSig && matched.length ? ' · ★=관련도 높음' : '')));
         chipsBox.innerHTML = ''; variantBox.style.display = 'none';
