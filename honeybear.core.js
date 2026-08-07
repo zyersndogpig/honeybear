@@ -25,6 +25,33 @@
 
   const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
 
+  /* ── 오염 영업손실비 종류표 ────────────────────────────────────────────
+   * 꿀통 드롭다운과 꿀빠는 곰 loss 탭이 이 표 하나만 본다.
+   * 금액·한도·세차/세척 표현을 여기서만 고치면 양쪽에 동시 반영된다.
+   * 한도 근거: 이용약관 제20조 (넥스트/플러스/라이트 15만, 카시트 8만, 밴 20만) */
+  const HB_CONTAM = {
+    interior: {
+      label:'차량 내부 오염', prefix:'', amount:150000, wash:'세차',
+      reason:'차량 내부 오염',
+      cap:'타다 이용약관에 따라 회원의 과실로 차량이 오염된 경우, 최대 15만원 한도 내에서 세차 실비 및 영업손실비가 산정됩니다.'
+    },
+    carseat: {
+      label:'카시트 오염', prefix:'카시트', amount:80000, wash:'세척',
+      reason:'차량에 비치된 카시트 오염',
+      cap:'카시트는 오염 발생 시 세척 및 소독이 완료될 때까지 카시트 부가서비스 운행이 불가하여, 타다 이용약관에 따라 최대 8만원 한도 내에서 세척 실비 및 영업손실비가 산정됩니다.'
+    },
+    pet: {
+      label:'반려동물 오염', prefix:'반려동물', amount:150000, wash:'세차',
+      reason:'반려동물로 인한 차량 내부 오염',
+      cap:'타다 이용약관에 따라 반려동물로 인해 차량이 오염된 경우, 최대 15만원 한도 내에서 세차 실비 및 영업손실비가 산정됩니다.'
+    },
+    van: {
+      label:'프리미엄 밴 오염', prefix:'', amount:200000, wash:'세차',
+      reason:'차량 내부 오염',
+      cap:'타다 이용약관에 따라 회원의 과실로 프리미엄 밴 차량이 오염된 경우, 최대 20만원 한도 내에서 세차 실비 및 영업손실비가 산정됩니다.'
+    }
+  };
+
   /* ═══════════════════════════════════════════════════════════════════════
    * 1. HBStore — 케이스 봉투 저장소 (기존 tada_* 20여 키를 대체)
    * ═══════════════════════════════════════════════════════════════════════ */
@@ -2682,7 +2709,7 @@ function clearIds(keepMsgData){
      // rideId가 있으면 이미 라이드 거친 것 → 경고 불필요
      extraWarning:!rideId||!(fareDetected&&estDetected),
      hasFareItems:true},
-    {title:applyLineup('[오염 영업손실비 청구 요청의 건 / 넥스트]'), extra:'영업손실비 : 150,000원', beeTab:'loss', carseatOption:true},
+    {title:applyLineup('[오염 영업손실비 청구 요청의 건 / 넥스트]'), extra:'영업손실비 : 150,000원', beeTab:'loss', contamOption:true},
     {title:applyLineup('[분실물 영업손실비 청구 요청의 건 / 넥스트]'), extra:'분실물 : \n영업손실비 : 30,000원', beeTab:'loss', lossSubtype:'분실물'},
     {title:'[드라이버 경위 확인 요청의 건]',                        extra:''},
     {title:applyLineup('[이용자 인입 가능성의 건 / 넥스트]'),        extra:''},
@@ -2762,20 +2789,26 @@ function clearIds(keepMsgData){
     label.appendChild(titleSpan);
     row.appendChild(label);
 
-    // ── 카시트 옵션 체크박스: 체크 시 제목 앞에 "카시트 " 접두 ──
-    if(t.carseatOption){
+    // ── 오염 종류 드롭다운: 선택 시 제목 접두 + 기본 영손비 금액 동시 반영 ──
+    // (기존 카시트 체크박스 대체 — 오염 대상은 상호배타적이라 select가 맞는 그릇)
+    if(t.contamOption){
       const csWrap=document.createElement('label');
-      csWrap.style.cssText='margin-left:22px;display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;cursor:pointer;';
-      const csCb=document.createElement('input');
-      csCb.type='checkbox';csCb.className='carseat-cb';csCb.id='carseat_cb_'+idx;
-      csCb.style.cssText='cursor:pointer;flex-shrink:0;';
+      csWrap.style.cssText='margin-left:22px;display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;';
       const csTxt=document.createElement('span');
-      csTxt.textContent='🚼 카시트 오염 (체크 시 제목 앞에 "카시트" 추가)';
-      csWrap.append(csCb,csTxt);
-      csCb.onchange=()=>{
-        titleSpan.textContent=csCb.checked?t.title.replace('[','[카시트 '):t.title;
-        // 카시트 오염 시 기본 영업손실비 80,000원 / 해제 시 150,000원 원복
-        input.value=csCb.checked?'영업손실비 : 80,000원':t.extra;
+      csTxt.textContent='🧽 오염 종류';
+      const csSel=document.createElement('select');
+      csSel.className='contam-sel';csSel.id='contam_sel_'+idx;
+      csSel.style.cssText='cursor:pointer;padding:2px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px;';
+      Object.keys(HB_CONTAM).forEach(k=>{
+        const o=document.createElement('option');
+        o.value=k;o.textContent=HB_CONTAM[k].label;
+        csSel.appendChild(o);
+      });
+      csWrap.append(csTxt,csSel);
+      csSel.onchange=()=>{
+        const c=HB_CONTAM[csSel.value];
+        titleSpan.textContent=c.prefix?t.title.replace('[','['+c.prefix+' '):t.title;
+        input.value='영업손실비 : '+c.amount.toLocaleString()+'원';
         input.rows=input.value.split('\n').length+1;
         if(input.style.display==='none'){input.style.display='';toggleBtn.textContent='−';}
       };
@@ -3147,8 +3180,13 @@ function clearIds(keepMsgData){
           localStorage.setItem('tada_msg_data', JSON.stringify(_md));
         }catch(e){}
       }
+      // 오염 영손비: 드롭다운에서 고른 종류를 그대로 넘긴다 (loss 탭 자동선택용)
+      if(tpl.contamOption){
+        const _cs2=document.getElementById('contam_sel_'+idx);
+        localStorage.setItem('tada_loss_subtype', _cs2?_cs2.value:'interior');
+      }
       // 분실물 영손비: subtype 플래그 + 분실물명 저장 (꿀빠는 곰 loss 탭 자동선택용)
-      if(tpl.lossSubtype){
+      else if(tpl.lossSubtype){
         localStorage.setItem('tada_loss_subtype', tpl.lossSubtype);
         if(tpl.lossSubtype==='분실물'){
           try{
@@ -3180,9 +3218,10 @@ function clearIds(keepMsgData){
     const tagPlain=tags.length?' '+tags.map(t=>'*`'+t+'`*').join(' '):'';
     const tagHtml =tags.length?' '+tags.map(t=>`<code><b>${t}</b></code>`).join(' '):'';
     let effTitle=tpl.title;
-    if(tpl.carseatOption){
-      const _csCb=document.getElementById('carseat_cb_'+idx);
-      if(_csCb&&_csCb.checked)effTitle=effTitle.replace('[','[카시트 ');
+    if(tpl.contamOption){
+      const _cs=document.getElementById('contam_sel_'+idx);
+      const _p=_cs?((HB_CONTAM[_cs.value]||{}).prefix||''):'';
+      if(_p)effTitle=effTitle.replace('[','['+_p+' ');
     }
     const titleLine=`[${effTitle.replace(/^\[|\]$/g,'')}]`;
 
@@ -4116,15 +4155,10 @@ function clearIds(keepMsgData){
       contentArea.innerHTML=`
         <div style='margin:5px 0;'>
           <label style='display:block;font-weight:bold;margin-bottom:8px;'>종류 선택:</label>
-          <label style='margin-right:12px;cursor:pointer;font-weight:bold;'>
-            <input type='radio' name='contamType' value='차량 내부 오염' checked> 차량 내부 오염
-          </label>
-          <label style='margin-right:12px;cursor:pointer;font-weight:bold;'>
-            <input type='radio' name='contamType' value='카시트 오염'> 카시트 오염
-          </label>
-          <label style='cursor:pointer;font-weight:bold;'>
-            <input type='radio' name='contamType' value='분실물'> 🎒 분실물
-          </label>
+          <select id='contamType' style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;font-weight:bold;cursor:pointer;'>
+            ${Object.keys(HB_CONTAM).map(k=>`<option value='${k}'>${HB_CONTAM[k].label} (기본 ${HB_CONTAM[k].amount.toLocaleString()}원)</option>`).join('')}
+            <option value='lost'>🎒 분실물 (기본 30,000원)</option>
+          </select>
         </div>
         <div id='lossDynamicArea' style='margin-top:15px;'>
           <label style='display:block;font-weight:bold;margin-bottom:5px;'>영업손실비 금액 입력:</label>
@@ -4143,37 +4177,40 @@ function clearIds(keepMsgData){
       }
       bindLossPrice();
 
-      contentArea.querySelectorAll('input[name="contamType"]').forEach(r=>{
-        r.onchange=()=>{
-          const dynArea=document.getElementById("lossDynamicArea");
-          if(r.value==="분실물"){
-            dynArea.innerHTML=`
-              <label style='display:block;font-weight:bold;margin-bottom:5px;'>습득 분실물 명칭 입력:</label>
-              <input id='lossItemName' placeholder='예: 아이폰13, 검은색 우산'
-                style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;margin-bottom:10px;'>
-              <label style='display:block;font-weight:bold;margin-bottom:5px;'>영업손실비 금액 입력:</label>
-              <input id='lossPrice' value='${_fmtLoss("30,000")}'
-                style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>`;
-          }else{
-            dynArea.innerHTML=`
-              <label style='display:block;font-weight:bold;margin-bottom:5px;'>영업손실비 금액 입력:</label>
-              <input id='lossPrice' value='${_fmtLoss("150,000")}'
-                style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>`;
-          }
-          bindLossPrice();
-        };
-      });
-        // ── 분실물 영손비: 꿀통 연동 시 분실물 라디오 자동선택 + 명칭 입력 ──
-        if(_lossSubtypeOnce==='분실물'){
+      const _ctSel=document.getElementById("contamType");
+      _ctSel.onchange=()=>{
+        const dynArea=document.getElementById("lossDynamicArea");
+        if(_ctSel.value==="lost"){
+          dynArea.innerHTML=`
+            <label style='display:block;font-weight:bold;margin-bottom:5px;'>습득 분실물 명칭 입력:</label>
+            <input id='lossItemName' placeholder='예: 아이폰13, 검은색 우산'
+              style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;margin-bottom:10px;'>
+            <label style='display:block;font-weight:bold;margin-bottom:5px;'>영업손실비 금액 입력:</label>
+            <input id='lossPrice' value='30,000'
+              style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>`;
+        }else{
+          // 종류를 직접 바꾸면 그 종류의 기본 한도액으로 리셋 (꿀통 1회성 값은 이미 소진됨)
+          dynArea.innerHTML=`
+            <label style='display:block;font-weight:bold;margin-bottom:5px;'>영업손실비 금액 입력:</label>
+            <input id='lossPrice' value='${HB_CONTAM[_ctSel.value].amount.toLocaleString()}'
+              style='width:100%;padding:8px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;'>`;
+        }
+        bindLossPrice();
+      };
+        // ── 꿀통 연동: 넘어온 종류로 드롭다운 자동선택 ──
+        // 오염 종류는 change를 쏘지 않는다 — 쏘면 꿀통에서 상담사가 손댄 금액이 기본값으로 덮인다.
+        if(_lossSubtypeOnce){
+          const _k=(_lossSubtypeOnce==='분실물')?'lost':_lossSubtypeOnce;  // 구버전 키 호환
           _lossSubtypeOnce='';
-          const _lr=contentArea.querySelector('input[name="contamType"][value="분실물"]');
-          if(_lr){
-            _lr.checked=true;
-            _lr.dispatchEvent(new Event('change'));
-            const _ln=document.getElementById('lossItemName');
-            if(_ln){
-              let _li='';try{_li=(JSON.parse(localStorage.getItem('tada_msg_data')||'{}').lostItem)||'';}catch(e){}
-              if(_li)_ln.value=_li;
+          if(_ctSel.querySelector(`option[value="${_k}"]`)){
+            _ctSel.value=_k;
+            if(_k==='lost'){
+              _ctSel.dispatchEvent(new Event('change'));
+              const _ln=document.getElementById('lossItemName');
+              if(_ln){
+                let _li='';try{_li=(JSON.parse(localStorage.getItem('tada_msg_data')||'{}').lostItem)||'';}catch(e){}
+                if(_li)_ln.value=_li;
+              }
             }
           }
         }
@@ -4525,17 +4562,18 @@ function clearIds(keepMsgData){
 
     // ── 영손비 ─────────────────────────────────────────────────────────
     }else if(currentMode==="loss"){
-      const typeRadio=document.querySelector('input[name="contamType"]:checked').value;
+      const typeKey=document.getElementById("contamType").value;
       let priceVal=document.getElementById("lossPrice").value.trim();
       if(!priceVal){alert("금액을 입력해주세요.");return;}
       if(!priceVal.includes("원"))priceVal=priceVal+"원";
       let message="";
-      if(typeRadio==="분실물"){
+      if(typeKey==="lost"){
         const itemName=document.getElementById("lossItemName")?.value.trim();
         if(!itemName){alert("습득 분실물 명칭을 입력해주세요.");return;}
         message=`[타다] 분실물 전달 영업손실비 발생 안내\n\n안녕하세요. ${info.name}님\n타다를 이용해주셔서 감사합니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}] 운행 건 탑승 중 발생한 분실물[${itemName}]을 드라이버가 직접 전달 완료한 내용 확인되어 안내 드립니다.\n\n영업손실비는 드라이버가 영업을 중단하고 이동한 시간과 거리에 따라 산정됩니다.\n\n10km/1시간 이내 거리 전달인 경우 : 30,000원\n10km/1시간 이상 거리 전달인 경우 : 50,000원\n\n등록된 결제 수단으로 영업손실비 ${priceVal}이 결제될 예정이오니, 이용에 참고 부탁드립니다.\n\n타다 고객센터 서비스 주요 안내 <분실물 발생>에서 자세한 내용 확인하실 수 있습니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n감사합니다. 타다 팀 드림`;
       }else{
-        message=`[타다] 특수 세차비용 청구 안내\n\n안녕하세요. ${info.name}님\n타다를 이용해주셔서 감사합니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}]까지 이동 중 ${typeRadio}으로 영업손실비 ${priceVal}이 발생하였습니다.\n\n추가적으로 오염 영업 손실 비용은 실제 호출하신 계정의 등록된 결제 수단으로만 결제가 가능한 점 양해 부탁드립니다.\n\n해당 차량 이용 시 발생한 오염 관련 증빙사진이 확인되어 잠시 후, 운행료 결제 시 등록되어 있던 카드로 결제 예정입니다.\n\n보다 쾌적한 탑승 환경을 위한 차량 세차, 복구를 위한 휴업 영업손실비에 대한 청구액으로 안내 드린 내용은 타다 이용 약관에 의거하며 타다 도움말 <이동 중 문제 발생>에서 자세한 내용을 확인하실 수 있습니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n감사합니다. 타다 팀 드림`;
+        const C=HB_CONTAM[typeKey]||HB_CONTAM.interior;
+        message=`[타다] 특수 ${C.wash}비용 청구 안내\n\n안녕하세요. ${info.name}님\n타다를 이용해주셔서 감사합니다.\n\n${info.timePhrase} [${info.departure} > ${info.destination}]까지 이동 중 ${C.reason}으로 영업손실비 ${priceVal}이 발생하였습니다.\n\n${C.cap}\n\n해당 차량 이용 시 발생한 오염 관련 증빙사진이 확인되어 잠시 후, 운행료 결제 시 등록되어 있던 카드로 결제 예정입니다.\n\n추가적으로 오염 영업 손실 비용은 실제 호출하신 계정의 등록된 결제 수단으로만 결제가 가능하며, 보유하신 크레딧 및 쿠폰으로는 결제가 불가한 점 양해 부탁드립니다.\n\n보다 쾌적한 탑승 환경을 위한 ${C.wash}, 복구를 위한 휴업 영업손실비에 대한 청구액으로 안내 드린 내용은 타다 이용 약관에 의거하며 타다 도움말 <이동 중 문제 발생>에서 자세한 내용을 확인하실 수 있습니다.\n\n안내드린 내용에 대해 궁금하신 사항이 있으실 경우, 타다 앱 내 고객센터 > 문의하기를 통해 남겨주시면 감사하겠습니다.\n\n감사합니다. 타다 팀 드림`;
       }
       await copyRichText(message);
       overlay.remove();
