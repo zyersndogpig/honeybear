@@ -130,8 +130,8 @@
   const HBFab = (() => {
     const KEY = 'hb_fab_cfg';
     const DEF = {
-      admin: { icon: '🍯', size: 46, bg: '#0a7d72', fg: '#ffffff', op: 100, round: 50 },
-      zd: { icon: '🎫', size: 44, bg: '#0a7d72', fg: '#ffffff', op: 100, round: 50 }
+      admin: { icon: '🍯', size: 46, bg: '#0a7d72', fg: '#ffffff', op: 100, round: 50, lock: false },
+      zd: { icon: '🎫', size: 44, bg: '#0a7d72', fg: '#ffffff', op: 100, round: 50, lock: false }
     };
     const all = () => { try { return JSON.parse(GM_getValue(KEY, '{}')) || {}; } catch (e) { return {}; } };
     const load = role => Object.assign({}, DEF[role], (all()[role] || {}));
@@ -184,7 +184,11 @@
       w.style.top = Math.max(8, Math.min(r.top - 250, innerHeight - 340)) + 'px';
       const row = (label, inner) => `<div style="display:flex;align-items:center;gap:8px;margin:7px 0;">
         <span style="width:52px;color:#5b6b63;flex-shrink:0;">${label}</span>${inner}</div>`;
-      w.innerHTML = `<div style="font-weight:bold;color:#0a5d54;margin-bottom:8px;">🎨 버튼 꾸미기</div>
+      w.innerHTML = `<div id="hbf_head" style="font-weight:bold;color:#0a5d54;margin-bottom:8px;cursor:move;user-select:none;">🎨 버튼 꾸미기
+          <span style="font-weight:normal;font-size:10px;color:#8a9992;">— 여기를 잡고 이동</span></div>
+        ${row('고정', `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11.5px;color:#5b6b63;">
+          <input id="hbf_lock" type="checkbox" ${c.lock ? 'checked' : ''} style="width:14px;height:14px;cursor:pointer;accent-color:#0a7d72;">
+          드래그 잠금 (위치 고정)</label>`)}
         ${row('아이콘', `<input id="hbf_icon" value="${c.icon}" maxlength="4" style="width:52px;text-align:center;font-size:17px;padding:3px;border:1px solid #d7dedb;border-radius:6px;">
           <span id="hbf_presets" style="display:flex;gap:3px;flex-wrap:wrap;"></span>`)}
         ${row('이미지', `<input id="hbf_file" type="file" accept="image/*" style="display:none;">
@@ -201,9 +205,46 @@
           <button id="hbf_reset" style="flex:1;padding:6px;border:1px solid #d7dedb;background:#f5f7f6;border-radius:7px;cursor:pointer;font-size:11.5px;">초기화</button>
           <button id="hbf_close" style="flex:1;padding:6px;border:none;background:#0a7d72;color:#fff;border-radius:7px;cursor:pointer;font-weight:bold;font-size:11.5px;">닫기</button>
         </div>
-        <div style="margin-top:7px;color:#8a9992;font-size:10.5px;line-height:1.5;">드래그로 위치 이동 · 위치도 저장됩니다</div>`;
+        <div style="margin-top:7px;color:#8a9992;font-size:10.5px;line-height:1.5;">드래그로 위치 이동 · 위치도 저장됩니다<br>고정을 켜면 클릭은 되고 드래그만 막힙니다</div>`;
       document.body.appendChild(w);
       const q = id => w.querySelector('#' + id);
+
+      /* 설정창도 드래그로 옮긴다 — 버튼을 화면 구석에 두면 설정창이 잘려서
+       * 슬라이더 끝을 못 잡는 경우가 있었다. 위치는 저장하지 않는다(매번 버튼 옆에 뜨는 게 맞다). */
+      (function () {
+        const head = q('hbf_head');
+        let sx = 0, sy = 0, ox = 0, oy = 0, on = false;
+        head.addEventListener('mousedown', e => {
+          on = true;
+          const r = w.getBoundingClientRect();
+          sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
+          e.preventDefault();
+        });
+        const mv = e => {
+          if (!on) return;
+          w.style.left = Math.max(0, Math.min(ox + e.clientX - sx, innerWidth - w.offsetWidth)) + 'px';
+          w.style.top = Math.max(0, Math.min(oy + e.clientY - sy, innerHeight - 40)) + 'px';
+        };
+        const up = () => { on = false; };
+        document.addEventListener('mousemove', mv);
+        document.addEventListener('mouseup', up);
+        // 설정창이 닫히면 전역 리스너도 같이 걷어낸다 (열 때마다 쌓이면 누수)
+        new MutationObserver((recs, obs) => {
+          if (!document.body.contains(w)) {
+            document.removeEventListener('mousemove', mv);
+            document.removeEventListener('mouseup', up);
+            obs.disconnect();
+          }
+        }).observe(document.body, { childList: true });
+      })();
+
+      /* 드래그 잠금 — 실수로 버튼을 옮겨놓고 "사라졌다"고 하는 일이 잦아 넣는다.
+       * 클릭(캡처·패널 열기)은 그대로 살리고 이동만 막는다. */
+      q('hbf_lock').onchange = () => {
+        const on = q('hbf_lock').checked;
+        save(role, { lock: on });
+        toast(on ? '📌 버튼 위치 고정됨 (클릭은 그대로)' : '📌 위치 고정 해제 — 드래그 가능');
+      };
 
       // 이모지 프리셋 (직접 입력도 가능)
       const box = q('hbf_presets');
@@ -280,7 +321,8 @@
         GM_registerMenuCommand('🎨 플로팅 버튼 초기화', () => { reset(role); apply(node, role); toast('버튼 설정 초기화됨'); });
       } catch (e) {}
     }
-    return { attach, apply, savePos, openSettings };
+    const locked = role => !!load(role).lock;
+    return { attach, apply, savePos, openSettings, locked };
   })();
 
   const IS_ADMIN = /admin\.tadatada\.(in|com)$/.test(location.hostname);
@@ -640,6 +682,31 @@
      * '실제' 거리·시간은 예약 API 어디에도 없다 → enrichCase()가 라이드 API를 대신 조회한다.
      * 이름이 다른 응답을 만날 때를 대비해 확인된 키를 먼저 보고, 없으면 유사 키를 훑는다.
      * 단위는 키 이름으로 판정하고(…Meters / …Seconds), 이름이 모호하면 값 크기로 추정한다. */
+    /* 거리는 있는데 소요시간 필드가 아예 없는 응답이 있다 (라이드 상세가 그렇다:
+     * distanceMeters 는 주는데 durationSeconds 계열이 없음 — 콘솔 로그로 확인됨).
+     * 그럴 땐 탑승·하차 타임스탬프 차이로 계산한다. 어드민 '실제요금' 행과 같은 값이다. */
+    function apiDurationMin(o, tag) {
+      if (!o || typeof o !== 'object') return 0;
+      const keys = Object.keys(o);
+      const atKeys = keys.filter(k => /At$/.test(k));
+      if (!atKeys.length) return 0;                      // 타임스탬프가 없는 객체(estimation 등)는 조용히 통과
+      const ep = k => (k && typeof o[k] === 'number' && o[k] > 1e11 && o[k] < 4e12) ? o[k] : 0;
+      const S = ['boardedAt', 'startedAt', 'pickedUpAt', 'onBoardAt', 'ridingStartedAt', 'departedAt', 'driveStartedAt'];
+      const E = ['droppedOffAt', 'dropOffAt', 'finishedAt', 'endedAt', 'completedAt', 'arrivedAt', 'driveFinishedAt'];
+      const sk = S.find(ep) || atKeys.find(k => /(board|start|pick|depart|riding)/i.test(k) && ep(k));
+      const ek = E.find(ep) || atKeys.find(k => /(drop|finish|end|complet|arriv)/i.test(k) && ep(k));
+      if (!sk || !ek) {
+        console.log('[HB] 소요시간 타임스탬프 미발견(' + tag + '). 후보 At 필드:', atKeys.filter(ep));
+        return 0;
+      }
+      const m = Math.round((o[ek] - o[sk]) / 60000);
+      if (m > 0 && m <= 720) {
+        console.log('[HB] 소요시간 타임스탬프 계산(' + tag + ') —', sk, '→', ek, '=', m + '분');
+        return m;
+      }
+      return 0;
+    }
+
     function apiMetrics(o, tag) {
       const out = { dist: 0, time: 0 };
       if (!o || typeof o !== 'object') return out;
@@ -657,6 +724,7 @@
       if (t && (/seconds$/i.test(tKey || '') || t >= 600)) t = Math.round(t / 60);
       if (d >= 100 && d <= 500000) out.dist = Math.round(d);   // 100m~500km 밖이면 단위가 다르다고 보고 버림
       if (t > 0 && t <= 720) out.time = t;
+      if (!out.time) out.time = apiDurationMin(o, tag);         // 시간 필드가 없으면 타임스탬프로 계산
       if (out.dist || out.time) {
         console.log('[HB] API 거리·시간(' + tag + ') —', dKey, o[dKey], '/', tKey, o[tKey], '→', out);
       } else if (keys.length) {
@@ -1238,6 +1306,7 @@
       });
       document.addEventListener('mousemove', e => {
         if (!dragging) return;
+        if (HBFab.locked('admin')) return;   // 고정 상태: 이동만 막고 클릭은 그대로 살린다
         if (Math.abs(e.clientX - sx) > 3 || Math.abs(e.clientY - sy) > 3) moved = true;
         fab.style.left = Math.max(0, dx + e.clientX - sx) + 'px';
         fab.style.top = Math.max(0, dy + e.clientY - sy) + 'px';
@@ -1328,9 +1397,16 @@
     }
 
     /* ── 대괄호 처리 (원본 processBrackets 동일) ──
-     * 긴 문장형 [..] = 선택 문단(토글), 짧은 [   ]/[금액] = 채움 표시(유지) */
+     * 긴 문장형 [..] = 선택 문단(토글), 짧은 [   ]/[금액] = 채움 표시(유지)
+     *
+     * ⚠️ 마크다운 링크 [라벨](URL) 의 라벨은 예외다.
+     *    '예약 서비스 일반 예약 요금 정책'처럼 라벨이 15자를 넘으면 선택 문단으로 오인되어
+     *    라벨만 통째로 삭제되고 괄호 안 URL 이 알몸으로 남는 사고가 실제로 있었다.
+     *    여는 괄호가 바로 뒤에 붙어 있으면 링크로 보고 건드리지 않는다. */
+    const _isLinkLabel = (str, off, whole) => str.charAt(off + whole.length) === '(';
     function processBrackets(text, includeOptional) {
-      return text.replace(/\n*\[([\s\S]*?)\]\n*/g, (whole, inner) => {
+      return text.replace(/\n*\[([\s\S]*?)\]\n*/g, (whole, inner, off, str) => {
+        if (_isLinkLabel(str, off, whole)) return whole;
         const optional = inner.trim().length > 15 || /[.!?。]/.test(inner);
         if (!optional) return whole;
         return includeOptional ? ('\n\n' + inner.trim() + '\n\n') : '\n\n';
@@ -1338,7 +1414,10 @@
     }
     function hasOptionalBracket(t) {
       const re = /\[([\s\S]*?)\]/g; let m;
-      while ((m = re.exec(t))) { const i = m[1].trim(); if (i.length > 15 || /[.!?。]/.test(i)) return true; }
+      while ((m = re.exec(t))) {
+        if (t.charAt(m.index + m[0].length) === '(') continue;   // 마크다운 링크 라벨
+        const i = m[1].trim(); if (i.length > 15 || /[.!?。]/.test(i)) return true;
+      }
       return false;
     }
     function optionalBracketName(t) {
@@ -1752,6 +1831,15 @@
           #hb_zd_panel .look.on{display:flex;}
           #hb_zd_panel .look input[type=color]{width:26px;height:22px;padding:0;border:1px solid var(--line);border-radius:5px;background:var(--bg);cursor:pointer;}
           #hb_zd_panel .sw{width:16px;height:16px;border-radius:50%;border:1px solid var(--line2);cursor:pointer;padding:0;}
+          /* 신호등 — 케이스 카드를 접어둬도 ID 대조 상태만은 헤더에서 항상 보여야 한다 */
+          #hb_zd_panel .led{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:bold;
+            padding:1px 7px;border-radius:20px;border:1px solid var(--line2);background:var(--bg2);color:var(--fg2);white-space:nowrap;}
+          #hb_zd_panel .led i{width:8px;height:8px;border-radius:50%;display:inline-block;background:#c3c9c6;}
+          #hb_zd_panel .cfold{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;}
+          #hb_zd_panel .cfold .arw{font-size:9px;color:var(--fg2);width:9px;}
+          #hb_zd_panel .csum{font-weight:normal;font-size:10px;color:var(--fg2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+          #hb_zd_panel .chip.group{border-style:dashed;font-weight:bold;background:var(--bg2);}
+          #hb_zd_panel .gbox{display:flex;flex-wrap:wrap;gap:5px;width:100%;padding:6px 0 6px 8px;margin:1px 0 3px;border-left:2px solid var(--accLine);}
           #hb_zd_panel .body{padding:12px 14px;}
           #hb_zd_panel .card{border:1px solid var(--accLine);background:var(--cardBg);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;}
           #hb_zd_panel .card.none{border-color:var(--noneLine);background:var(--noneBg);}
@@ -1789,7 +1877,7 @@
           #hb_zd_panel .opt{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--acc);cursor:pointer;margin:6px 0;}
           #hb_zd_panel input[type=checkbox]{accent-color:var(--acc);width:13px;height:13px;cursor:pointer;}
         </style>
-        <div class="h"><span>🎫</span><b>티켓 뷰</b><span class="tn">#${TN}</span><span style="font-size:9.5px;color:var(--fg3);margin-left:6px;">v${HB_APP_VER}</span><button class="gear" id="hb_gear" title="테마·색상">⚙</button><button class="x" id="hb_x">✕</button></div>
+        <div class="h"><span>🎫</span><b>티켓 뷰</b><span class="tn">#${TN}</span><span class="led" id="hb_led" title="케이스 ID 대조 상태"><i></i>—</span><span style="font-size:9.5px;color:var(--fg3);">v${HB_APP_VER}</span><button class="gear" id="hb_gear" title="테마·색상">⚙</button><button class="x" id="hb_x">✕</button></div>
         <div class="look" id="hb_look">
           <span>테마</span>
           <div class="seg" id="hb_theme"><button data-t="auto">자동</button><button data-t="light">밝게</button><button data-t="dark">어둡게</button></div>
@@ -1920,6 +2008,11 @@
       let ZDIDS = collectZdIds(pageSnap);
 
       /* 케이스 카드 렌더 + ID 대조 */
+      /* 케이스 카드 접기 상태 — 기본은 접힘. 상태는 GM 스토리지에 남겨
+       * 티켓을 옮겨다녀도 매번 다시 접을 필요가 없게 한다. */
+      let cardOpen = false;
+      try { cardOpen = !!GM_getValue('hb_card_open', false); } catch (e) {}
+
       function renderCard() {
         const c = HBStore.loadCase();
         const has = !!(c && c.ts);
@@ -1981,11 +2074,42 @@
         const badgeTx = !has ? '데이터 없음' : mism ? 'ID 불일치'
           : unver ? ('대조불가 · ' + fresh(c.ts) + (stale ? '·오래됨' : ''))
           : (fresh(c.ts) + (stale ? '·오래됨' : ''));
+
+        /* 신호등은 헤더로 분리 — 카드를 접어둬도 빨강/주황/초록은 항상 눈에 들어와야 한다.
+         * 접어두면 안 보이는 곳에 경고를 두는 건 경고가 없는 것과 같다. */
+        const ledEl = g('hb_led');
+        if (ledEl) {
+          const led = !has ? { c: '#c3c9c6', t: '케이스 없음' }
+            : mism ? { c: '#c0392b', t: 'ID 불일치' }
+              : unver ? { c: '#d97706', t: '대조불가' }
+                : stale ? { c: '#d97706', t: '오래됨' }
+                  : { c: '#16a34a', t: '일치' };
+          ledEl.innerHTML = `<i style="background:${led.c};"></i>${led.t}`;
+          ledEl.style.borderColor = led.c;
+          ledEl.style.color = led.c;
+        }
+
+        /* ID 불일치일 때는 접혀 있으면 안 된다 — 그 상태에서 답변을 쓰면 남의 건이 나간다.
+         * 나머지는 기본 접힘. 상담사 대부분은 신호등만 보고 바로 멘트로 내려간다. */
+        const open = cardOpen || mism;
+        const summary = has ? [c.trip.name, c.trip.dateTime,
+          (c.trip.timeSrc === 'resv' || c.flags.isFromResv) ? '예약' : '실시간'].filter(Boolean).join(' · ') : '';
         const cardEl = g('hb_card');
         cardEl.className = 'card' + (!has ? ' none' : mism ? ' warn' : '');
-        cardEl.innerHTML = `<div class="chead">🍯 케이스 <span class="badge" style="background:${badgeBg};">${badgeTx}</span>
-          <button id="hb_clear" class="ghost" style="margin-left:auto;padding:1px 8px;font-size:10px;">비우기</button></div>
-          ${has ? `<div class="grid">${rows}</div>${note}` : ''}`;
+        cardEl.innerHTML = `<div class="chead cfold" id="hb_chead">
+            <span class="arw">${open ? '▼' : '▶'}</span>🍯 케이스
+            <span class="badge" style="background:${badgeBg};">${badgeTx}</span>
+            ${!open && summary ? `<span class="csum">${summary}</span>` : ''}
+            <button id="hb_clear" class="ghost" style="margin-left:auto;padding:1px 8px;font-size:10px;">비우기</button></div>
+          ${has && open ? `<div class="grid">${rows}</div>${note}` : ''}`;
+        const hd = g('hb_chead');
+        if (hd) hd.onclick = e => {
+          if (e.target.id === 'hb_clear') return;
+          if (mism) { toast('⚠️ ID 불일치 상태에서는 접을 수 없습니다'); return; }
+          cardOpen = !cardOpen;
+          try { GM_setValue('hb_card_open', cardOpen); } catch (err) {}
+          renderCard();
+        };
         const cb = g('hb_clear'); if (cb) cb.onclick = () => { HBStore.clearCase(); renderCard(); renderMents(); };
       }
 
@@ -2108,6 +2232,7 @@
         return 'both';   // 모르면 숨기지 않는다
       }
       let showAllMents = false;   // '반대편 멘트도 보기' 토글
+      const openGroups = new Set();   // 펼쳐 놓은 멘트 묶음 (ments.json 의 group 필드 기준)
       function renderMents() {
         const txt = signalText(); const q = norm(filterEl.value); const hasSig = txt.trim().length > 0;
         const side = (party === '파트너') ? 'partner' : 'user';
@@ -2128,13 +2253,37 @@
         chipsBox.innerHTML = ''; variantBox.style.display = 'none';
         // 대상 표시 배지 (이 칩이 누구용인지 한눈에)
         const partyMark = { user: '👤', partner: '🚕', both: '🔁' };
-        ordered.forEach(({ m, score, party: mp }) => {
+        const mkChip = ({ m, score, party: mp }) => {
           const hot = score > 0;
           const b = el('button', null, partyMark[mp] + ' ' + (hot ? '★ ' : '') + m.label + (m.variants ? ' ▾' : ''));
           b.className = 'chip' + (hot ? ' rec' : '') + ' p-' + mp;
           b.title = m.variants ? ('경우: ' + m.variants.map(v => v.label).join(' / ')) : fillTokens(m.text, HBStore.loadCase());
           b.onclick = m.variants ? (() => showVariants(m)) : (() => addMent(m));
-          chipsBox.appendChild(b);
+          return b;
+        };
+        /* 그룹 묶음 — 배차·콜 불만처럼 내용이 겹치는 멘트가 칩 줄을 다 잡아먹어
+         * 정작 찾는 멘트가 스크롤 밖으로 밀리던 문제. 접어두고 눌러서 펼친다.
+         * 검색 중에는 묶지 않는다 (검색은 '지금 찾는 것'을 바로 보여줘야 한다). */
+        const drawnGroups = new Set();
+        ordered.forEach(item => {
+          const gname = item.m.group;
+          if (!gname || q) { chipsBox.appendChild(mkChip(item)); return; }
+          if (drawnGroups.has(gname)) return;
+          drawnGroups.add(gname);
+          const members = ordered.filter(x => x.m.group === gname);
+          const hotN = members.filter(x => x.score > 0).length;
+          const isOpen = openGroups.has(gname);
+          const gb = el('button', null,
+            (isOpen ? '📂 ' : '📁 ') + (hotN ? '★ ' : '') + gname + ' (' + members.length + ')');
+          gb.className = 'chip group' + (hotN ? ' rec' : '');
+          gb.title = members.map(x => x.m.label).join(' / ');
+          gb.onclick = () => { isOpen ? openGroups.delete(gname) : openGroups.add(gname); renderMents(); };
+          chipsBox.appendChild(gb);
+          if (isOpen) {
+            const box = el('div'); box.className = 'gbox';
+            members.forEach(x => box.appendChild(mkChip(x)));
+            chipsBox.appendChild(box);
+          }
         });
         if (!q && (hidden.length || showAllMents)) {
           const t = el('button', null, showAllMents ? '↩︎ ' + sideName + ' 멘트만 보기' : '＋ ' + (sideName === '파트너' ? '이용자' : '파트너') + ' 멘트도 보기');
@@ -2226,6 +2375,9 @@
           partyManual = false;   // 티켓이 바뀌면 이전 티켓의 수동 선택은 무효
           healTries = 0;
           renderCard();                                                  // 대조 경고도 함께 초기화
+          /* 티켓이 바뀌면 화면도 맨 위로. 앞 티켓에서 멘트 영역까지 내려가 있던 스크롤이
+           * 그대로 남으면, 새 티켓인데 케이스 카드·인입 블록을 못 보고 지나친다. */
+          try { panel.scrollTop = 0; } catch (e) {}
         }
         readPending = true;
         markTN('loading');
@@ -2253,6 +2405,8 @@
           renderMents();
           readTN = nowTN;
           failedTN = '';
+          // 읽기가 끝나며 내용 높이가 바뀌므로 한 번 더 맨 위로 고정
+          if (changed) { try { panel.scrollTop = 0; } catch (e) {} }
         });
       }
       function toggle() {
@@ -2273,6 +2427,7 @@
         });
         document.addEventListener('mousemove', e => {
           if (!fDrag) return;
+          if (HBFab.locked('zd')) return;    // 고정 상태: 이동만 막고 클릭은 그대로 살린다
           if (Math.abs(e.clientX - fsx) > 3 || Math.abs(e.clientY - fsy) > 3) fMoved = true;
           btn.style.left = Math.max(0, fdx + e.clientX - fsx) + 'px';
           btn.style.top = Math.max(0, fdy + e.clientY - fsy) + 'px';
