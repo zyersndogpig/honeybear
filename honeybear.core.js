@@ -1562,6 +1562,11 @@
          * rideLine 은 '탑승하시어/호출하시어 … 이동하신' 전제라 노쇼 문의에 그대로 못 쓴다. */
         caseLine: (IS_RESV ? (dt + ' 탑승 요청하신 ' + route + ' 예약 건')
                            : (dt + '에 요청하신 ' + route + ' 호출 건')),
+        /* 멘트에 [{departure} > {destination}] 이라고 직접 쓰면 안 된다.
+         * processBrackets 가 fillTokens 보다 먼저 도는데, 안쪽 문자열이 15자를 넘어
+         * '선택 문단'으로 오인돼 통째로 삭제된다(실제로 경로가 빈 줄로 사라졌다).
+         * 대괄호까지 포함한 완성형을 토큰 하나로 넘긴다. */
+        route: route,
         ...TIME_T
       };
     }
