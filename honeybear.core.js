@@ -18,7 +18,7 @@
 
   /* 도구 버전 — 콘솔·어드민 메뉴·젠데스크 패널에서 같은 값을 쓴다.
    * 팀원이 "내 게 최신인가"를 F12 없이 확인할 수 있어야 한다. */
-  const HB_APP_VER = '0.9.9';
+  const HB_APP_VER = '1.0.0';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
   console.log('%c[HB] 허니베어 core v' + HB_APP_VER + ' 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
@@ -373,11 +373,31 @@
     } catch (e) {}
     const _lastApi = {}; // url pattern → 최근 응답 (captureFromApi에서 사용)
 
+    /* 교차 보강용 — 어드민이 API를 부를 때 실제로 붙이는 인증 헤더를 그대로 기억해 둔다.
+     * 예약 페이지에서 라이드 API를 직접 조회하려면 같은 헤더가 필요하다
+     * (세션 쿠키만으로는 401 이 나는 구조라 헤더 재사용이 가장 안전하다). */
+    let _lastApiHdrs = null;
+    let _rawFetch = null;     // 가로채기 이전의 원본 fetch (재귀 방지)
+    function _hbNoteHeaders(input, init) {
+      try {
+        const url = (typeof input === 'string') ? input : (input && input.url) || '';
+        if (!/\/api\//.test(url)) return;
+        const h = (init && init.headers) || (input && input.headers) || null;
+        if (!h) return;
+        const o = {};
+        if (typeof h.forEach === 'function') h.forEach((v, k) => { o[k] = v; });
+        else Object.keys(h).forEach(k => { o[k] = h[k]; });
+        if (Object.keys(o).length) _lastApiHdrs = o;
+      } catch (e) {}
+    }
+
     // 가로채기 실패가 스크립트 전체를 죽이지 않도록 격리 (버튼·캡처는 이것 없이도 동작)
     try {
       const uw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
       const _fetch = uw.fetch;
+      _rawFetch = (u, o) => _fetch.call(uw, u, o);
       uw.fetch = async function (...args) {
+        _hbNoteHeaders(args[0], args[1]);
         const res = await _fetch.apply(this, args);
         try {
           const url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url) || '';
@@ -394,11 +414,19 @@
         return res;
       };
       // XHR도 동일하게 (어드민이 axios/XHR 기반일 수 있음)
+      const _srh = uw.XMLHttpRequest.prototype.setRequestHeader;
+      uw.XMLHttpRequest.prototype.setRequestHeader = function (k, v) {
+        try { (this._hbHdrs || (this._hbHdrs = {}))[k] = v; } catch (e) {}
+        return _srh.call(this, k, v);
+      };
       const _open = uw.XMLHttpRequest.prototype.open;
       uw.XMLHttpRequest.prototype.open = function (m, url, ...rest) {
         this._hbUrl = url;
         this.addEventListener('load', function () {
           try {
+            if (/\/api\//.test(this._hbUrl) && this._hbHdrs && Object.keys(this._hbHdrs).length) {
+              _lastApiHdrs = this._hbHdrs;
+            }
             if (/\/(rides?|rideReservations?|users?|drivers?)\//.test(this._hbUrl) &&
                 /json/.test(this.getResponseHeader('content-type') || '')) {
               const j = JSON.parse(this.responseText);
@@ -609,7 +637,7 @@
      * 실제 응답에서 확인된 필드 (예약 API):
      *   estimation: { distanceMeters: 71576, durationSeconds: 3729, ... }
      * 반면 j.ride 는 id·origin·destination·receipt·status 만 담고 있어
-     * '실제' 거리·시간은 예약 API 어디에도 없다 → 라이드 상세를 열어야 한다.
+     * '실제' 거리·시간은 예약 API 어디에도 없다 → enrichCase()가 라이드 API를 대신 조회한다.
      * 이름이 다른 응답을 만날 때를 대비해 확인된 키를 먼저 보고, 없으면 유사 키를 훑는다.
      * 단위는 키 이름으로 판정하고(…Meters / …Seconds), 이름이 모호하면 값 크기로 추정한다. */
     function apiMetrics(o, tag) {
@@ -636,6 +664,116 @@
           keys.filter(k => typeof o[k] === 'number'));
       }
       return out;
+    }
+
+    /* ── 예약 ↔ 라이드 교차 보강 ────────────────────────────────────────────
+     * 두 상세 API 는 서로 없는 값을 하나씩 들고 있다.
+     *   /api/rideReservations/:id → estimation(예상 거리·시간)은 있지만
+     *                               j.ride 는 위치·영수증·상태뿐이라 '실제'가 없다.
+     *   /api/rides/:id            → 실제 거리·시간은 있지만 예약 estimation 이 없다.
+     * 그래서 지금까지는 "라이드도 열어서 한 번 더 캡처하세요"를 사람이 메웠는데,
+     * 예약에서 누르든 라이드에서 누르든 결과가 같아야 한다.
+     * → 부족한 쪽 엔드포인트를 어드민과 같은 헤더로 직접 조회해서 채운다.
+     * 캡처를 막지 않도록 비동기로 돌리고, 응답이 오면 병합 저장만 한다
+     * (젠데스크 패널은 GM 스토리지 구독이라 저장 즉시 알아서 갱신된다). */
+    function hbApiGet(url) {
+      const hdrs = Object.assign({ Accept: 'application/json' }, _lastApiHdrs || {});
+      // GET 에 무의미한 본문 헤더는 떼어낸다 (일부 게이트웨이가 400 을 준다)
+      Object.keys(hdrs).forEach(k => { if (/^content-(type|length)$/i.test(k)) delete hdrs[k]; });
+      const f = _rawFetch || ((u, o) => fetch(u, o));
+      return f(url, { method: 'GET', credentials: 'include', headers: hdrs })
+        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(j => {
+          // 캐시에도 넣어둔다 → 같은 건을 다시 캡처하면 네트워크 없이 즉시 채워진다
+          try {
+            const pat = url.split('?')[0].replace(/[A-Z0-9]{10,}/g, ':id');
+            _lastApi[pat] = { url, json: j, at: Date.now() };
+            _bankPut(pat, j);
+          } catch (e) {}
+          return j;
+        });
+    }
+    /* 지금까지 관측한 API URL 을 본떠 형제 엔드포인트 URL 을 만든다.
+     * origin·경로 접두사가 .in/.com 및 프록시 구성마다 달라 하드코딩하면 한쪽에서 깨진다. */
+    function hbSiblingApiUrl(seg, id) {
+      const k = Object.keys(_lastApi).find(k => /\/api\/(rides|rideReservations)\/:id/.test(k));
+      const seen = k && _lastApi[k].url;
+      if (seen) {
+        const built = seen.split('?')[0]
+          .replace(/\/(rides|rideReservations)\/[A-Za-z0-9]+.*$/, '/' + seg + '/' + id);
+        if (built !== seen.split('?')[0]) return built;
+      }
+      return location.origin + '/api/' + seg + '/' + id;
+    }
+    function enrichCase(saved) {
+      if (!saved || !saved.ts) return;
+      const rideId = saved.ids.ride;
+      const resvId = saved.ids.resv || saved.ids.fromResv;
+      const jobs = [];
+
+      // 예약에서 눌렀을 때 비는 값: 실제 이동거리·시간 → 라이드 상세를 대신 조회
+      if (rideId && !(saved.fare.realDist && saved.fare.realTime)) {
+        jobs.push(hbApiGet(hbSiblingApiUrl('rides', rideId)).then(j => {
+          if (!j || j.id !== rideId) return null;
+          const p = {};
+          const rm = apiMetrics(j, '보강>라이드');
+          if (rm.dist) p.realDist = rm.dist;
+          if (rm.time) p.realTime = rm.time;
+          if (j.surgePercentage) p.surge = j.surgePercentage;
+          if (j.cost) p.total = j.cost;
+          return { fare: p, ids: { driver: (j.driver && j.driver.id) || '' } };
+        }));
+      }
+      // 라이드에서 눌렀을 때 비는 값: 예약 예상 거리·시간 → 예약 상세를 대신 조회
+      if (resvId && !(saved.fare.estDist && saved.fare.estTime)) {
+        jobs.push(hbApiGet(hbSiblingApiUrl('rideReservations', resvId)).then(j => {
+          if (!j || j.id !== resvId) return null;
+          const est = j.estimation || {};
+          const p = {};
+          const em = apiMetrics(est, '보강>예약');
+          if (em.dist) p.estDist = em.dist;
+          if (em.time) p.estTime = em.time;
+          if (est.totalFee) p.est = est.totalFee;
+          if (est.surgePercentage) p.surge = est.surgePercentage;
+          return { fare: p, ids: { resv: j.id }, trip: j.expectedPickUpAt
+            ? { dateTime: fmtDT(j.expectedPickUpAt), actionWord: '탑승', timeSrc: 'resv' } : {} };
+        }));
+      }
+      if (!jobs.length) return;
+
+      Promise.all(jobs.map(p => p.catch(e => {
+        console.warn('[HB] 교차 보강 실패 —', e.message);
+        return null;
+      }))).then(res => {
+        const got = res.filter(Boolean);
+        if (!got.length) return;
+        const cur = HBStore.loadCase();
+        // 그 사이 다른 건을 캡처했으면 덮지 않는다 (stale 오염 방지)
+        if (!cur.ts) return;
+        if (rideId && cur.ids.ride && cur.ids.ride !== rideId) return;
+        if (resvId && cur.ids.resv && cur.ids.resv !== resvId && cur.ids.fromResv !== resvId) return;
+        // 비어 있는 칸만 채운다 — 이미 잡힌 DOM 정본을 API 값으로 덮지 않는다
+        const touched = [];
+        got.forEach(g => {
+          ['fare', 'ids', 'trip'].forEach(grp => {
+            Object.keys(g[grp] || {}).forEach(k => {
+              const v = g[grp][k];
+              if (!v) return;
+              if (cur[grp][k]) return;
+              cur[grp][k] = v;
+              if (grp === 'fare') touched.push(k);
+            });
+          });
+        });
+        if (!touched.length) return;
+        HBStore.saveCase(cur);
+        const real = touched.some(k => /^real/.test(k));
+        const est = touched.some(k => /^est/.test(k));
+        toast('🍯 교차 보강 — ' +
+          (real && est ? '예상·실제 이동거리·시간' : real ? '실제 이동거리·시간' : est ? '예상 이동거리·시간' : '요금 정보') +
+          ' 확보됨');
+        console.log('[HB] 교차 보강 반영:', touched.join(', '));
+      });
     }
 
     function captureFromApi() {
@@ -673,7 +811,8 @@
         if (j.ride && j.ride.receipt) c.fare.items = [];
         if (j.ride) receiptToFare(c, j.ride.receipt);
         // 예약 DOM·API 어디에도 '실제' 거리·시간이 없다(j.ride 는 위치·영수증·상태만).
-        // 영수증에 들어있는 응답도 있을 수 있어 한 번 더 훑고, 없으면 라이드 캡처로 안내한다.
+        // 영수증에 들어있는 응답도 있을 수 있어 한 번 더 훑고, 그래도 없으면
+        // capture() 끝의 enrichCase()가 라이드 API를 직접 조회해서 채운다.
         if (j.ride) {
           const rm = apiMetrics(j.ride, '예약>라이드');
           const rr = (rm.dist && rm.time) ? rm : apiMetrics(j.ride.receipt, '예약>라이드>영수증');
@@ -1014,6 +1153,10 @@
 
       const merged = mergeCase(HBStore.loadCase(), cur);
       HBStore.saveCase(merged);
+
+      /* 예약↔라이드 중 열려 있지 않은 쪽에만 있는 값(실제/예상 이동거리·시간)을
+       * 백그라운드로 마저 채운다. 어디서 눌러도 같은 결과가 나오게 하는 장치. */
+      try { enrichCase(merged); } catch (e) { console.warn('[HB] 교차 보강 오류:', e.message); }
 
       const gaps = missingFields(merged);
       toast(gaps.length
@@ -1824,14 +1967,15 @@
         if (unver) notes.push(`<div class="note warn">
           ❔ <b>${isPartnerTicket ? '파트너' : '이용자'} ID 대조 불가</b> — 이 티켓에서 외부 ID·어드민 링크를 찾지 못했습니다 (웹 유저·이메일 인입 등).<br>
           불일치가 <u>없는 게 아니라 확인이 안 된 상태</u>입니다. 케이스가 이 문의 건이 맞는지 직접 확인해주세요.</div>`);
-        /* 실제 이동거리·시간은 라이드 상세 페이지의 '실제요금' 행에만 있다.
-         * 예약 페이지만 캡처하면 예상값만 잡히고 실제값은 빈 채로 남는다 —
-         * 멘트의 예상/실제 비교표가 반쪽이 되므로 눈에 띄게 알려준다. */
+        /* 실제 이동거리·시간은 라이드 상세에만 있다. 예약에서 캡처해도 어드민 API를
+         * 대신 조회해 자동으로 채우지만(교차 보강), 권한·네트워크 문제로 실패할 수 있다.
+         * 그때는 멘트의 예상/실제 비교표가 반쪽이 되므로 수동 경로를 안내한다. */
         const needRide = has && c.ids.ride && c.fare.total > 0 && !c.fare.cancel
                          && !(c.fare.realDist && c.fare.realTime);
         if (needRide) notes.push(`<div class="note info">
-          📍 <b>실제 이동거리·시간 미확보</b> — 이 값은 라이드 상세의 '실제요금' 행에만 있습니다.<br>
-          어드민에서 라이드 <b>${c.ids.ride}</b> 를 열고 🍯 캡처를 한 번 더 눌러주세요.</div>`);
+          📍 <b>실제 이동거리·시간 미확보</b> — 예약에서 캡처하면 라이드 상세를 자동으로 조회해 채웁니다.
+          잠시 후에도 비어 있으면 자동 조회가 실패한 것입니다.<br>
+          어드민에서 라이드 <b>${c.ids.ride}</b> 를 직접 열고 🍯 캡처를 한 번 더 눌러주세요.</div>`);
         const note = notes.join('');
         const badgeBg = !has ? '#c3c9c6' : mism ? '#c0392b' : (unver || stale) ? '#d97706' : '#0a7d72';
         const badgeTx = !has ? '데이터 없음' : mism ? 'ID 불일치'
