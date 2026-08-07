@@ -18,7 +18,7 @@
 
   /* 도구 버전 — 콘솔·어드민 메뉴·젠데스크 패널에서 같은 값을 쓴다.
    * 팀원이 "내 게 최신인가"를 F12 없이 확인할 수 있어야 한다. */
-  const HB_APP_VER = '1.0.0';
+  const HB_APP_VER = '1.0.1';
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
   console.log('%c[HB] 허니베어 core v' + HB_APP_VER + ' 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
@@ -2118,7 +2118,28 @@
       let blocks = parseInboundOriginal();
       const sel = new Set();
       if (blocks.length) sel.add(blocks.length - 1);
-      function rebuild() { contentBox.value = blocks.filter((b, i) => sel.has(i)).join('\n\n'); }
+      /* rebuild() 가 만들어 넣은 '자동 생성 그대로'의 값을 기억한다.
+       * 나중에 인입 본문을 다시 읽을 때, 상담사가 손으로 고친 텍스트를
+       * 말없이 덮어쓰지 않기 위한 판단 근거다. */
+      let lastAutoContent = '';
+      function rebuild() {
+        contentBox.value = blocks.filter((b, i) => sel.has(i)).join('\n\n');
+        lastAutoContent = contentBox.value;
+      }
+      const sigOf = arr => (arr || []).join('\u0001');
+      /* 파싱한 인입 블록을 화면에 반영 — 최초 읽기·티켓 전환·자가 점검이 모두 이 경로를 쓴다 */
+      function applyBlocks(nb) {
+        blocks = nb || [];
+        sel.clear(); if (blocks.length) sel.add(blocks.length - 1);
+        if (blocks.length) { g('hb_pick_wrap').style.display = 'block'; renderPick(); rebuild(); }
+        else { g('hb_pick_wrap').style.display = 'none'; contentBox.value = ''; lastAutoContent = ''; }
+      }
+      /* 새 인입을 감지했는데 상담사가 이미 본문을 고쳐놨을 때 — 덮지 않고 표시만 한다 */
+      function markContentStale(on) {
+        const rb = g('hb_refresh'); if (!rb) return;
+        rb.textContent = on ? '🔄 다시 읽기 🔴' : '🔄 다시 읽기';
+        rb.title = on ? '인입 본문이 바뀌었습니다 — 직접 수정한 내용이 있어 자동 갱신하지 않았습니다' : '';
+      }
       function renderPick() {
         const pw = g('hb_pick'); pw.innerHTML = '';
         blocks.forEach((b, i) => {
@@ -2341,8 +2362,13 @@
        *   ① 현재 티켓 번호가 화면에 실제로 떠 있고
        *   ② 인입 블록이 하나 이상 파싱되고
        *   ③ 본문 길이가 연속 2회 동일(렌더 안정화)
-       * 세 조건을 모두 만족할 때만 읽는다. 8초 내 미충족이면 실패로 끝낸다. */
-      function whenTicketReady(tn, cb) {
+       * 세 조건을 모두 만족할 때만 읽는다. 8초 내 미충족이면 실패로 끝낸다.
+       *
+       * ④ avoidSig — 전환 직후 3초 동안은 '직전 티켓과 같은 본문'을 거절한다.
+       *    젠데스크는 이전 티켓의 대화 패널을 잠깐 그대로 띄워두기 때문에
+       *    ①②③ 을 다 만족하면서 앞 티켓 내용을 읽어버리는 일이 실제로 있었다.
+       *    (두 티켓 본문이 우연히 같을 수도 있으므로 3초 뒤엔 그냥 받아들인다) */
+      function whenTicketReady(tn, avoidSig, cb) {
         const seq = ++readySeq;
         const started = Date.now();
         let lastLen = -1, stable = 0;
@@ -2352,9 +2378,11 @@
           const txt = document.body.innerText || '';
           stable = (txt.length === lastLen) ? stable + 1 : 0;
           lastLen = txt.length;
-          let hasBody = false;
-          try { hasBody = parseInboundOriginal().length > 0; } catch (e) {}
-          if (txt.indexOf(tn) >= 0 && hasBody && stable >= 1) return cb(true);
+          let parsed = [];
+          try { parsed = parseInboundOriginal(); } catch (e) {}
+          const guard = avoidSig && (Date.now() - started < 3000);
+          const notStale = !guard || sigOf(parsed) !== avoidSig;
+          if (txt.indexOf(tn) >= 0 && parsed.length > 0 && stable >= 1 && notStale) return cb(true);
           if (Date.now() - started > 8000) return cb(false);
           setTimeout(poll, 250);
         })();
@@ -2365,12 +2393,15 @@
         if (!nowTN) return;
         const changed = nowTN !== curTN;
         curTN = nowTN;
+        // 직전 티켓의 인입 본문 지문 — 전환 후 같은 본문이 읽히면 잔여 DOM 이다
+        const prevSig = changed ? sigOf(blocks) : '';
         if (changed) {
           /* 읽기 완료 '전에' 이전 티켓 데이터를 지운다.
            * 남겨두면 그 사이 상담사가 앞 티켓 내용을 복사해갈 수 있다 — 실제 오염 경로. */
           blocks = []; sel.clear();
           g('hb_pick_wrap').style.display = 'none';
-          contentBox.value = '';
+          contentBox.value = ''; lastAutoContent = '';
+          markContentStale(false);
           ZDIDS = collectZdIds('');
           partyManual = false;   // 티켓이 바뀌면 이전 티켓의 수동 선택은 무효
           healTries = 0;
@@ -2381,7 +2412,7 @@
         }
         readPending = true;
         markTN('loading');
-        whenTicketReady(nowTN, ok => {
+        whenTicketReady(nowTN, prevSig, ok => {
           readPending = false;
           if (nowTN !== curTN) return;                                   // 대기 중 또 전환됨
           if (!ok) {
@@ -2397,10 +2428,8 @@
           if (!partyManual) setParty(detectParty(''));
           renderCard();
           try { renderAddons(); } catch (e) {}
-          blocks = parseInboundOriginal();
-          sel.clear(); if (blocks.length) sel.add(blocks.length - 1);
-          if (blocks.length) { g('hb_pick_wrap').style.display = 'block'; renderPick(); rebuild(); }
-          else { g('hb_pick_wrap').style.display = 'none'; contentBox.value = ''; }
+          applyBlocks(parseInboundOriginal());
+          markContentStale(false);
           draftText = getDraftText();
           renderMents();
           readTN = nowTN;
@@ -2449,14 +2478,36 @@
       }, 1200);
 
       /* 5초 주기 자가 점검.
-       * 젠데스크 사이드바(요청자·외부 ID)는 대화 본문보다 늦게 채워지는 경우가 있다.
-       * 본문 기준으로 '읽기 성공' 판정이 나도 그 시점엔 외부 ID가 없을 수 있고,
-       * 그러면 ID 대조와 파트너/이용자 판별이 조용히 빈 채로 굳어버린다.
-       * → 외부 ID를 하나도 못 찾은 동안은 계속 다시 수집한다 (최대 1분). */
+       * ① 인입 본문 — 티켓 전환 직후엔 이전 티켓의 대화 DOM 이 잠깐 남아 그대로 읽히거나,
+       *    고객이 답장을 새로 달아 블록이 늘어나는 경우가 있다. 매번 다시 파싱해 비교한다.
+       * ② 외부 ID — 젠데스크 사이드바(요청자·외부 ID)는 대화 본문보다 늦게 채워지는 경우가 있다.
+       *    본문 기준으로 '읽기 성공' 판정이 나도 그 시점엔 외부 ID가 없을 수 있고,
+       *    그러면 ID 대조와 파트너/이용자 판별이 조용히 빈 채로 굳어버린다.
+       *    → 외부 ID를 하나도 못 찾은 동안은 계속 다시 수집한다 (최대 1분). */
       setInterval(() => {
         if (panel.style.display === 'none' || readPending) return;
         const nowTN = (location.href.match(/tickets\/(\d+)/) || [])[1] || '';
         if (!nowTN || nowTN !== curTN || nowTN !== readTN) return;        // 읽기 성공 상태에서만
+
+        // ① 인입 본문 재확인
+        try {
+          const nb = parseInboundOriginal();
+          if (nb.length && sigOf(nb) !== sigOf(blocks)) {
+            /* 상담사가 본문을 직접 고쳤다면 덮지 않는다 — 작성 중인 내용을 날리는 게
+             * 이전 티켓 내용을 잠깐 더 보는 것보다 훨씬 나쁘다. 표시만 하고 판단을 넘긴다. */
+            if (contentBox.value.trim() === lastAutoContent.trim()) {
+              applyBlocks(nb);
+              markContentStale(false);
+              try { renderMents(); } catch (e) {}
+              console.log('[HB] 인입 본문 갱신 — 티켓', nowTN, '블록', nb.length + '개');
+              toast('📋 인입 본문을 다시 읽었습니다');
+            } else {
+              markContentStale(true);
+            }
+          }
+        } catch (e) {}
+
+        // ② 외부 ID 지연 수집
         if (ZDIDS.user.length || ZDIDS.driver.length || healTries >= 12) return;
         healTries++;
         const z = collectZdIds(document.body.innerText || '');
@@ -2469,7 +2520,12 @@
         console.log('[HB] 외부 ID 지연 수집 —', z);
       }, 5000);
       // 다시 읽기 = 실패 기록 지우고 강제 재읽기 (파트너/이용자 수동 토글은 유지)
-      g('hb_refresh').onclick = () => { failedTN = ''; healTries = 0; refreshForTicket(); };
+      g('hb_refresh').onclick = () => {
+        failedTN = ''; healTries = 0;
+        markContentStale(false);
+        lastAutoContent = contentBox.value;   // 수동 재읽기는 편집 내용을 덮어써도 된다는 뜻
+        refreshForTicket();
+      };
       HBStore.onChange(c => { renderCard(); renderMents(); if (panel.style.display === 'none') toast('🍯 새 케이스 수신'); });
       renderCard();
 
