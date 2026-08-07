@@ -149,6 +149,17 @@
    * 2. 공통 유틸
    * ═══════════════════════════════════════════════════════════════════════ */
   const won = v => { const n = Number(String(v || '').replace(/[^0-9]/g, '')); return n ? n.toLocaleString() + '원' : ''; };
+  /* 초까지 필요한 곳(배차 수락/도착/취소 시각)용 — fmtDT 는 분까지만 찍는다.
+   * ⚠️ 반드시 공용 스코프에 둔다. tokensOf 가 IS_ZD 블록에서 이걸 부르는데
+   *    IS_ADMIN 블록 안에 두면 젠데스크에서 ReferenceError 로 패널 빌드가 통째로 죽는다. */
+  function fmtDTS(ms) {
+    if (!ms) return '';
+    const d = new Date(Number(ms));
+    if (isNaN(d.getTime())) return '';
+    const p = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + ' ' +
+           p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
   const $ = (s, r) => (r || document).querySelector(s);
   const el = (tag, css, html) => { const e = document.createElement(tag); if (css) e.style.cssText = css; if (html != null) e.innerHTML = html; return e; };
   const onReady = fn => (document.readyState === 'loading') ? document.addEventListener('DOMContentLoaded', fn) : fn();
@@ -571,16 +582,6 @@
       const p = n => String(n).padStart(2, '0');
       return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
     }
-    /* 초까지 필요한 곳(배차 수락/도착/취소 시각)용 — fmtDT 는 분까지만 찍는다 */
-    function fmtDTS(ms) {
-      if (!ms) return '';
-      const d = new Date(Number(ms));
-      if (isNaN(d.getTime())) return '';
-      const p = n => String(n).padStart(2, '0');
-      return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + ' ' +
-             p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
-    }
-
     /* ── 운행 타임스탬프 수집 ──────────────────────────────────────────────
      * ⚠️ 실제 어드민 응답의 정확한 필드명을 확인하지 못했다. 알려진 후보를 먼저 보고
      *    없으면 이름 패턴으로 훑는다. 무엇을 잡았고 응답에 어떤 At 필드가 있었는지
