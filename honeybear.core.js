@@ -1617,6 +1617,28 @@
         /^오류 제보|^유선 상담 중 자료|^계약 및 해지|^기타$/.test(ml) ||
         /^\d{10,11}$/.test(ml) || /^\d{3,4}-\d{3,4}-\d{4}$/.test(ml));
     }
+    /* ── 페이지 텍스트 읽기 (허니베어 패널 제외) ────────────────────────────
+     * 파서가 대화 노드를 못 찾으면 convEl 이 document.body 로 폴백한다. 그런데 패널도
+     * body 안에 있어서, 그 순간부터 '패널에 표시된 내용'을 인입 본문으로 되읽는다.
+     *   파싱 → applyBlocks → 칩·본문 렌더 → body 텍스트 변화 → 파싱 결과 달라짐 → 다시 파싱…
+     * 5초 자가 점검이 이 고리를 계속 돌려 무한 재읽기가 된다.
+     * ⚠️ display 를 잠깐 껐다 켜는 방법은 쓰지 않는다. 숨기는 순간 패널 안의 포커스와
+     *    텍스트 선택이 날아가서, 상담사가 미리보기에 입력하는 중이면 패널이 먹통처럼 느껴진다.
+     *    (이 함수는 로딩 중 250ms 주기로도 불린다.)
+     *    → DOM 은 전혀 건드리지 않고, body 직계 자식 중 허니베어 요소만 빼고 읽는다. */
+    function hbPageText() {
+      try {
+        const kids = document.body ? [...document.body.children] : [];
+        const mine = n => n && (n.id === 'hb_zd_panel' || /^hb[_-]/.test(n.id || '') ||
+                                n.tagName === 'STYLE' || n.tagName === 'SCRIPT');
+        const rest = kids.filter(n => !mine(n));
+        // 허니베어 요소를 걸러내고 남은 게 없으면(예외적 DOM) 원래대로 전체를 읽는다
+        if (!rest.length) return document.body.innerText || '';
+        return rest.map(n => n.innerText || '').join('\n');
+      } catch (e) {
+        try { return document.body.innerText || ''; } catch (e2) { return ''; }
+      }
+    }
     /* 고객 인입 파싱 — 원본 zendesk.html 103~361줄 그대로 (검증된 티켓뷰 코드) */
     function parseInboundOriginal() {
       // ── 고객 메시지 추출 ──
@@ -1647,7 +1669,7 @@
       }
       
       try{
-      const bodyText=document.body.innerText;
+      const bodyText=hbPageText();
       const bodyLimit=bodyText.indexOf('메시지 작성기');
       
       let activeConv=null;
@@ -1667,14 +1689,18 @@
       ||document.querySelector('[class*="conversation"]')
       ||document.querySelector('main')
       ||document.body;
+      /* 폴백이 body 까지 내려오면 패널 텍스트가 섞인다 — 위 hbPageText 주석 참고.
+       * 이 경우에만 표시를 남겨 아래에서 innerText 대신 패널 제외 텍스트를 쓰게 한다. */
+      const convIsBody = (convEl === document.body);
       
       const scopedComments=(convEl&&convEl.querySelectorAll('.zd-comment').length>0)
       ?convEl.querySelectorAll('.zd-comment')
       :document.querySelectorAll('.zd-comment');
       
-      const isMessaging = !!(convEl && /Web User [a-f0-9]+/.test(convEl.innerText));
+      const convText = convIsBody ? bodyText : ((convEl && convEl.innerText) || '');
+      const isMessaging = !!(convEl && /Web User [a-f0-9]+/.test(convText));
       if(isMessaging){
-      const rawLines=convEl.innerText.split('\n');
+      const rawLines=convText.split('\n');
       const cutLineIdx=rawLines.findIndex(l=>l.trim()==='메시지 작성기');
       const allLines=cutLineIdx>=0?rawLines.slice(0,cutLineIdx):rawLines;
       
@@ -1930,7 +1956,7 @@
      *    (기존엔 무조건 '이용자'로 떨어져, 판별 실패가 이용자로 위장됐다) */
     function detectParty(snap) {
       try {
-        const blob = snap || document.body.innerText || '';
+        const blob = snap || hbPageText();
         // ① 웹 유저 인입 = 드라이버 센터 익명 메시징 → 파트너
         if (/Web\s*User\s+[0-9a-f]{12,}/i.test(blob)) return '파트너';
         const m = blob.match(/외부\s*(?:ID|아이디)[\s\S]{0,40}?([A-Za-z0-9:_-]{6,})/);
@@ -1958,11 +1984,13 @@
       return m < 1 ? '방금' : m + '분 전';
     }
 
-    /* ═══ 패널 빌드 ═══ */
-    onReady(() => {
+    /* ═══ 패널 빌드 ═══
+     * 빌드 도중 예외가 나면 지금까지는 패널이 조용히 안 뜨고 끝났다("갑자기 안 돼요").
+     * 예외를 잡아 콘솔과 화면 양쪽에 남긴다 — 무엇이 죽었는지 바로 말할 수 있어야 한다. */
+    onReady(() => { try {
       const TN = (location.href.match(/tickets\/(\d+)/) || [])[1] || '';
       const ticketUrl = 'https://tadatadahelp.zendesk.com/agent/tickets/' + TN;
-      const pageSnap = (() => { try { return document.body.innerText || ''; } catch (e) { return ''; } })();
+      const pageSnap = hbPageText();
 
       const panel = el('div',
         'position:fixed;top:16px;right:16px;width:360px;height:92vh;min-width:300px;min-height:220px;max-width:96vw;max-height:96vh;overflow:auto;resize:both;z-index:999999;background:var(--bg);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.28);font-family:-apple-system,sans-serif;color:var(--fg);display:none;');
@@ -2113,6 +2141,7 @@
       const btn = el('button', 'position:fixed;right:18px;bottom:18px;z-index:999999;width:44px;height:44px;border-radius:50%;border:none;background:#0a7d72;color:#fff;font-size:19px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;', '🎫');
       btn.title = '허니베어 패널 (Alt+H · 드래그로 이동)';
       document.body.appendChild(btn);
+      btn.id = 'hb_zd_fab';      // hbPageText 가 걸러낼 수 있도록 (인입 파싱 오염 방지)
       HBFab.attach(btn, 'zd');   // 저장된 아이콘·크기·색·위치 적용 + 우클릭 설정
 
       const g = id => panel.querySelector('#' + id);
@@ -2508,6 +2537,10 @@
       let readPending = false;
       let failedTN = '';     // 타임아웃난 티켓 — 무한 재시도/토스트 폭탄 방지
       let healTries = 0;     // 외부 ID 지연 로딩 자가 점검 횟수
+      /* 자동 재읽기 폭주 차단 — 파싱이 자기 출력을 되읽는 고리에 빠져도 3회에서 멈춘다 */
+      let autoReadTN = '';   // 카운터가 물린 티켓 번호
+      let autoReadN = 0;     // 이 티켓에서 자동으로 다시 읽은 횟수
+      let lastAutoSig = '';  // 직전에 자동 반영한 인입 지문 — 같은 값이면 다시 안 쓴다
 
       /* readTN 이 따로 필요한 이유:
        * 패널 빌드 시점의 pageSnap 은 페이지 로드 직후라 본문이 아직 비어 있다.
@@ -2578,6 +2611,7 @@
           ZDIDS = collectZdIds('');
           partyManual = false;   // 티켓이 바뀌면 이전 티켓의 수동 선택은 무효
           healTries = 0;
+          autoReadTN = ''; autoReadN = 0; lastAutoSig = '';
           renderCard();                                                  // 대조 경고도 함께 초기화
           /* 티켓이 바뀌면 화면도 맨 위로. 앞 티켓에서 멘트 영역까지 내려가 있던 스크롤이
            * 그대로 남으면, 새 티켓인데 케이스 카드·인입 블록을 못 보고 지나친다. */
@@ -2665,14 +2699,22 @@
         // ① 인입 본문 재확인
         try {
           const nb = parseInboundOriginal();
-          if (nb.length && sigOf(nb) !== sigOf(blocks)) {
+          const nsig = sigOf(nb);
+          /* 안전장치: 같은 티켓에서 자동 재읽기가 몇 번이고 반복되면 파싱이 자기 출력을
+           * 되읽고 있다는 뜻이다(위 hbPageText 주석의 고리). 원인을 못 잡았을 때도
+           * 상담사 화면이 토스트로 도배되지 않도록 3회에서 멈추고 콘솔에 남긴다. */
+          if (autoReadTN !== nowTN) { autoReadTN = nowTN; autoReadN = 0; }
+          if (nb.length && nsig !== sigOf(blocks) && nsig !== lastAutoSig && autoReadN < 3) {
             /* 상담사가 본문을 직접 고쳤다면 덮지 않는다 — 작성 중인 내용을 날리는 게
              * 이전 티켓 내용을 잠깐 더 보는 것보다 훨씬 나쁘다. 표시만 하고 판단을 넘긴다. */
             if (contentBox.value.trim() === lastAutoContent.trim()) {
+              autoReadN++;
+              lastAutoSig = nsig;
               applyBlocks(nb);
               markContentStale(false);
               try { renderMents(); } catch (e) {}
-              console.log('[HB] 인입 본문 갱신 — 티켓', nowTN, '블록', nb.length + '개');
+              console.log('[HB] 인입 본문 갱신 — 티켓', nowTN, '블록', nb.length + '개', '(자동 ' + autoReadN + '/3)');
+              if (autoReadN >= 3) console.warn('[HB] 자동 재읽기 3회 도달 — 이 티켓은 여기서 멈춥니다. 필요하면 🔄 다시 읽기를 눌러주세요.');
               toast('📋 인입 본문을 다시 읽었습니다');
             } else {
               markContentStale(true);
@@ -2693,8 +2735,10 @@
         console.log('[HB] 외부 ID 지연 수집 —', z);
       }, 5000);
       // 다시 읽기 = 실패 기록 지우고 강제 재읽기 (파트너/이용자 수동 토글은 유지)
+      console.log('%c[HB] 젠데스크 패널 빌드 완료 v' + HB_APP_VER, 'color:#0a7d72;font-weight:bold;');
       g('hb_refresh').onclick = () => {
         failedTN = ''; healTries = 0;
+        autoReadN = 0; autoReadTN = ''; lastAutoSig = '';   // 수동 재읽기는 자동 카운터를 리셋한다
         markContentStale(false);
         lastAutoContent = contentBox.value;   // 수동 재읽기는 편집 내용을 덮어써도 된다는 뜻
         refreshForTicket();
@@ -2723,7 +2767,11 @@
         });
         document.addEventListener('mouseup', () => { if (dragging) { dragging = false; saveGeo(); } });
       })();
-    });
+    } catch (err) {
+      console.error('[HB] 젠데스크 패널 빌드 실패 —', err);
+      try { toast('🎫 허니베어 패널을 띄우지 못했습니다 — F12 콘솔을 확인해주세요'); } catch (e) {}
+    } });
+
   }
 
     /* ══ 꿀통 양식 (원본 honey.html 팝업부 그대로 + 봉투 어댑터) ══
@@ -4923,6 +4971,8 @@ function clearIds(keepMsgData){
   function toast(msg) {
     onReady(() => {
       const t = el('div', 'position:fixed;left:50%;bottom:76px;transform:translateX(-50%);z-index:1000001;background:#0a7d72;color:#fff;padding:8px 16px;border-radius:20px;font-size:12.5px;font-weight:bold;box-shadow:0 4px 14px rgba(0,0,0,.25);font-family:-apple-system,sans-serif;', msg);
+      // id 를 붙여야 hbPageText 가 걸러낸다 — 안 그러면 토스트 문구가 인입 본문으로 되읽힌다
+      t.id = 'hb_toast';
       document.body.appendChild(t);
       setTimeout(() => t.remove(), 2200);
     });
