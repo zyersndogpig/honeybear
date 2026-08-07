@@ -583,11 +583,12 @@
       return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
     }
     /* ── 운행 타임스탬프 수집 ──────────────────────────────────────────────
-     * ⚠️ 실제 어드민 응답의 정확한 필드명을 확인하지 못했다. 알려진 후보를 먼저 보고
-     *    없으면 이름 패턴으로 훑는다. 무엇을 잡았고 응답에 어떤 At 필드가 있었는지
-     *    콘솔에 남기므로, 실제 응답 한 번만 보면 아래 배열을 정확히 좁힐 수 있다. */
+     * 실제 /api/rideReservations/:id 응답(2026.08 덤프)에서 확인된 이름:
+     *   acceptedAt · cancelledAt(L 두 개) · createdAt · expectedPickUpAt
+     * 출발지 도착·운송 완료는 예약 응답에 없고 라이드 쪽에만 있다 → enrichCase 가 보강한다.
+     * 이름이 다른 응답을 만날 때를 대비해 확인된 키를 먼저 보고, 없으면 패턴으로 훑는다. */
     function harvestTimes(o, tag) {
-      const out = { accepted: 0, arrived: 0, canceled: 0, finished: 0, pickup: 0 };
+      const out = { called: 0, accepted: 0, arrived: 0, boarded: 0, canceled: 0, finished: 0, pickup: 0 };
       if (!o || typeof o !== 'object') return out;
       const ep = v => (typeof v === 'number' && v > 1e11 && v < 4e12) ? v : 0;
       const atKeys = Object.keys(o).filter(k => /At$/.test(k) && ep(o[k]));
@@ -597,13 +598,15 @@
         const k2 = atKeys.find(k => re.test(k) && !(exclude && exclude.test(k)));
         return k2 ? o[k2] : 0;
       };
+      out.called   = pick(['createdAt', 'requestedAt'], /^created|request/i);
       out.accepted = pick(['acceptedAt', 'assignedAt', 'matchedAt', 'dispatchedAt', 'driverAssignedAt'],
                           /accept|assign|match|dispatch/i);
       /* 주의: 'arrivedAt' 은 기존 apiDurationMin 에서 하차(종료) 후보로도 쓰인다.
        * 여기선 출발지 도착이므로 origin/pickup/waiting 계열을 먼저 보고 목적지 계열은 제외한다. */
       out.arrived  = pick(['originArrivedAt', 'arrivedAtOriginAt', 'pickUpArrivedAt', 'driverArrivedAt', 'waitingStartedAt'],
                           /arriv|waiting/i, /drop|destination|finish|complet/i);
-      out.canceled = pick(['canceledAt', 'cancelledAt'], /cancel/i);
+      out.canceled = pick(['cancelledAt', 'canceledAt'], /cancel/i);
+      out.boarded  = pick(['boardedAt', 'pickedUpAt', 'onBoardAt', 'ridingStartedAt'], /board|pickedUp|riding/i);
       out.finished = pick(['droppedOffAt', 'dropOffAt', 'finishedAt', 'completedAt', 'endedAt'],
                           /drop|finish|complet|end/i);
       out.pickup   = pick(['expectedPickUpAt', 'pickUpAt', 'reservedAt'], /expectedPickUp|pickUp/i);
@@ -679,7 +682,19 @@
 
     function cancelReasonOf(j) {
       return (j && (j.cancelReasonText || j.cancelReason || j.cancellationReason ||
+                    j.cancellationCause || j.cancellationReasonType ||
                     (j.cancel && j.cancel.reason) || '')) || '';
+    }
+    /* 라인업 코드 → 한글. 실제 응답 확인값: rideType:'NXT', driver.type:'NXT'.
+     * ⚠️ 예약 응답의 j.type 은 'RESERVATION_CALL'(호출 종류)이라 라인업이 아니다 —
+     *    여기에 j.type 을 먼저 물리면 전부 오판한다. rideType → driver.type 순으로 본다. */
+    function lineupOf(j) {
+      if (!j) return '';
+      const code = String(j.rideType || (j.driver && j.driver.type) || j.type || '').toUpperCase();
+      if (/PLUS|PREMIUM|DTX/.test(code)) return '플러스';
+      if (/LITE/.test(code)) return '라이트';
+      if (/NXT|NEXT/.test(code)) return '넥스트';
+      return _isPlusOf(j.driver, j.rideType || j.type) ? '플러스' : '';
     }
 
     function apiOf(re) {
@@ -936,8 +951,7 @@
           if (j.surgePercentage) p.surge = j.surgePercentage;
           if (j.cost) p.total = j.cost;
           const tm = harvestTimes(j, '보강>라이드');
-          const lu = _isPlusOf(j.driver, j.type) ? '플러스'
-                   : (/LITE/i.test(j.type || '') ? '라이트' : (j.type ? '넥스트' : ''));
+          const lu = lineupOf(j);
           return {
             fare: p,
             ids: { driver: (j.driver && j.driver.id) || '' },
@@ -1065,7 +1079,7 @@
             pickup:   tRe.pickup || (j.expectedPickUpAt || 0)
           });
           c.flags.cancelReason = cancelReasonOf(j) || (j.ride ? cancelReasonOf(j.ride) : '') || getRowValue('취소 사유') || '';
-          c.flags.lineup = domLineup();
+          c.flags.lineup = domLineup() || lineupOf(j);
         }
         return c;
       }
@@ -1117,7 +1131,7 @@
           || _thirdTagOfPayment(j.payment && j.payment.paymentMethod);
         c.flags.isPlus = _isPlusOf(j.driver, j.type);
         c.times = mergeTimes(harvestTimes(j, '라이드'));
-        c.flags.lineup = domLineup();
+        c.flags.lineup = domLineup() || lineupOf(j);
         c.flags.cancelReason = cancelReasonOf(j) || getRowValue('취소 사유') || '';
         return c;
       }
