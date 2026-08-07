@@ -1505,22 +1505,30 @@
       /* ── 시각·경과 토큰 ─────────────────────────────────────────────────
        * 값이 없으면 빈 문자열 → fillTokens 가 [   ] 로 떨어뜨린다(기존 동작 유지). */
       const TM = c.times || {};
+      const hm = ms => { if (!ms) return ''; const d = new Date(Number(ms));
+        return isNaN(d.getTime()) ? '' : (d.getHours() + '시 ' + d.getMinutes() + '분'); };
       const gap = (a, b) => {
         if (!(a && b && b > a)) return '';
         const sec = Math.floor((b - a) / 1000);
         return Math.floor(sec / 60) + '분 ' + String(sec % 60).padStart(2, '0') + '초';
       };
-      /* 예약 취소 수수료 구간 — 이용약관 제10조 제2항 제1호 표 그대로 */
+      /* 예약 취소 수수료 구간 — 이용약관 제10조 제2항 제1호 표 그대로.
+       * line 은 문장에 그대로 끼울 완성형 절. 노쇼는 '출발 예정 시각으로부터 …' 형태가
+       * 성립하지 않아(취소가 탑승시각 이후) 절 전체를 따로 둔다. */
       const RESV_BANDS = [
-        { h: 12, band: '12시간 이전', pct: 0,  cap: 0 },
-        { h: 9,  band: '12시간 ~ 9시간 이전', pct: 10, cap: 5000 },
-        { h: 2,  band: '9시간 ~ 2시간 이전',  pct: 50, cap: 10000 },
-        { h: 0,  band: '2시간 이내',          pct: 80, cap: 20000 }
+        { band: '12시간 이전',          pct: 0,   cap: 0,     line: '출발 예정 시각으로부터 12시간 이전 취소로' },
+        { band: '12시간 ~ 9시간 이전',  pct: 10,  cap: 5000,  line: '출발 예정 시각으로부터 12시간 ~ 9시간 이전 취소로' },
+        { band: '9시간 ~ 2시간 이전',   pct: 50,  cap: 10000, line: '출발 예정 시각으로부터 9시간 ~ 2시간 이전 취소로' },
+        { band: '2시간 이내',           pct: 80,  cap: 20000, line: '출발 예정 시각으로부터 2시간 이내 취소로' },
+        { band: '탑승 시각 10분 경과',  pct: 100, cap: 30000,
+          line: '회원 사정으로 탑승하지 않거나, 출발 예정 시각 10분 이후 연락 두절 또는 미탑승으로' }
       ];
       let RB = null;
       if (TM.pickup && TM.canceled) {
         const h = (TM.pickup - TM.canceled) / 3600000;
-        RB = h >= 12 ? RESV_BANDS[0] : h >= 9 ? RESV_BANDS[1] : h >= 2 ? RESV_BANDS[2] : RESV_BANDS[3];
+        /* 취소가 탑승 예정 시각을 10분 넘겨 일어났으면 노쇼 구간이다 (h 가 -1/6 미만) */
+        RB = h < -(10 / 60) ? RESV_BANDS[4]
+           : h >= 12 ? RESV_BANDS[0] : h >= 9 ? RESV_BANDS[1] : h >= 2 ? RESV_BANDS[2] : RESV_BANDS[3];
       }
       const noshowItem = (c.fare.items || []).find(i => /미탑승/.test(i.label));
       const TIME_T = {
@@ -1534,8 +1542,11 @@
         cancelReason: (c.flags && c.flags.cancelReason) || '',
         noshowFee:    noshowItem ? won(noshowItem.amt) : '',
         resvBand:     RB ? RB.band : '',
+        resvBandLine: RB ? RB.line : '',
         resvPct:      RB ? (RB.pct + '%') : '',
-        resvCap:      RB && RB.cap ? RB.cap.toLocaleString() + '원' : ''
+        resvCap:      RB && RB.cap ? RB.cap.toLocaleString() + '원' : '',
+        /* '2시 27분' 형태 — 문장 안에 시각을 끼워 넣는 메크로 멘트용 */
+        acceptedHm: hm(TM.accepted), arrivedHm: hm(TM.arrived), canceledHm: hm(TM.canceled)
       };
       return {
         name: c.trip.name, dateTime: c.trip.dateTime,
