@@ -74,7 +74,10 @@
           fix: null,              // {old, new, items:[{label,from,to}]} — 요금정정 시
           loss: 0                 // 영업손실비
         },
-        flags: { isCash: false, isPlus: false, isFromResv: false, thirdParty: '' }
+        /* 운행 타임스탬프(epoch ms) — 취소·미탑승 수수료 방어 멘트용.
+         * 0이면 미수집. 구버전 봉투엔 이 키가 없으므로 읽는 쪽은 반드시 (c.times||{}) 로 감싼다. */
+        times: { accepted: 0, arrived: 0, canceled: 0, finished: 0, pickup: 0 },
+        flags: { isCash: false, isPlus: false, isFromResv: false, thirdParty: '', cancelReason: '' }
       };
     },
     loadCase() {
@@ -568,6 +571,93 @@
       const p = n => String(n).padStart(2, '0');
       return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
     }
+    /* 초까지 필요한 곳(배차 수락/도착/취소 시각)용 — fmtDT 는 분까지만 찍는다 */
+    function fmtDTS(ms) {
+      if (!ms) return '';
+      const d = new Date(Number(ms));
+      if (isNaN(d.getTime())) return '';
+      const p = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + ' ' +
+             p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+    }
+
+    /* ── 운행 타임스탬프 수집 ──────────────────────────────────────────────
+     * ⚠️ 실제 어드민 응답의 정확한 필드명을 확인하지 못했다. 알려진 후보를 먼저 보고
+     *    없으면 이름 패턴으로 훑는다. 무엇을 잡았고 응답에 어떤 At 필드가 있었는지
+     *    콘솔에 남기므로, 실제 응답 한 번만 보면 아래 배열을 정확히 좁힐 수 있다. */
+    function harvestTimes(o, tag) {
+      const out = { accepted: 0, arrived: 0, canceled: 0, finished: 0, pickup: 0 };
+      if (!o || typeof o !== 'object') return out;
+      const ep = v => (typeof v === 'number' && v > 1e11 && v < 4e12) ? v : 0;
+      const atKeys = Object.keys(o).filter(k => /At$/.test(k) && ep(o[k]));
+      const pick = (known, re, exclude) => {
+        const k1 = known.find(k => ep(o[k]));
+        if (k1) return o[k1];
+        const k2 = atKeys.find(k => re.test(k) && !(exclude && exclude.test(k)));
+        return k2 ? o[k2] : 0;
+      };
+      out.accepted = pick(['acceptedAt', 'assignedAt', 'matchedAt', 'dispatchedAt', 'driverAssignedAt'],
+                          /accept|assign|match|dispatch/i);
+      /* 주의: 'arrivedAt' 은 기존 apiDurationMin 에서 하차(종료) 후보로도 쓰인다.
+       * 여기선 출발지 도착이므로 origin/pickup/waiting 계열을 먼저 보고 목적지 계열은 제외한다. */
+      out.arrived  = pick(['originArrivedAt', 'arrivedAtOriginAt', 'pickUpArrivedAt', 'driverArrivedAt', 'waitingStartedAt'],
+                          /arriv|waiting/i, /drop|destination|finish|complet/i);
+      out.canceled = pick(['canceledAt', 'cancelledAt'], /cancel/i);
+      out.finished = pick(['droppedOffAt', 'dropOffAt', 'finishedAt', 'completedAt', 'endedAt'],
+                          /drop|finish|complet|end/i);
+      out.pickup   = pick(['expectedPickUpAt', 'pickUpAt', 'reservedAt'], /expectedPickUp|pickUp/i);
+      console.log('[HB] 운행 타임스탬프(' + tag + ') —', out, '/ 응답 내 At 필드:', atKeys);
+      return out;
+    }
+    /* ── 어드민 표에서 시각 직접 읽기 ──────────────────────────────────────
+     * API 필드명 추측이 빗나가도 화면에 보이는 값은 확실하다. getRowValue 는 이미
+     * '호출 시각'·'요청 탑승 일시'로 검증된 경로이므로 같은 방식으로 후보 라벨을 훑는다.
+     * 못 찾으면 표의 전체 라벨 목록을 콘솔에 남긴다 — 한 번만 보면 후보를 정확히 좁힐 수 있다. */
+    function parseKDT(txt) {
+      if (!txt) return 0;
+      const m = String(txt).match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})[\sT]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      if (!m) return 0;
+      const d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+      const t = d.getTime();
+      return isNaN(t) ? 0 : t;
+    }
+    function domRowTime(labels) {
+      for (const L of labels) { const t = parseKDT(getRowValue(L)); if (t) return t; }
+      return 0;
+    }
+    function harvestTimesDom() {
+      const out = {
+        accepted: domRowTime(['배차 수락 시각', '배차 수락', '배차 시각', '수락 시각', '배차 완료 시각']),
+        arrived:  domRowTime(['출발지 도착 시각', '출발지 도착', '도착 시각', '대기 시작 시각', '탑승지 도착 시각']),
+        canceled: domRowTime(['취소 시각', '취소 일시', '호출 취소 시각']),
+        finished: domRowTime(['운행 종료 시각', '하차 시각', '종료 시각', '운행 완료 시각']),
+        pickup:   domRowTime(['요청 탑승 일시', '탑승 예정 시각', '탑승 시각'])
+      };
+      if (!out.accepted && !out.arrived && !out.canceled) {
+        const labels = [...document.querySelectorAll('tr')]
+          .map(tr => (tr.innerText.split('\t')[0] || '').trim())
+          .filter(v => v && v.length < 20);
+        console.log('[HB] 어드민 표에서 시각 라벨 미발견. 현재 표의 라벨 목록:', labels);
+      }
+      return out;
+    }
+    /* API 결과에 DOM 값을 덧대 메운다 (API 우선, 빈 칸만 DOM 으로) */
+    function mergeTimes(api) {
+      const dom = harvestTimesDom();
+      const out = Object.assign({}, api);
+      let filled = [];
+      ['accepted', 'arrived', 'canceled', 'finished', 'pickup'].forEach(k => {
+        if (!out[k] && dom[k]) { out[k] = dom[k]; filled.push(k); }
+      });
+      if (filled.length) console.log('[HB] 시각 DOM 폴백으로 보강 —', filled.join(', '));
+      return out;
+    }
+
+    function cancelReasonOf(j) {
+      return (j && (j.cancelReasonText || j.cancelReason || j.cancellationReason ||
+                    (j.cancel && j.cancel.reason) || '')) || '';
+    }
+
     function apiOf(re) {
       const k = Object.keys(_lastApi).find(k => re.test(k));
       return k ? _lastApi[k].json : null;
@@ -921,6 +1011,19 @@
         c.flags.thirdParty = _thirdTag(j.user)
           || _thirdTagOfPayment(j.paymentMethod);
         c.flags.isPlus = _isPlusOf(j.driver, j.rideType);
+        {
+          const tRe = harvestTimes(j, '예약');
+          const tRd = j.ride ? harvestTimes(j.ride, '예약>라이드') : null;
+          // 배차/도착/취소는 라이드 쪽이 실체, 탑승예정은 예약 쪽이 실체 → 필드별로 우선순위를 다르게 둔다
+          c.times = mergeTimes({
+            accepted: (tRd && tRd.accepted) || tRe.accepted || 0,
+            arrived:  (tRd && tRd.arrived)  || tRe.arrived  || 0,
+            canceled: (tRd && tRd.canceled) || tRe.canceled || 0,
+            finished: (tRd && tRd.finished) || tRe.finished || 0,
+            pickup:   tRe.pickup || (j.expectedPickUpAt || 0)
+          });
+          c.flags.cancelReason = cancelReasonOf(j) || (j.ride ? cancelReasonOf(j.ride) : '') || getRowValue('취소 사유') || '';
+        }
         return c;
       }
 
@@ -970,6 +1073,8 @@
           || _thirdTagOfPayment(j.paymentProfile && j.paymentProfile.paymentMethod)
           || _thirdTagOfPayment(j.payment && j.payment.paymentMethod);
         c.flags.isPlus = _isPlusOf(j.driver, j.type);
+        c.times = mergeTimes(harvestTimes(j, '라이드'));
+        c.flags.cancelReason = cancelReasonOf(j) || getRowValue('취소 사유') || '';
         return c;
       }
       return null;
@@ -1395,6 +1500,42 @@
       const dt = c.trip.dateTime || '[   ]';
       const route = (!c.trip.departure && !c.trip.destination) ? '[   ]'
         : '[' + (c.trip.departure || '   ') + ' > ' + (c.trip.destination || '   ') + ']';
+
+      /* ── 시각·경과 토큰 ─────────────────────────────────────────────────
+       * 값이 없으면 빈 문자열 → fillTokens 가 [   ] 로 떨어뜨린다(기존 동작 유지). */
+      const TM = c.times || {};
+      const gap = (a, b) => {
+        if (!(a && b && b > a)) return '';
+        const sec = Math.floor((b - a) / 1000);
+        return Math.floor(sec / 60) + '분 ' + String(sec % 60).padStart(2, '0') + '초';
+      };
+      /* 예약 취소 수수료 구간 — 이용약관 제10조 제2항 제1호 표 그대로 */
+      const RESV_BANDS = [
+        { h: 12, band: '12시간 이전', pct: 0,  cap: 0 },
+        { h: 9,  band: '12시간 ~ 9시간 이전', pct: 10, cap: 5000 },
+        { h: 2,  band: '9시간 ~ 2시간 이전',  pct: 50, cap: 10000 },
+        { h: 0,  band: '2시간 이내',          pct: 80, cap: 20000 }
+      ];
+      let RB = null;
+      if (TM.pickup && TM.canceled) {
+        const h = (TM.pickup - TM.canceled) / 3600000;
+        RB = h >= 12 ? RESV_BANDS[0] : h >= 9 ? RESV_BANDS[1] : h >= 2 ? RESV_BANDS[2] : RESV_BANDS[3];
+      }
+      const noshowItem = (c.fare.items || []).find(i => /미탑승/.test(i.label));
+      const TIME_T = {
+        acceptedAt: fmtDTS(TM.accepted), arrivedAt: fmtDTS(TM.arrived),
+        canceledAt: fmtDTS(TM.canceled), finishedAt: fmtDTS(TM.finished),
+        pickupAt:   fmtDTS(TM.pickup),
+        /* 탑승 대기 시작(출발지 도착) → 취소. 미탑승 수수료 멘트의 '00분 00초' */
+        waitGap:      gap(TM.arrived, TM.canceled),
+        /* 배차 수락 → 취소. 취소 수수료 멘트의 '0분 0초' */
+        acceptGap:    gap(TM.accepted, TM.canceled),
+        cancelReason: (c.flags && c.flags.cancelReason) || '',
+        noshowFee:    noshowItem ? won(noshowItem.amt) : '',
+        resvBand:     RB ? RB.band : '',
+        resvPct:      RB ? (RB.pct + '%') : '',
+        resvCap:      RB && RB.cap ? RB.cap.toLocaleString() + '원' : ''
+      };
       return {
         name: c.trip.name, dateTime: c.trip.dateTime,
         departure: c.trip.departure, destination: c.trip.destination,
@@ -1415,7 +1556,12 @@
         fixLines: c.fare.fix ? (c.fare.fix.items || []).map(i => i.label + ' : ' + won(i.from) + ' > ' + won(i.to)).join('\n') : '',
         fixItems: c.fare.fix && (c.fare.fix.items || []).length ? ('\n' + (c.fare.fix.items || []).map(i => i.label + ' : ' + won(i.from) + ' > ' + won(i.to)).join('\n')) : '',
         fixIntro: '', lossPara: '',
-        rideLine: (IS_RESV ? (dt + ' 탑승하시어') : (dt + '에 호출하시어')) + ' ' + route
+        rideLine: (IS_RESV ? (dt + ' 탑승하시어') : (dt + '에 호출하시어')) + ' ' + route,
+        /* 아직 탑승하지 않은 건(미탑승·취소)에도 쓸 수 있는 중립 표현.
+         * rideLine 은 '탑승하시어/호출하시어 … 이동하신' 전제라 노쇼 문의에 그대로 못 쓴다. */
+        caseLine: (IS_RESV ? (dt + ' 탑승 요청하신 ' + route + ' 예약 건')
+                           : (dt + '에 요청하신 ' + route + ' 호출 건')),
+        ...TIME_T
       };
     }
     function fillTokens(text, c) {
@@ -3382,6 +3528,31 @@ function clearIds(keepMsgData){
     };
   }
 
+  /* ── 봉투 요금 폴백 ───────────────────────────────────────────────────
+   * 🐻 꿀빠는 문자를 꿀통 없이 바로 누르면 fix 탭 기본값이 DOM 파싱에만 의존한다.
+   * hbSpreadCaseToTada 가 tada_total_fare/tada_est_fare 를 써주긴 하지만 읽는 쪽이 없었고,
+   * 꿀통이 쓰는 tada_fix_* 키도 없어 hbFixCtx().match 가 false → 기존/정정 금액이 빈칸으로 떴다.
+   * API 가로채기로 잡은 봉투 값(adjustedPriceTotal 반영분 포함)이 DOM보다 정확하므로
+   * 파싱이 비었을 때만 메운다. 현재 페이지 ID와 일치할 때만 — 다른 건 값이 새는 것 차단. */
+  function hbEnvFare(){
+    try{
+      const c=HBStore.loadCase();
+      if(!(c&&c.ts)) return {total:0,est:0};
+      const cRid=location.pathname.match(/rides\/([A-Za-z0-9]+)/)?.[1]||'';
+      const cRsv=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||'';
+      const ok=(cRid&&c.ids.ride===cRid)||(cRsv&&c.ids.resv===cRsv);
+      if(!ok) return {total:0,est:0};
+      return {total:Number(c.fare.total)||0, est:Number(c.fare.est)||0};
+    }catch(e){ return {total:0,est:0}; }
+  }
+  function hbApplyEnvFare(tag){
+    const e=hbEnvFare();
+    let used=[];
+    if((!realPrice||realPrice==="0")&&e.total){realPrice=String(e.total);used.push('실제='+e.total);}
+    if((!estPrice ||estPrice ==="0")&&e.est  ){estPrice =String(e.est);  used.push('예상='+e.est);}
+    if(used.length) console.log('[HB] 봉투 요금 폴백('+tag+') —', used.join(' / '));
+  }
+
   // ── 꿀통 연동: tada_msg_data 확인 ────────────────────────────────────
   // 꿀통에서 라이드/예약 처리하며 저장한 문자정보가 현재 페이지와 일치하면
   // 라이드↔예약 2단계 과정 없이 바로 사용 (내가 직접 꿀통까지 한 케이스)
@@ -3711,6 +3882,9 @@ function clearIds(keepMsgData){
       }
     }
 
+    // DOM 파싱이 비었으면 봉투로 메운다 (저장 전에 적용해야 예약 재실행 때도 값이 살아있다)
+    hbApplyEnvFare('라이드');
+
     // ── 예약 파생 라이드면 요금 파싱 완료 후 저장 & return ─────────────────
     if(info.isFromResv){
       info.savedRealPrice=realPrice;
@@ -3726,6 +3900,7 @@ function clearIds(keepMsgData){
   if(isReservation&&!estPrice&&info.resEstPrice){
     estPrice=info.resEstPrice;
   }
+  hbApplyEnvFare(isReservation?'예약':'라이드(최종)');
 
   // ── UI 생성 ──────────────────────────────────────────────────────────
   const overlay=document.createElement("div");
@@ -4671,8 +4846,12 @@ function clearIds(keepMsgData){
   function richHtmlOf(text) {
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     /* [텍스트](URL) → <a>. 대괄호 바로 뒤에 '(' 가 와야만 매칭되므로
-     * 기존 [   ] 채움 표시나 선택 문단 [..] 과는 충돌하지 않는다. */
-    const link = s => s.replace(/\[([^\][]+)\]\((https?:\/\/[^\s)]+)\)/g,
+     * 기존 [   ] 채움 표시나 선택 문단 [..] 과는 충돌하지 않는다.
+     * ⚠️ 라벨 안에 대괄호가 한 번 더 들어가는 실제 도움말 제목이 있다:
+     *    [[일반 예약] 요금&수수료 정책](URL)
+     *    기존 [^\][]+ 는 이걸 못 잡아 링크가 안 걸리고 URL 이 본문에 알몸으로 노출됐다.
+     *    → 라벨에 중첩 대괄호 1단계까지 허용한다. */
+    const link = s => s.replace(/\[((?:[^\][]|\[[^\][]*\])+)\]\((https?:\/\/[^\s)]+)\)/g,
       (w, label, url) => '<a href="' + url + '" target="_blank">' + label + '</a>');
     const isRow = l => /^\s*\|.*\|\s*$/.test(l);
     const isSep = l => /^\s*\|[\s:|-]+\|\s*$/.test(l);
