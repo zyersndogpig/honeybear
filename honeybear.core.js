@@ -18,12 +18,46 @@
 
   /* 도구 버전 — 콘솔·어드민 메뉴·젠데스크 패널에서 같은 값을 쓴다.
    * 팀원이 "내 게 최신인가"를 F12 없이 확인할 수 있어야 한다. */
-  const HB_APP_VER = '1.0.1';
+  const HB_APP_VER = '1.1.1';
+  /* 패치 노트 — 맨 앞이 최신. 버전 배지에 마우스를 올리면 이 내용이 뜬다.
+   * 로더가 이전 core 를 캐시해서 한 박자 늦게 반영되므로, 팀원이 지금 무엇을
+   * 물고 있는지 버전으로 바로 구분할 수 있어야 한다. */
+  const HB_PATCH_NOTES = [
+    ['1.1.1', [
+      '케이스 유효시간 2시간 도입 — 지난 봉투는 토큰을 비워 오래된 값이 답변에 섞이지 않게',
+      '봉투 스키마 v4 (times/lineup) — 구버전 봉투 자동 폐기',
+      'mergeCase 에 times 누락 수정 — 라이드에서 잡은 시각이 예약 재실행 때 사라지던 문제',
+      '손상된 tada_res_data / tada_ride_data 파싱 시 스크립트가 죽던 문제 방어'
+    ]],
+    ['1.1.0', [
+      '메크로 5종을 「메크로모음」 폴더로 묶고 실시간/예약 구분 추천(★) 추가',
+      '취소·미탑승 수수료 방어 멘트 신설, 예약 취소 구간·노쇼 자동 판정',
+      '운행 시각 수집(배차 수락·출발지 도착·탑승 완료·운송 완료·취소) + 라인업별 수수료',
+      '오염 영손비 멘트를 차량 내부/카시트 6종 변형으로 분리',
+      'FAB 드래그 화면 이탈 방지 + 창 크기 변경 시 자동 복귀',
+      '젠데스크 무한 재읽기 수정(패널 텍스트를 인입으로 되읽던 고리)',
+      '요금정정 탭이 꿀통 없이 실행하면 비던 문제 수정(봉투 폴백)',
+      '도움말 링크가 [[일반 예약] …] 처럼 대괄호 중첩이면 안 걸리던 문제 수정'
+    ]],
+    ['1.0.1', ['이전 버전']]
+  ];
+  const HB_NOTES_TEXT = HB_PATCH_NOTES
+    .map(([v, list]) => 'v' + v + '\n' + list.map(x => ' · ' + x).join('\n')).join('\n\n');
 
   // 실행 확인용 비콘 — F12 콘솔에 이 줄이 없으면 스크립트가 아예 실행되지 않은 것
   console.log('%c[HB] 허니베어 core v' + HB_APP_VER + ' 로드됨 —', 'color:#0a7d72;font-weight:bold;', location.hostname);
+  try {
+    console.groupCollapsed('%c[HB] v' + HB_APP_VER + ' 패치 노트', 'color:#0a7d72;');
+    (HB_PATCH_NOTES[0][1] || []).forEach(x => console.log('· ' + x));
+    console.groupEnd();
+  } catch (e) {}
 
-  const HB_VER = 3; // 케이스 봉투 스키마 버전 (v3: fare.paid/discount 추가)
+  const HB_VER = 4; // 케이스 봉투 스키마 버전 (v4: times.* / flags.lineup 추가)
+  /* 봉투 유효시간(분). 이걸 넘으면 토큰을 아예 비워 [   ] 로 떨어뜨린다.
+   * 배지의 '오래됨'(30분) 은 색만 바꿀 뿐 사용을 막지 않아서, 어제 캡처한 값이
+   * 오늘 다른 고객 답변에 그대로 박힐 수 있었다 — 오안내 중 가장 치명적인 경로다. */
+  const HB_CASE_TTL_MIN = 120;
+  const hbCaseExpired = c => !!(c && c.ts && (Date.now() - c.ts > HB_CASE_TTL_MIN * 60000));
 
   /* ── 오염 영업손실비 종류표 ────────────────────────────────────────────
    * 꿀통 드롭다운과 꿀빠는 곰 loss 탭이 이 표 하나만 본다.
@@ -123,6 +157,10 @@
       dst[k] = v;
     });
     fill(out.ids, cur.ids); fill(out.trip, cur.trip); fill(out.fare, cur.fare);
+    // times 가 빠져 있었다 — 라이드에서 잡은 배차/도착/완료 시각이
+    // 예약 페이지 재실행 때 통째로 사라졌다. 구버전 봉투 대비 기본값도 채운다.
+    if (!out.times) out.times = {};
+    fill(out.times, cur.times || {});
     // flags 도 빈 값 보호. Object.assign 이면 유저 페이지에서 잡은 써드파티 태그가
     // 이후 라이드 페이지 캡처의 thirdParty:'' 로 지워진다.
     // 단 boolean 은 false 가 유의미한 값이므로 그대로 반영한다.
@@ -202,15 +240,49 @@
       }
       // 저장된 위치 복원 (없으면 기본 우하단 유지)
       if (c.left != null && c.top != null) {
-        const L = Math.min(Math.max(0, c.left), Math.max(0, innerWidth - c.size));
-        const T = Math.min(Math.max(0, c.top), Math.max(0, innerHeight - c.size));
         node.style.right = 'auto'; node.style.bottom = 'auto';
-        node.style.left = L + 'px'; node.style.top = T + 'px';
+        const m = 8;
+        node.style.left = Math.max(m, Math.min(c.left, Math.max(m, innerWidth - c.size - m))) + 'px';
+        node.style.top = Math.max(m, Math.min(c.top, Math.max(m, innerHeight - c.size - m))) + 'px';
       }
     }
+    /* 화면 밖으로 나가지 않게 가둔다.
+     * 기존엔 Math.max(0, …) 뿐이라 왼쪽·위만 막히고 오른쪽·아래로는 끝없이 나갔다.
+     * 한 번 나가면 저장까지 돼서 새로고침해도 안 돌아오고, 버튼을 영영 못 잡는다.
+     * 가장자리에 8px 은 남겨 완전히 붙지 않게 한다. */
+    const clamp = (node, L, T) => {
+      const w = node.offsetWidth || 46, h = node.offsetHeight || 46, m = 8;
+      return {
+        left: Math.max(m, Math.min(L, Math.max(m, innerWidth - w - m))),
+        top: Math.max(m, Math.min(T, Math.max(m, innerHeight - h - m)))
+      };
+    };
+    /* 드래그 중 실시간 적용 */
+    const moveTo = (node, L, T) => {
+      const c = clamp(node, L, T);
+      node.style.left = c.left + 'px'; node.style.top = c.top + 'px';
+    };
     const savePos = (node, role) => {
       const r = node.getBoundingClientRect();
-      save(role, { left: Math.round(r.left), top: Math.round(r.top) });
+      const c = clamp(node, r.left, r.top);
+      node.style.left = c.left + 'px'; node.style.top = c.top + 'px';
+      save(role, { left: Math.round(c.left), top: Math.round(c.top) });
+    };
+    /* 창을 줄이면 버튼이 화면 밖에 남는다 — 리사이즈마다 다시 가둔다 */
+    const watchResize = (node, role) => {
+      let t = null;
+      addEventListener('resize', () => {
+        clearTimeout(t);
+        t = setTimeout(() => {
+          if (node.style.left === '' || node.style.left === 'auto') return;  // 기본 위치면 CSS 에 맡긴다
+          const r = node.getBoundingClientRect();
+          const c = clamp(node, r.left, r.top);
+          if (Math.round(c.left) !== Math.round(r.left) || Math.round(c.top) !== Math.round(r.top)) {
+            node.style.left = c.left + 'px'; node.style.top = c.top + 'px';
+            save(role, { left: Math.round(c.left), top: Math.round(c.top) });
+          }
+        }, 150);
+      });
     };
 
     /* 우클릭 설정 팝업 — 변경 즉시 미리보기 + 저장 */
@@ -357,13 +429,14 @@
     function attach(node, role) {
       apply(node, role);
       node.addEventListener('contextmenu', e => { e.preventDefault(); openSettings(node, role); });
+      watchResize(node, role);
       node.title = (node.title || '') + ' · 우클릭으로 꾸미기';
       try {
         GM_registerMenuCommand('🎨 플로팅 버튼 초기화', () => { reset(role); apply(node, role); toast('버튼 설정 초기화됨'); });
       } catch (e) {}
     }
     const locked = role => !!load(role).lock;
-    return { attach, apply, savePos, openSettings, locked };
+    return { attach, apply, savePos, moveTo, openSettings, locked };
   })();
 
   const IS_ADMIN = /admin\.tadatada\.(in|com)$/.test(location.hostname);
@@ -1472,7 +1545,9 @@
         wrap.appendChild(mk('🍯 꿀통양식', () => { try { hbRunHoneyForm(); } catch (e) { console.warn('[HB] 꿀통 오류:', e.message); toast('🍯 실행 오류 — 콘솔 확인'); } }));
         wrap.appendChild(mk('🐻 꿀빠는 문자', () => { try { hbRunBeeForm(); } catch (e) { console.warn('[HB] 꿀빠는곰 오류:', e.message); toast('🐻 실행 오류 — 콘솔 확인'); } }));
         // 버전 표시 — 팀원이 최신 스크립트를 받았는지 F12 없이 확인할 수 있게
-        wrap.appendChild(el('div', 'font-size:9.5px;color:#a3aba6;text-align:right;margin-top:2px;', '허니베어 v' + HB_APP_VER));
+        const _v = el('div', 'font-size:9.5px;color:#a3aba6;text-align:right;margin-top:2px;cursor:help;', '허니베어 v' + HB_APP_VER);
+        _v.title = HB_NOTES_TEXT;
+        wrap.appendChild(_v);
         document.body.appendChild(wrap);
         const off = e => { if (!wrap.contains(e.target) && e.target !== fab) { wrap.remove(); document.removeEventListener('mousedown', off); } };
         setTimeout(() => document.addEventListener('mousedown', off), 0);
@@ -1498,8 +1573,7 @@
         if (!dragging) return;
         if (HBFab.locked('admin')) return;   // 고정 상태: 이동만 막고 클릭은 그대로 살린다
         if (Math.abs(e.clientX - sx) > 3 || Math.abs(e.clientY - sy) > 3) moved = true;
-        fab.style.left = Math.max(0, dx + e.clientX - sx) + 'px';
-        fab.style.top = Math.max(0, dy + e.clientY - sy) + 'px';
+        HBFab.moveTo(fab, dx + e.clientX - sx, dy + e.clientY - sy);
       });
       document.addEventListener('mouseup', () => {
         if (dragging && !moved) openPicker();
@@ -1553,6 +1627,12 @@
 
     /* ── 토큰 치환 — 봉투에서 직접 ── */
     function tokensOf(c) {
+      /* 유효시간을 넘긴 봉투는 값을 하나도 내주지 않는다.
+       * 부분적으로 남기면 '요금만 옛날 건'처럼 더 알아채기 어려운 오류가 된다. */
+      if (hbCaseExpired(c)) {
+        console.warn('[HB] 케이스가 ' + HB_CASE_TTL_MIN + '분을 넘겨 토큰을 비웁니다 — 어드민에서 다시 캡처해주세요.');
+        c = HBStore.emptyCase();
+      }
       const toll = (c.fare.items || []).find(i => /톨게이트|통행료|톨/.test(i.label));
       const IS_RESV = c.trip.actionWord === '탑승' || c.trip.timeSrc === 'resv' || c.flags.isFromResv;
       const dt = c.trip.dateTime || '[   ]';
@@ -2018,9 +2098,13 @@
       let s = 0;
       (m.key || []).forEach(k => { if (txt.includes(norm(k))) s += 3; });
       (m.trig || []).forEach(k => { if (txt.includes(norm(k))) s += 1; });
-      if (m.mode && mode) s += (m.mode === mode) ? 4 : -6;
+      if (m.mode && mode && m.mode === mode) s += 4;   // 맞으면 위로. 어긋나도 감점하지 않는다.
       return s;
     }
+    /* 구분이 어긋나는 멘트인가 — 목록에는 그대로 두되 ★ 추천 표시만 뗀다.
+     * 실시간/예약은 수수료 체계가 아예 달라 잘못 고르면 그대로 오안내가 되지만,
+     * 캡처가 없거나 애매한 건도 있어서 상담사가 직접 고를 길은 열어둬야 한다. */
+    function modeOff(m, mode) { return !!(m.mode && mode && m.mode !== mode); }
 
     /* ── ID 대조 (젠데스크 페이지 ↔ 봉투) ── */
     function collectZdIds(snap) {
@@ -2135,6 +2219,9 @@
           #hb_zd_panel .cfold .arw{font-size:9px;color:var(--fg2);width:9px;}
           #hb_zd_panel .csum{font-weight:normal;font-size:10px;color:var(--fg2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
           #hb_zd_panel .chip.group{border-style:dashed;font-weight:bold;background:var(--bg2);}
+          /* 호출 구분이 다른 멘트 — 숨기지 않고 흐리게만. 눌러서 쓸 수는 있다. */
+          #hb_zd_panel .chip.modeoff{opacity:.45;}
+          #hb_zd_panel .chip.modeoff:hover{opacity:1;}
           #hb_zd_panel .gbox{display:flex;flex-wrap:wrap;gap:5px;width:100%;padding:6px 0 6px 8px;margin:1px 0 3px;border-left:2px solid var(--accLine);}
           #hb_zd_panel .body{padding:12px 14px;}
           #hb_zd_panel .card{border:1px solid var(--accLine);background:var(--cardBg);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;}
@@ -2173,7 +2260,7 @@
           #hb_zd_panel .opt{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--acc);cursor:pointer;margin:6px 0;}
           #hb_zd_panel input[type=checkbox]{accent-color:var(--acc);width:13px;height:13px;cursor:pointer;}
         </style>
-        <div class="h"><span>🎫</span><b>티켓 뷰</b><span class="tn">#${TN}</span><span class="led" id="hb_led" title="케이스 ID 대조 상태"><i></i>—</span><span style="font-size:9.5px;color:var(--fg3);">v${HB_APP_VER}</span><button class="gear" id="hb_gear" title="테마·색상">⚙</button><button class="x" id="hb_x">✕</button></div>
+        <div class="h"><span>🎫</span><b>티켓 뷰</b><span class="tn">#${TN}</span><span class="led" id="hb_led" title="케이스 ID 대조 상태"><i></i>—</span><span style="font-size:9.5px;color:var(--fg3);cursor:help;" title="${HB_NOTES_TEXT.replace(/"/g,'&quot;')}">v${HB_APP_VER}</span><button class="gear" id="hb_gear" title="테마·색상">⚙</button><button class="x" id="hb_x">✕</button></div>
         <div class="look" id="hb_look">
           <span>테마</span>
           <div class="seg" id="hb_theme"><button data-t="auto">자동</button><button data-t="light">밝게</button><button data-t="dark">어둡게</button></div>
@@ -2314,6 +2401,7 @@
         const c = HBStore.loadCase();
         const has = !!(c && c.ts);
         const stale = has && (Date.now() - c.ts > 30 * 60 * 1000);
+        const expired = hbCaseExpired(c);   // TTL 초과 → 토큰이 실제로 안 채워지는 상태
         const uSt = idStatus(c.ids.user, ZDIDS.user), dSt = idStatus(c.ids.driver, ZDIDS.driver);
         const mism = uSt === 'bad' || dSt === 'bad';
         /* ⚠️ 티켓은 이용자 '또는' 파트너 한쪽에서만 인입된다.
@@ -2354,6 +2442,9 @@
         ].concat(flags.length ? [['기타', flags.join(' · '), '']] : [])
           .map(r => `<div class="k">${r[0]}</div><div class="${r[2] || (r[1] ? '' : 'miss')}">${r[1] || '—'}</div>`).join('');
         const notes = [];
+        if (expired) notes.push(`<div class="note warn">
+          ⏰ <b>케이스 만료</b> — 캡처한 지 ${HB_CASE_TTL_MIN}분이 지나 멘트 토큰이 채워지지 않습니다.<br>
+          오래된 값이 다른 고객 답변에 섞이는 것을 막기 위한 조치입니다. 어드민에서 다시 캡처해주세요.</div>`);
         if (unver) notes.push(`<div class="note warn">
           ❔ <b>${isPartnerTicket ? '파트너' : '이용자'} ID 대조 불가</b> — 이 티켓에서 외부 ID·어드민 링크를 찾지 못했습니다 (웹 유저·이메일 인입 등).<br>
           불일치가 <u>없는 게 아니라 확인이 안 된 상태</u>입니다. 케이스가 이 문의 건이 맞는지 직접 확인해주세요.</div>`);
@@ -2367,8 +2458,9 @@
           잠시 후에도 비어 있으면 자동 조회가 실패한 것입니다.<br>
           어드민에서 라이드 <b>${c.ids.ride}</b> 를 직접 열고 🍯 캡처를 한 번 더 눌러주세요.</div>`);
         const note = notes.join('');
-        const badgeBg = !has ? '#c3c9c6' : mism ? '#c0392b' : (unver || stale) ? '#d97706' : '#0a7d72';
+        const badgeBg = !has ? '#c3c9c6' : (mism || expired) ? '#c0392b' : (unver || stale) ? '#d97706' : '#0a7d72';
         const badgeTx = !has ? '데이터 없음' : mism ? 'ID 불일치'
+          : expired ? ('만료 · ' + fresh(c.ts) + ' · 재캡처 필요')
           : unver ? ('대조불가 · ' + fresh(c.ts) + (stale ? '·오래됨' : ''))
           : (fresh(c.ts) + (stale ? '·오래됨' : ''));
 
@@ -2574,10 +2666,13 @@
         // 대상 표시 배지 (이 칩이 누구용인지 한눈에)
         const partyMark = { user: '👤', partner: '🚕', both: '🔁' };
         const mkChip = ({ m, score, party: mp }) => {
-          const hot = score > 0;
-          const b = el('button', null, partyMark[mp] + ' ' + (hot ? '★ ' : '') + m.label + (m.variants ? ' ▾' : ''));
-          b.className = 'chip' + (hot ? ' rec' : '') + ' p-' + mp;
-          b.title = m.variants ? ('경우: ' + m.variants.map(v => v.label).join(' / ')) : fillTokens(m.text, HBStore.loadCase());
+          const off = modeOff(m, mode);
+          const hot = score > 0 && !off;
+          const tag = m.mode ? (m.mode === 'resv' ? '[예약] ' : '[실시간] ') : '';
+          const b = el('button', null, partyMark[mp] + ' ' + (hot ? '★ ' : '') + tag + m.label + (m.variants ? ' ▾' : ''));
+          b.className = 'chip' + (hot ? ' rec' : '') + (off ? ' modeoff' : '') + ' p-' + mp;
+          b.title = (off ? '⚠️ 이 건은 ' + (mode === 'resv' ? '예약' : '실시간') + ' 건입니다 — 구분이 다른 멘트\n\n' : '')
+            + (m.variants ? ('경우: ' + m.variants.map(v => v.label).join(' / ')) : fillTokens(m.text, HBStore.loadCase()));
           b.onclick = m.variants ? (() => showVariants(m)) : (() => addMent(m));
           return b;
         };
@@ -2591,7 +2686,7 @@
           if (drawnGroups.has(gname)) return;
           drawnGroups.add(gname);
           const members = ordered.filter(x => x.m.group === gname);
-          const hotN = members.filter(x => x.score > 0).length;
+          const hotN = members.filter(x => x.score > 0 && !modeOff(x.m, mode)).length;
           const isOpen = openGroups.has(gname);
           const gb = el('button', null,
             (isOpen ? '📂 ' : '📁 ') + (hotN ? '★ ' : '') + gname + ' (' + members.length + ')');
@@ -2762,8 +2857,7 @@
           if (!fDrag) return;
           if (HBFab.locked('zd')) return;    // 고정 상태: 이동만 막고 클릭은 그대로 살린다
           if (Math.abs(e.clientX - fsx) > 3 || Math.abs(e.clientY - fsy) > 3) fMoved = true;
-          btn.style.left = Math.max(0, fdx + e.clientX - fsx) + 'px';
-          btn.style.top = Math.max(0, fdy + e.clientY - fsy) + 'px';
+          HBFab.moveTo(btn, fdx + e.clientX - fsx, fdy + e.clientY - fsy);
         });
         document.addEventListener('mouseup', () => { if (fDrag && !fMoved) toggle(); else if (fDrag && fMoved) HBFab.savePos(btn, 'zd'); fDrag = false; });
       })();
@@ -3818,7 +3912,11 @@ function clearIds(keepMsgData){
   }else if(!msgDataUsed){
     const saved=localStorage.getItem("tada_res_data");
     if(saved){
-      const parsed=JSON.parse(saved);
+      /* 저장값이 손상돼 있어도 여기서 죽지 않게. {} 로 떨어지면 아래 !parsed.rideId
+       * 분기를 타서 '저장값 없음'과 같은 흐름으로 안전하게 흘러간다. */
+      const parsed=(()=>{try{return JSON.parse(saved);}catch(e){
+        console.warn('[HB] tada_res_data 파싱 실패 — 폐기합니다',e);
+        localStorage.removeItem('tada_res_data'); return null;}})()||{};
 
       // rideId 없으면 검증 건너뜀 (취소 예약 등 라이드 없는 케이스)
       if(!parsed.rideId){
@@ -3912,7 +4010,9 @@ function clearIds(keepMsgData){
   if(isReservation&&!msgDataUsed){
     const savedRide=localStorage.getItem("tada_ride_data");
     if(savedRide){
-      const parsedRide=JSON.parse(savedRide);
+      const parsedRide=(()=>{try{return JSON.parse(savedRide);}catch(e){
+        console.warn('[HB] tada_ride_data 파싱 실패 — 폐기합니다',e);
+        localStorage.removeItem('tada_ride_data'); return null;}})()||{};
       // 호출 ID 검증
       const currentResvId=location.pathname.match(/rideReservations\/([A-Za-z0-9]+)/)?.[1]||"";
       if(parsedRide.fromResvId&&parsedRide.fromResvId!==currentResvId){
